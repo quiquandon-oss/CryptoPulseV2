@@ -9,6 +9,8 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A0C10">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>
   body{font-family:'Courier New',ui-monospace,monospace;}
   .glow{box-shadow:0 0 0 1px rgba(245,166,35,0.15), 0 8px 30px -12px rgba(245,166,35,0.25);}
@@ -76,6 +78,29 @@
       <p class="text-sm text-[#8A93A6]">Loading prediction…</p>
     </section>
 
+    <!-- BTC price vs. predictions: one combo chart rather than two, so calls
+         sit directly on the price line they were made against. Ring color
+         is the part that matters — it's a running visual scorecard, not
+         just a log of guesses. Range tabs filter client-side from one
+         fetch; fullscreen just repositions this same card + canvas rather
+         than duplicating a chart instance. -->
+    <section id="chartSection" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="text-sm font-semibold">BTC price vs. predictions</h2>
+        <div class="flex items-center gap-2">
+          <div id="rangeTabs" class="flex gap-1 bg-[#0A0C10] rounded-lg p-1"></div>
+          <button id="fullscreenBtn" class="text-[#8A93A6] hover:text-[#E7E9EE] p-1.5 rounded-md hover:bg-[#0A0C10]" title="Full screen">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="chartContainer" class="relative" style="height:280px;">
+        <canvas id="priceChart"></canvas>
+      </div>
+      <p class="text-[10px] text-[#8A93A6] mt-2">▲ bullish call · ▼ bearish call · fill saturation = confidence · ring — <span class="text-[#3BF38B]">green</span> correct · <span class="text-[#F5606C]">red</span> wrong · grey pending</p>
+      <p id="chartCountNote" class="text-[11px] text-[#8A93A6] mt-1"></p>
+    </section>
+
     <!-- Roadmap: honest about what this is right now, ordered because it's
          a real build sequence, not decorative numbering. -->
     <section class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5">
@@ -83,7 +108,7 @@
       <ol class="space-y-2.5 text-sm text-[#8A93A6]">
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">1</span>Scaffold: this page + PulseWorkerV2 wired to the shared D1 — <span class="text-[#3BF38B]">done</span></li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">2</span>k-NN historical analog model for BTC: P(24h return &gt; 0) — <span class="text-[#3BF38B]">done</span></li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time — <span class="text-[#3BF38B]">done</span>, still needs 24h+ to produce its first resolved prediction</li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time — <span class="text-[#3BF38B]">done</span>, now running on a 6h cron (not just page visits)</li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">4</span>Second model (logistic regression) once there's enough history to trust one</li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">5</span>More horizons, more coins, wired-in whale/liquidation signals</li>
       </ol>
@@ -179,6 +204,165 @@ async function loadPrediction(){
   }
 }
 loadPrediction();
+
+// ---- BTC price vs. predictions chart ----
+const RANGES = [
+  { key: '1D', label: '1D', ms: 24*60*60*1000 },
+  { key: '1W', label: '1W', ms: 7*24*60*60*1000 },
+  { key: '1M', label: '1M', ms: 30*24*60*60*1000 },
+  { key: 'ALL', label: 'ALL', ms: Infinity },
+];
+let chartRaw = { prices: [], predictions: [] };
+let chartInstance = null;
+let activeRange = '1M';
+
+function buildRangeTabs(){
+  const host = document.getElementById('rangeTabs');
+  host.innerHTML = RANGES.map(r =>
+    `<button data-range="${r.key}" class="range-tab px-2.5 py-1 rounded-md text-xs font-semibold ${r.key===activeRange ? 'bg-[#F5A623] text-[#0A0C10]' : 'text-[#8A93A6]'}">${r.label}</button>`
+  ).join('');
+  host.querySelectorAll('.range-tab').forEach(btn => {
+    btn.onclick = () => { activeRange = btn.dataset.range; buildRangeTabs(); renderChart(); };
+  });
+}
+
+function confidenceAlpha(p_up){
+  // 50% confidence -> faint, 100%/0% -> fully solid
+  return 0.28 + 0.72 * Math.abs(p_up - 0.5) * 2;
+}
+
+function renderChart(){
+  const range = RANGES.find(r => r.key === activeRange);
+  const cutoff = range.ms === Infinity ? -Infinity : Date.now() - range.ms;
+
+  const prices = chartRaw.prices.filter(p => p.ts >= cutoff);
+  const preds = chartRaw.predictions.filter(p => p.ts >= cutoff);
+
+  const priceData = prices.map(p => ({ x: p.ts, y: p.btc_price }));
+  const predData = preds.map(p => ({ x: p.ts, y: p.btc_price_at_prediction }));
+
+  const pointStyle = preds.map(p => 'triangle');
+  const rotation = preds.map(p => p.p_up >= 0.5 ? 0 : 180);
+  const bg = preds.map(p => {
+    const a = confidenceAlpha(p.p_up).toFixed(2);
+    return p.p_up >= 0.5 ? `rgba(59,243,139,${a})` : `rgba(245,96,108,${a})`;
+  });
+  const border = preds.map(p =>
+    p.realized_up === null || p.realized_up === undefined ? '#4B5563' :
+    p.realized_up === 1 ? '#3BF38B' : '#F5606C'
+  );
+
+  const nResolved = preds.filter(p => p.realized_up !== null && p.realized_up !== undefined).length;
+  document.getElementById('chartCountNote').textContent =
+    `${preds.length} prediction${preds.length===1?'':'s'} in this range · ${nResolved} resolved`;
+
+  const datasets = [
+    {
+      type: 'line',
+      label: 'BTC Price',
+      data: priceData,
+      borderColor: '#8A93A6',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.15,
+    },
+    {
+      type: 'scatter',
+      label: 'Predictions',
+      data: predData,
+      showLine: false,
+      pointStyle,
+      rotation,
+      pointBackgroundColor: bg,
+      pointBorderColor: border,
+      pointBorderWidth: 2.5,
+      pointRadius: 7,
+      pointHoverRadius: 9,
+      // stash the raw prediction alongside each point for the tooltip callback
+      _preds: preds,
+    },
+  ];
+
+  if(chartInstance){
+    chartInstance.data.datasets = datasets;
+    chartInstance.update();
+    return;
+  }
+
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: true },
+      scales: {
+        x: { type: 'time', ticks: { color: '#8A93A6', maxRotation: 0 }, grid: { color: '#1B2029' } },
+        y: { ticks: { color: '#8A93A6', callback: v => '$' + v.toLocaleString() }, grid: { color: '#1B2029' } },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#10131A',
+          borderColor: '#1B2029',
+          borderWidth: 1,
+          titleColor: '#E7E9EE',
+          bodyColor: '#8A93A6',
+          callbacks: {
+            label: (item) => {
+              if(item.dataset.label !== 'Predictions') return 'BTC $' + item.parsed.y.toLocaleString();
+              const p = item.dataset._preds[item.dataIndex];
+              const lines = [
+                `Called ${Math.round(p.p_up*100)}% up @ $${p.btc_price_at_prediction.toLocaleString()}`,
+                `Median analog move: ${p.median_analog_return>0?'+':''}${p.median_analog_return?.toFixed(2)}%`,
+              ];
+              lines.push(
+                p.realized_up === null || p.realized_up === undefined ? 'Outcome: pending' :
+                `Outcome: ${p.realized_up ? 'correct' : 'wrong'} (${p.realized_return>0?'+':''}${p.realized_return?.toFixed(2)}%)`
+              );
+              return lines;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+async function loadChart(){
+  try{
+    const r = await fetch(WORKER_URL + '/chart-data');
+    const d = await r.json();
+    if(d.ok){
+      chartRaw.prices = d.prices;
+      chartRaw.predictions = d.predictions;
+    }
+  }catch(e){
+    document.getElementById('chartCountNote').textContent = 'Could not load chart data.';
+  }
+  buildRangeTabs();
+  renderChart();
+}
+loadChart();
+
+// Fullscreen: repositions this same card (header, tabs, canvas) rather than
+// spinning up a second chart instance to keep in sync.
+let isFullscreen = false;
+document.getElementById('fullscreenBtn').onclick = () => {
+  const section = document.getElementById('chartSection');
+  const container = document.getElementById('chartContainer');
+  isFullscreen = !isFullscreen;
+  if(isFullscreen){
+    section.classList.add('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
+    container.style.height = 'calc(100vh - 140px)';
+  }else{
+    section.classList.remove('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
+    container.style.height = '280px';
+  }
+  requestAnimationFrame(() => chartInstance && chartInstance.resize());
+};
+
 </script>
 </body>
 </html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoPulse V2 — BTC Prediction Model</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:'Courier New',ui-monospace,monospace;}
+  .glow{box-shadow:0 0 0 1px rgba(245,166,35,0.15), 0 8px 30px -12px rgba(245,166,35,0.25);}
+  @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+  .pulsing{animation:pulse-dot 1.6s ease-in-out infinite;}
+</style>
+</head>
+<body class="bg-[#0A0C10] text-[#E7E9EE] min-h-screen">
+
+  <div class="max-w-3xl mx-auto px-5 py-10 sm:py-16">
+
+    <!-- Header: deliberately distinct from V1's green — amber signals
+         "calibrating", not "confirmed live", which is honestly where this
+         app is right now. -->
+    <header class="mb-10">
+      <p class="text-[10px] uppercase tracking-[0.25em] text-[#F5A623]/70 mb-2">CryptoPulse — Model Lab</p>
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">V2<span class="text-[#F5A623]">.</span></h1>
+      <p class="text-sm text-[#8A93A6] mt-2 max-w-lg">A standalone BTC prediction model, learning off the same market history <a href="https://quiquandon-oss.github.io/CryptoPulse/" class="underline decoration-[#F5A623]/40 hover:text-[#F5A623]" target="_blank" rel="noopener">CryptoPulse</a> has been logging — separate app, shared data, nothing here can touch the original.</p>
+    </header>
+
+    <!-- Pipeline status: this is the actual useful content of the scaffold —
+         it proves frontend -> new Worker -> shared D1 works end to end,
+         not just decoration. -->
+    <section class="grid sm:grid-cols-3 gap-3 mb-10">
+      <div class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 glow">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] uppercase tracking-wide text-[#8A93A6]">Worker</span>
+          <span id="dotWorker" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span>
+        </div>
+        <p id="workerStatus" class="text-sm font-semibold">Checking…</p>
+      </div>
+      <div class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 glow">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] uppercase tracking-wide text-[#8A93A6]">Shared history (D1)</span>
+          <span id="dotDb" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span>
+        </div>
+        <p id="dbStatus" class="text-sm font-semibold">Checking…</p>
+      </div>
+      <div class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 glow">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] uppercase tracking-wide text-[#8A93A6]">Model</span>
+          <span class="w-2 h-2 rounded-full bg-[#4B5563]"></span>
+        </div>
+        <p class="text-sm font-semibold text-[#8A93A6]">Not built yet</p>
+      </div>
+    </section>
+
+    <!-- Roadmap: honest about what this is right now, ordered because it's
+         a real build sequence, not decorative numbering. -->
+    <section class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5">
+      <h2 class="text-sm font-semibold mb-3 text-[#E7E9EE]">Build sequence</h2>
+      <ol class="space-y-2.5 text-sm text-[#8A93A6]">
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">1</span>Scaffold: this page + PulseWorkerV2 wired to the shared D1 — <span class="text-[#3BF38B]">done</span></li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">2</span>k-NN historical analog model for BTC: P(24h return &gt; 0), built on existing sentiment/technical/regime history</li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time</li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">4</span>Second model (logistic regression) once there's enough history to trust one</li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">5</span>More horizons, more coins, wired-in whale/liquidation signals</li>
+      </ol>
+    </section>
+
+    <footer class="mt-10 text-[11px] text-[#4B5563]">
+      Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" class="underline hover:text-[#8A93A6]">PulseWorkerV2</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" class="underline hover:text-[#8A93A6]">CryptoPulse</a>
+    </footer>
+
+  </div>
+
+<script>
+const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
+
+function setDot(id, ok){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.remove('pulsing');
+  el.className = 'w-2 h-2 rounded-full ' + (ok ? 'bg-[#3BF38B]' : 'bg-[#F5606C]');
+}
+
+async function checkWorker(){
+  try{
+    const r = await fetch(WORKER_URL + '/');
+    const d = await r.json();
+    document.getElementById('workerStatus').textContent = d.ok ? 'Live' : 'Error';
+    setDot('dotWorker', !!d.ok);
+  }catch(e){
+    document.getElementById('workerStatus').textContent = 'Unreachable';
+    setDot('dotWorker', false);
+  }
+}
+
+async function checkDb(){
+  try{
+    const r = await fetch(WORKER_URL + '/db-check');
+    const d = await r.json();
+    if(d.ok && d.history){
+      document.getElementById('dbStatus').textContent = d.history.cnt + ' rows logged';
+      setDot('dotDb', true);
+    }else{
+      document.getElementById('dbStatus').textContent = 'Error';
+      setDot('dotDb', false);
+    }
+  }catch(e){
+    document.getElementById('dbStatus').textContent = 'Unreachable';
+    setDot('dotDb', false);
+  }
+}
+
+checkWorker();
+checkDb();
+</script>
+</body>
+</html>

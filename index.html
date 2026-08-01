@@ -28,7 +28,7 @@
     <!-- Pipeline status: this is the actual useful content of the scaffold —
          it proves frontend -> new Worker -> shared D1 works end to end,
          not just decoration. -->
-    <section class="grid sm:grid-cols-3 gap-3 mb-10">
+    <section class="grid sm:grid-cols-3 gap-3 mb-6">
       <div class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 glow">
         <div class="flex items-center justify-between mb-2">
           <span class="text-[10px] uppercase tracking-wide text-[#8A93A6]">Worker</span>
@@ -46,10 +46,30 @@
       <div class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 glow">
         <div class="flex items-center justify-between mb-2">
           <span class="text-[10px] uppercase tracking-wide text-[#8A93A6]">Model</span>
-          <span class="w-2 h-2 rounded-full bg-[#4B5563]"></span>
+          <span id="dotModel" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span>
         </div>
-        <p class="text-sm font-semibold text-[#8A93A6]">Not built yet</p>
+        <p id="modelStatus" class="text-sm font-semibold">Checking…</p>
       </div>
+    </section>
+
+    <!-- The actual point of this app: today's prediction. Deliberately not
+         styled as a confident headline number — the note field carries the
+         same "small sample, read as a lean not a forecast" caveat the
+         Worker itself attaches. -->
+    <section id="predictionCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6 hidden">
+      <p class="text-[10px] uppercase tracking-wide text-[#8A93A6] mb-1">BTC · next 24h</p>
+      <div class="flex items-baseline gap-3 mb-2">
+        <span id="predPUp" class="text-3xl font-bold">—</span>
+        <span class="text-sm text-[#8A93A6]">chance of a positive 24h return</span>
+      </div>
+      <p id="predDetail" class="text-xs text-[#8A93A6] mb-3"></p>
+      <div id="predAnalogs" class="text-xs text-[#8A93A6] space-y-1 mb-3"></div>
+      <p id="predNote" class="text-[11px] text-[#F5A623]/80 italic"></p>
+      <p id="calibNote" class="text-[11px] text-[#8A93A6] mt-3 pt-3 border-t border-[#1B2029]"></p>
+    </section>
+
+    <section id="predictionEmpty" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6">
+      <p class="text-sm text-[#8A93A6]">Loading prediction…</p>
     </section>
 
     <!-- Roadmap: honest about what this is right now, ordered because it's
@@ -58,8 +78,8 @@
       <h2 class="text-sm font-semibold mb-3 text-[#E7E9EE]">Build sequence</h2>
       <ol class="space-y-2.5 text-sm text-[#8A93A6]">
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">1</span>Scaffold: this page + PulseWorkerV2 wired to the shared D1 — <span class="text-[#3BF38B]">done</span></li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">2</span>k-NN historical analog model for BTC: P(24h return &gt; 0), built on existing sentiment/technical/regime history</li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time</li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">2</span>k-NN historical analog model for BTC: P(24h return &gt; 0) — <span class="text-[#3BF38B]">done</span></li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time — <span class="text-[#3BF38B]">done</span>, still needs 24h+ to produce its first resolved prediction</li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">4</span>Second model (logistic regression) once there's enough history to trust one</li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">5</span>More horizons, more coins, wired-in whale/liquidation signals</li>
       </ol>
@@ -112,6 +132,49 @@ async function checkDb(){
 
 checkWorker();
 checkDb();
+
+async function loadPrediction(){
+  const card = document.getElementById('predictionCard');
+  const empty = document.getElementById('predictionEmpty');
+  try{
+    const r = await fetch(WORKER_URL + '/predict');
+    const d = await r.json();
+
+    if(!d.ok || d.status !== 'ok'){
+      empty.querySelector('p').textContent =
+        d.status === 'insufficient_data' ? `Not enough history yet (${d.n_available}/${d.min_required} days needed).` :
+        d.status === 'insufficient_resolved_analogs' ? `Found similar days, but too few have a resolved 24h outcome yet (${d.n_resolved}/${d.min_required}).` :
+        'Model unavailable right now.';
+      document.getElementById('modelStatus').textContent = 'No prediction yet';
+      setDot('dotModel', false);
+      return;
+    }
+
+    card.classList.remove('hidden');
+    empty.classList.add('hidden');
+
+    document.getElementById('predPUp').textContent = Math.round(d.p_up * 100) + '%';
+    document.getElementById('predDetail').textContent =
+      `BTC $${d.btc_price_now.toLocaleString()} now · median analog move ${d.median_analog_return_pct > 0 ? '+' : ''}${d.median_analog_return_pct}% · ${d.n_analogs} similar days used`;
+    document.getElementById('predAnalogs').innerHTML =
+      '<p class="text-[10px] uppercase tracking-wide text-[#8A93A6] mb-1">Most similar days</p>' +
+      d.top_analogs.map(a => `<div class="flex justify-between"><span>${a.date}</span><span class="${a.return_pct >= 0 ? 'text-[#3BF38B]' : 'text-[#F5606C]'}">${a.return_pct > 0 ? '+' : ''}${a.return_pct}%</span></div>`).join('');
+    document.getElementById('predNote').textContent = d.note;
+
+    document.getElementById('modelStatus').textContent = Math.round(d.p_up*100) + '% up (24h)';
+    setDot('dotModel', true);
+
+    const c = await (await fetch(WORKER_URL + '/calibration')).json();
+    document.getElementById('calibNote').textContent = c.n_resolved === 0
+      ? c.note
+      : `Calibration: ${c.n_resolved} resolved predictions · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} — ${c.note}`;
+  }catch(e){
+    empty.querySelector('p').textContent = 'Could not reach the model.';
+    document.getElementById('modelStatus').textContent = 'Unreachable';
+    setDot('dotModel', false);
+  }
+}
+loadPrediction();
 </script>
 </body>
 </html>

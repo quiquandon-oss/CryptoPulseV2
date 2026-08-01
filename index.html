@@ -31,6 +31,14 @@
       <p class="text-sm text-[#8A93A6] mt-2 max-w-lg">A standalone BTC prediction model, learning off the same market history <a href="https://quiquandon-oss.github.io/CryptoPulse/" class="underline decoration-[#F5A623]/40 hover:text-[#F5A623]" target="_blank" rel="noopener">CryptoPulse</a> has been logging — separate app, shared data, nothing here can touch the original.</p>
     </header>
 
+    <!-- Menu: two views sharing one page rather than a real router — keeps
+         this a single self-contained file like V1, no build step. -->
+    <nav class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 mb-6 w-fit">
+      <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold"></button>
+      <button data-view="analysis" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold"></button>
+    </nav>
+
+    <div id="view-dashboard">
     <!-- Pipeline status: this is the actual useful content of the scaffold —
          it proves frontend -> new Worker -> shared D1 works end to end,
          not just decoration. -->
@@ -111,8 +119,43 @@
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time — <span class="text-[#3BF38B]">done</span>, now running on a 6h cron (not just page visits)</li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">4</span>Second model (logistic regression) once there's enough history to trust one</li>
         <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">5</span>More horizons, more coins, wired-in whale/liquidation signals</li>
+        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">6</span>Daily comprehensive Gemini analysis (macro/geo/technical/cross-asset) — <span class="text-[#3BF38B]">done</span>, logged only (not yet fed into the model — needs its own maturation period first)</li>
       </ol>
     </section>
+    </div>
+
+    <!-- Analysis view: the daily Gemini narrative, plain reading UI. Not
+         wired into the model yet — this is purely for reading right now. -->
+    <div id="view-analysis" class="hidden">
+      <section id="analysisEmpty" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6">
+        <p class="text-sm text-[#8A93A6]">Loading analysis…</p>
+      </section>
+
+      <section id="analysisCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6 hidden">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <p id="analysisDate" class="text-xs text-[#8A93A6]"></p>
+          <select id="analysisHistorySelect" class="bg-[#0A0C10] border border-[#1B2029] rounded-md text-xs px-2 py-1 text-[#8A93A6]"></select>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 mb-4">
+          <div class="bg-[#0A0C10] rounded-lg p-2 text-center">
+            <p class="text-[9px] uppercase text-[#8A93A6] mb-1">Short</p>
+            <p id="biasShort" class="text-xs font-bold">—</p>
+          </div>
+          <div class="bg-[#0A0C10] rounded-lg p-2 text-center">
+            <p class="text-[9px] uppercase text-[#8A93A6] mb-1">Medium</p>
+            <p id="biasMedium" class="text-xs font-bold">—</p>
+          </div>
+          <div class="bg-[#0A0C10] rounded-lg p-2 text-center">
+            <p class="text-[9px] uppercase text-[#8A93A6] mb-1">Long</p>
+            <p id="biasLong" class="text-xs font-bold">—</p>
+          </div>
+        </div>
+        <p id="analysisLevels" class="text-xs text-[#8A93A6] mb-4"></p>
+
+        <pre id="analysisNarrative" class="text-xs sm:text-sm text-[#E7E9EE] whitespace-pre-wrap leading-relaxed"></pre>
+      </section>
+    </div>
 
     <footer class="mt-10 text-[11px] text-[#4B5563]">
       Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" class="underline hover:text-[#8A93A6]">PulseWorkerV2</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" class="underline hover:text-[#8A93A6]">CryptoPulse</a>
@@ -344,7 +387,81 @@ async function loadChart(){
   buildRangeTabs();
   renderChart();
 }
+// ---- Nav: two views, one page ----
 loadChart();
+const NAV = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'analysis', label: 'Analysis' },
+];
+let activeView = 'dashboard';
+function renderNav(){
+  document.querySelectorAll('.nav-tab').forEach(btn => {
+    const item = NAV.find(n => n.key === btn.dataset.view);
+    btn.textContent = item.label;
+    const on = btn.dataset.view === activeView;
+    btn.className = 'nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold ' + (on ? 'bg-[#F5A623] text-[#0A0C10]' : 'text-[#8A93A6]');
+  });
+  document.getElementById('view-dashboard').classList.toggle('hidden', activeView !== 'dashboard');
+  document.getElementById('view-analysis').classList.toggle('hidden', activeView !== 'analysis');
+}
+document.querySelectorAll('.nav-tab').forEach(btn => {
+  btn.onclick = () => { activeView = btn.dataset.view; renderNav(); };
+});
+renderNav();
+
+// ---- Analysis view ----
+let analysisList = [];
+const BIAS_COLOR = { bullish: 'text-[#3BF38B]', bearish: 'text-[#F5606C]', neutral: 'text-[#8A93A6]' };
+
+function renderAnalysis(idx){
+  const a = analysisList[idx];
+  if(!a) return;
+  document.getElementById('analysisDate').textContent =
+    new Date(a.ts).toUTCString().slice(0,16) + ' · BTC $' + (a.btc_price_at_analysis?.toLocaleString() ?? '—');
+
+  ['short','medium','long'].forEach(h => {
+    const el = document.getElementById('bias' + h[0].toUpperCase() + h.slice(1));
+    const v = a['bias_'+h];
+    el.textContent = v ? v : '—';
+    el.className = 'text-xs font-bold ' + (BIAS_COLOR[v] || 'text-[#8A93A6]');
+  });
+
+  const levels = [];
+  if(a.support_pct_below != null) levels.push(`Support ~${a.support_pct_below}% below`);
+  if(a.resistance_pct_above != null) levels.push(`Resistance ~${a.resistance_pct_above}% above`);
+  if(a.macro_risk) levels.push(`Macro risk: ${a.macro_risk}`);
+  if(a.geopolitical_risk) levels.push(`Geopolitical risk: ${a.geopolitical_risk}`);
+  document.getElementById('analysisLevels').textContent = levels.join(' · ');
+
+  document.getElementById('analysisNarrative').textContent = a.narrative || '(no narrative text)';
+}
+
+async function loadAnalysis(){
+  const card = document.getElementById('analysisCard');
+  const empty = document.getElementById('analysisEmpty');
+  try{
+    const r = await fetch(WORKER_URL + '/gemini-analysis?limit=30');
+    const d = await r.json();
+    if(!d.ok || !d.analyses || !d.analyses.length){
+      empty.querySelector('p').textContent = 'No daily analysis yet — the first one runs at 07:00 UTC.';
+      return;
+    }
+    analysisList = d.analyses; // newest first
+    const select = document.getElementById('analysisHistorySelect');
+    select.innerHTML = analysisList.map((a,i) =>
+      `<option value="${i}">${new Date(a.ts).toUTCString().slice(0,16)}</option>`
+    ).join('');
+    select.onchange = () => renderAnalysis(Number(select.value));
+
+    card.classList.remove('hidden');
+    empty.classList.add('hidden');
+    renderAnalysis(0);
+  }catch(e){
+    empty.querySelector('p').textContent = 'Could not reach the analysis endpoint.';
+  }
+}
+loadAnalysis();
+
 
 // Fullscreen: repositions this same card (header, tabs, canvas) rather than
 // spinning up a second chart instance to keep in sync.

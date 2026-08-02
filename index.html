@@ -227,7 +227,7 @@ async function loadPrediction(){
 
     document.getElementById('predPUp').textContent = Math.round(d.p_up * 100) + '%';
     document.getElementById('predDetail').textContent =
-      `BTC $${d.btc_price_now.toLocaleString()} now · median analog move ${d.median_analog_return_pct > 0 ? '+' : ''}${d.median_analog_return_pct}% · ${d.n_analogs} similar days used`;
+      `BTC $${d.btc_price_now.toLocaleString()} now · likely range ${d.return_range_pct[0]>0?'+':''}${d.return_range_pct[0]}% to ${d.return_range_pct[1]>0?'+':''}${d.return_range_pct[1]}% (median ${d.median_analog_return_pct>0?'+':''}${d.median_analog_return_pct}%) · ${d.n_analogs} similar days used`;
     document.getElementById('predAnalogs').innerHTML =
       '<p class="text-[10px] uppercase tracking-wide text-[#8A93A6] mb-1">Most similar days</p>' +
       d.top_analogs.map(a => `<div class="flex justify-between"><span>${a.date}</span><span class="${a.return_pct >= 0 ? 'text-[#3BF38B]' : 'text-[#F5606C]'}">${a.return_pct > 0 ? '+' : ''}${a.return_pct}%</span></div>`).join('');
@@ -239,7 +239,7 @@ async function loadPrediction(){
     const c = await (await fetch(WORKER_URL + '/calibration')).json();
     document.getElementById('calibNote').textContent = c.n_resolved === 0
       ? c.note
-      : `Calibration: ${c.n_resolved} resolved predictions · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} — ${c.note}`;
+      : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (naive baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;
   }catch(e){
     empty.querySelector('p').textContent = 'Could not reach the model.';
     document.getElementById('modelStatus').textContent = 'Unreachable';

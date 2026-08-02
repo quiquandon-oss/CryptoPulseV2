@@ -303,9 +303,9 @@ function renderChart(){
       borderColor: '#8A93A6',
       backgroundColor: gradient,
       fill: true,
-      borderWidth: 1.5,
+      borderWidth: 2,
       pointRadius: 0,
-      tension: 0.2,
+      tension: 0.25,
     },
     {
       type: 'scatter',
@@ -317,8 +317,9 @@ function renderChart(){
       pointBackgroundColor: bg,
       pointBorderColor: border,
       pointBorderWidth: 2.5,
-      pointRadius: 7,
-      pointHoverRadius: 9,
+      pointRadius: 8,
+      pointHoverRadius: 11,
+      pointHitRadius: 14,
       _preds: preds,
     },
   ];
@@ -336,8 +337,8 @@ function renderChart(){
       maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: true },
       scales: {
-        x: { type: 'time', ticks: { color: '#8A93A6', maxRotation: 0, font: { family: 'monospace' } }, grid: { color: '#1B2029' } },
-        y: { ticks: { color: '#8A93A6', font: { family: 'monospace' }, callback: v => '$' + v.toLocaleString() }, grid: { color: '#1B2029' } },
+        x: { type: 'time', ticks: { color: '#8A93A6', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(27,32,41,0.4)' } },
+        y: { ticks: { color: '#8A93A6', font: { family: 'monospace', size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: 'rgba(27,32,41,0.4)' } },
       },
       plugins: {
         legend: { display: false },
@@ -348,6 +349,7 @@ function renderChart(){
           titleColor: '#E7E9EE',
           bodyColor: '#8A93A6',
           bodyFont: { family: 'monospace' },
+          padding: 10,
           callbacks: {
             label: (item) => {
               if(item.dataset.label !== 'Predictions') return 'BTC $' + item.parsed.y.toLocaleString();

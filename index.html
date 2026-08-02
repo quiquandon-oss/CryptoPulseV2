@@ -71,7 +71,11 @@
          same "small sample, read as a lean not a forecast" caveat the
          Worker itself attaches. -->
     <section id="predictionCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6 hidden">
-      <p class="text-[10px] uppercase tracking-wide text-[#8A93A6] mb-1">BTC · next 24h</p>
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#8A93A6]">BTC · next 24h</p>
+        <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1" onclick="toggleNote(this,'predictionNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#8A93A6] mb-3" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what BTC actually did in the 24h after each of them. The range is the 25th-75th percentile of those outcomes, not a confidence interval in the formal statistical sense — read it as "here's the spread of what similar setups did," not a guarantee.</p>
       <div class="flex items-baseline gap-3 mb-2">
         <span id="predPUp" class="text-3xl font-bold">—</span>
         <span class="text-sm text-[#8A93A6]">chance of a positive 24h return</span>
@@ -96,12 +100,14 @@
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="text-sm font-semibold">BTC price vs. predictions</h2>
         <div class="flex items-center gap-2">
+          <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1" onclick="toggleNote(this,'chartNote')">ⓘ Info</button>
           <div id="rangeTabs" class="flex gap-1 bg-[#0A0C10] rounded-lg p-1"></div>
           <button id="fullscreenBtn" class="text-[#8A93A6] hover:text-[#E7E9EE] p-1.5 rounded-md hover:bg-[#0A0C10]" title="Full screen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
           </button>
         </div>
       </div>
+      <p class="hidden text-xs text-[#8A93A6] mb-3" id="chartNote">Every triangle is a logged prediction, placed on the price line at the moment it was made. Shape: ▲ bullish call, ▼ bearish. Fill: faint = near-50/50, solid = high confidence. Ring: green = correct, red = wrong, grey = still pending (needs 24h to resolve). Tap a marker for the exact numbers.</p>
       <div id="chartContainer" class="relative" style="height:280px;">
         <canvas id="priceChart"></canvas>
       </div>
@@ -114,12 +120,12 @@
     <section class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5">
       <h2 class="text-sm font-semibold mb-3 text-[#E7E9EE]">Build sequence</h2>
       <ol class="space-y-2.5 text-sm text-[#8A93A6]">
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">1</span>Scaffold: this page + PulseWorkerV2 wired to the shared D1 — <span class="text-[#3BF38B]">done</span></li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">2</span>k-NN historical analog model for BTC: P(24h return &gt; 0) — <span class="text-[#3BF38B]">done</span></li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time — <span class="text-[#3BF38B]">done</span>, now running on a 6h cron (not just page visits)</li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">4</span>Second model (logistic regression) once there's enough history to trust one</li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">5</span>More horizons, more coins, wired-in whale/liquidation signals</li>
-        <li class="flex gap-3"><span class="text-[#F5A623] font-semibold w-5 shrink-0">6</span>Daily comprehensive Gemini analysis (macro/geo/technical/cross-asset) — <span class="text-[#3BF38B]">done</span>, logged only (not yet fed into the model — needs its own maturation period first)</li>
+        <li><span class="inline-block w-5 text-[#F5A623] font-semibold">1</span>Scaffold: this page + PulseWorkerV2 wired to the shared D1 — <span class="text-[#3BF38B]">done</span></li>
+        <li><span class="inline-block w-5 text-[#F5A623] font-semibold">2</span>k-NN historical analog model for BTC: P(24h return &gt; 0) — <span class="text-[#3BF38B]">done</span></li>
+        <li><span class="inline-block w-5 text-[#F5A623] font-semibold">3</span>Calibration loop — log every prediction, log the realized outcome, track accuracy over time — <span class="text-[#3BF38B]">done</span>, now running on a 6h cron (not just page visits)</li>
+        <li><span class="inline-block w-5 text-[#F5A623] font-semibold">4</span>Second model (logistic regression) once there's enough history to trust one</li>
+        <li><span class="inline-block w-5 text-[#F5A623] font-semibold">5</span>More horizons, more coins, wired-in whale/liquidation signals</li>
+        <li><span class="inline-block w-5 text-[#F5A623] font-semibold">6</span>Daily comprehensive Gemini analysis (macro/geo/technical/cross-asset) — <span class="text-[#3BF38B]">done</span>, logged only (not yet fed into the model — needs its own maturation period first)</li>
       </ol>
     </section>
     </div>
@@ -133,9 +139,13 @@
 
       <section id="analysisCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6 hidden">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <p id="analysisDate" class="text-xs text-[#8A93A6]"></p>
+          <div class="flex items-center gap-2">
+            <p id="analysisDate" class="text-xs text-[#8A93A6]"></p>
+            <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1" onclick="toggleNote(this,'analysisNote')">ⓘ Info</button>
+          </div>
           <select id="analysisHistorySelect" class="bg-[#0A0C10] border border-[#1B2029] rounded-md text-xs px-2 py-1 text-[#8A93A6]"></select>
         </div>
+        <p class="hidden text-xs text-[#8A93A6] mb-3" id="analysisNote">Runs once daily at 07:00 UTC, generated server-side so it doesn't depend on anyone opening any page. Gemini writes the narrative and a few structured reads (bias, support/resistance, risk levels); it never sees or touches the model's actual prediction number. Not yet fed into the k-NN model — this data source starts at zero and needs its own maturation period before being trusted as a feature.</p>
 
         <div class="grid grid-cols-3 gap-2 mb-4">
           <div class="bg-[#0A0C10] rounded-lg p-2 text-center">
@@ -164,6 +174,13 @@
   </div>
 
 <script>
+function toggleNote(btn, noteId){
+  const el = document.getElementById(noteId);
+  if(!el) return;
+  const nowHidden = el.classList.toggle('hidden');
+  btn.textContent = nowHidden ? 'ⓘ Info' : 'ⓘ Hide';
+}
+
 const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
 
 function setDot(id, ok){

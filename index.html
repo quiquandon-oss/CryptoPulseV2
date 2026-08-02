@@ -46,16 +46,22 @@
     <p class="text-sm text-[#8A93A6] mt-2 max-w-lg leading-relaxed">A standalone BTC prediction model, learning off the same market history <a href="https://quiquandon-oss.github.io/CryptoPulse/" class="underline decoration-[#F5A623]/40 hover:text-[#F5A623]" target="_blank" rel="noopener">CryptoPulse</a> has been logging — separate app, shared data, nothing here can touch the original.</p>
   </header>
 
-  <nav class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 mb-6 w-fit">
+  <nav class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 mb-4 w-fit">
     <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="analysis" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
+
+  <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
+       of BTC — different data source, simpler self-bootstrapping technical
+       score, younger and rougher calibration. Switching re-fetches and
+       re-renders the prediction/chart/analysis for whichever coin is active. -->
+  <div id="coinTabs" class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 mb-6 w-fit"></div>
 
   <div id="view-dashboard">
 
     <section id="predictionCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6 hidden transition-all duration-200 hover:border-[#F5A623]/30 glow">
       <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#8A93A6] font-semibold">BTC · Next 24h</p>
+        <p id="predictionTitle" class="text-[10px] uppercase tracking-wide text-[#8A93A6] font-semibold">BTC · Next 24h</p>
         <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'predictionNote')">ⓘ Info</button>
       </div>
       <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what BTC actually did in the 24h after each of them. The range is the 25th-75th percentile of those outcomes — read it as a spread of what similar setups did, not a guarantee.</p>
@@ -77,7 +83,7 @@
 
     <section id="chartSection" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6 transition-all duration-200 hover:border-[#1B2029]/80">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 class="text-sm font-semibold">BTC Price vs. Predictions</h2>
+        <h2 id="chartTitle" class="text-sm font-semibold">BTC Price vs. Predictions</h2>
         <div class="flex items-center gap-2">
           <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'chartNote')">ⓘ Info</button>
           <div id="rangeTabs" class="flex gap-1 bg-[#0A0C10] rounded-lg p-1"></div>
@@ -196,11 +202,52 @@ async function checkDb(){
 checkWorker();
 checkDb();
 
+// ---- Coin config: LINK is a genuinely different pipeline (own endpoints,
+// own price field names, leaner Gemini schema), not BTC with a different
+// label swapped in — this config just points each shared UI piece at the
+// right place for whichever coin is active. ----
+const COIN_CONFIG = {
+  BTC: {
+    label: 'BTC', predict: '/predict', calib: '/calibration', chart: '/chart-data', analysis: '/gemini-analysis',
+    priceNowField: 'btc_price_now', priceHistField: 'btc_price', predPriceField: 'btc_price_at_prediction',
+  },
+  LINK: {
+    label: 'LINK', predict: '/link-predict', calib: '/link-calibration', chart: '/link-chart-data', analysis: '/link-gemini-analysis',
+    priceNowField: 'link_price_now', priceHistField: 'link_price', predPriceField: 'link_price_at_prediction',
+  },
+};
+const COINS = ['BTC', 'LINK'];
+let currentCoin = 'BTC';
+
+function buildCoinTabs(){
+  const host = document.getElementById('coinTabs');
+  host.innerHTML = COINS.map(c =>
+    `<button data-coin="${c}" class="coin-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${c===currentCoin ? 'bg-[#F5A623] text-[#0A0C10]' : 'text-[#8A93A6] hover:text-[#E7E9EE]'}">${c}</button>`
+  ).join('');
+  host.querySelectorAll('.coin-tab').forEach(btn => {
+    btn.onclick = () => { currentCoin = btn.dataset.coin; buildCoinTabs(); switchCoin(); };
+  });
+}
+
+function switchCoin(){
+  const cfg = COIN_CONFIG[currentCoin];
+  document.getElementById('predictionTitle').textContent = cfg.label + ' · Next 24h';
+  document.getElementById('chartTitle').textContent = cfg.label + ' Price vs. Predictions';
+  if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
+  loadPrediction();
+  loadChart();
+  loadAnalysis();
+}
+
 async function loadPrediction(){
+  const cfg = COIN_CONFIG[currentCoin];
   const card = document.getElementById('predictionCard');
   const empty = document.getElementById('predictionEmpty');
+  card.classList.add('hidden');
+  empty.classList.remove('hidden');
+  empty.innerHTML = `<div class="h-3 bg-[#1B2029] rounded-full w-1/4 animate-pulse"></div><div class="h-8 bg-[#1B2029] rounded-xl w-1/2 animate-pulse mt-3"></div><div class="h-3 bg-[#1B2029] rounded-full w-3/4 animate-pulse mt-3"></div>`;
   try{
-    const r = await fetch(WORKER_URL + '/predict');
+    const r = await fetch(WORKER_URL + cfg.predict);
     const d = await r.json();
     if(!d.ok || d.status !== 'ok'){
       empty.innerHTML = `<p class="text-sm text-[#8A93A6]">${
@@ -208,15 +255,15 @@ async function loadPrediction(){
         d.status === 'insufficient_resolved_analogs' ? `Too few resolved 24h outcomes (${d.n_resolved}/${d.min_required}).` :
         'Model unavailable right now.'
       }</p>`;
-      document.getElementById('modelStatus').textContent = 'No data';
-      setDot('dotModel', false);
+      if(currentCoin === 'BTC'){ document.getElementById('modelStatus').textContent = 'No data'; setDot('dotModel', false); }
       return;
     }
     card.classList.remove('hidden');
     empty.classList.add('hidden');
     document.getElementById('predPUp').textContent = Math.round(d.p_up * 100) + '%';
+    const priceNow = d[cfg.priceNowField];
     document.getElementById('predDetail').textContent =
-      `BTC $${d.btc_price_now.toLocaleString()} now · range ${d.return_range_pct[0]>0?'+':''}${d.return_range_pct[0]}% to ${d.return_range_pct[1]>0?'+':''}${d.return_range_pct[1]}% (median ${d.median_analog_return_pct>0?'+':''}${d.median_analog_return_pct}%) · ${d.n_analogs} similar days`;
+      `${cfg.label} $${priceNow.toLocaleString()} now · range ${d.return_range_pct[0]>0?'+':''}${d.return_range_pct[0]}% to ${d.return_range_pct[1]>0?'+':''}${d.return_range_pct[1]}% (median ${d.median_analog_return_pct>0?'+':''}${d.median_analog_return_pct}%) · ${d.n_analogs} similar days`;
 
     document.getElementById('predAnalogs').innerHTML =
       '<p class="text-[10px] uppercase tracking-wide text-[#8A93A6] mb-1.5 font-semibold">Most similar days</p>' +
@@ -226,23 +273,21 @@ async function loadPrediction(){
       }).join('');
 
     document.getElementById('predNote').textContent = d.note;
-    document.getElementById('modelStatus').textContent = Math.round(d.p_up*100) + '% up';
-    setDot('dotModel', true);
+    if(currentCoin === 'BTC'){ document.getElementById('modelStatus').textContent = Math.round(d.p_up*100) + '% up'; setDot('dotModel', true); }
 
-    const c = await (await fetch(WORKER_URL + '/calibration')).json();
+    const c = await (await fetch(WORKER_URL + cfg.calib)).json();
     document.getElementById('calibNote').textContent = c.n_resolved === 0
       ? c.note
       : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;
   }catch(e){
     empty.innerHTML = `<p class="text-sm text-[#8A93A6]">Could not reach the model.</p>`;
-    const el = document.getElementById('modelStatus'); if(el) el.textContent = 'Unreachable';
-    setDot('dotModel', false);
+    if(currentCoin === 'BTC'){ const el = document.getElementById('modelStatus'); if(el) el.textContent = 'Unreachable'; setDot('dotModel', false); }
   }
 }
 
 loadPrediction();
 
-// ---- BTC price vs predictions chart ----
+// ---- Price vs predictions chart ----
 const RANGES = [
   { key: '1D', label: '1D', ms: 24*60*60*1000 },
   { key: '1W', label: '1W', ms: 7*24*60*60*1000 },
@@ -268,13 +313,14 @@ function confidenceAlpha(p_up){
 }
 
 function renderChart(){
+  const cfg = COIN_CONFIG[currentCoin];
   const range = RANGES.find(r => r.key === activeRange);
   const cutoff = range.ms === Infinity ? -Infinity : Date.now() - range.ms;
   const prices = chartRaw.prices.filter(p => p.ts >= cutoff);
   const preds = chartRaw.predictions.filter(p => p.ts >= cutoff);
 
-  const priceData = prices.map(p => ({ x: p.ts, y: p.btc_price }));
-  const predData = preds.map(p => ({ x: p.ts, y: p.btc_price_at_prediction }));
+  const priceData = prices.map(p => ({ x: p.ts, y: p[cfg.priceHistField] }));
+  const predData = preds.map(p => ({ x: p.ts, y: p[cfg.predPriceField] }));
   const pointStyle = preds.map(p => 'triangle');
   const rotation = preds.map(p => p.p_up >= 0.5 ? 0 : 180);
   const bg = preds.map(p => {
@@ -298,7 +344,7 @@ function renderChart(){
   const datasets = [
     {
       type: 'line',
-      label: 'BTC Price',
+      label: cfg.label + ' Price',
       data: priceData,
       borderColor: '#8A93A6',
       backgroundColor: gradient,
@@ -352,10 +398,10 @@ function renderChart(){
           padding: 10,
           callbacks: {
             label: (item) => {
-              if(item.dataset.label !== 'Predictions') return 'BTC $' + item.parsed.y.toLocaleString();
+              if(item.dataset.label !== 'Predictions') return cfg.label + ' $' + item.parsed.y.toLocaleString();
               const p = item.dataset._preds[item.dataIndex];
               const lines = [
-                `Called ${Math.round(p.p_up*100)}% up @ $${p.btc_price_at_prediction.toLocaleString()}`,
+                `Called ${Math.round(p.p_up*100)}% up @ $${p[cfg.predPriceField].toLocaleString()}`,
                 `Median analog move: ${p.median_analog_return>0?'+':''}${p.median_analog_return?.toFixed(2)}%`,
               ];
               lines.push(
@@ -372,8 +418,9 @@ function renderChart(){
 }
 
 async function loadChart(){
+  const cfg = COIN_CONFIG[currentCoin];
   try{
-    const r = await fetch(WORKER_URL + '/chart-data');
+    const r = await fetch(WORKER_URL + cfg.chart);
     const d = await r.json();
     if(d.ok){
       chartRaw.prices = d.prices;
@@ -386,6 +433,7 @@ async function loadChart(){
   renderChart();
 }
 
+buildCoinTabs();
 loadChart();
 
 // ---- Nav tabs ----
@@ -416,10 +464,12 @@ let analysisList = [];
 const BIAS_COLOR = { bullish: 'text-[#3BF38B]', bearish: 'text-[#F5606C]', neutral: 'text-[#8A93A6]' };
 
 function renderAnalysis(idx){
+  const cfg = COIN_CONFIG[currentCoin];
   const a = analysisList[idx];
   if(!a) return;
+  const priceField = currentCoin === 'BTC' ? 'btc_price_at_analysis' : 'link_price_at_analysis';
   document.getElementById('analysisDate').textContent =
-    new Date(a.ts).toUTCString().slice(0,16) + ' · BTC $' + (a.btc_price_at_analysis?.toLocaleString() ?? '—');
+    new Date(a.ts).toUTCString().slice(0,16) + ' · ' + cfg.label + ' $' + (a[priceField]?.toLocaleString() ?? '—');
 
   ['short','medium','long'].forEach(h => {
     const el = document.getElementById('bias' + h[0].toUpperCase() + h.slice(1));
@@ -439,10 +489,13 @@ function renderAnalysis(idx){
 }
 
 async function loadAnalysis(){
+  const cfg = COIN_CONFIG[currentCoin];
   const card = document.getElementById('analysisCard');
   const empty = document.getElementById('analysisEmpty');
+  card.classList.add('hidden');
+  empty.classList.remove('hidden');
   try{
-    const r = await fetch(WORKER_URL + '/gemini-analysis?limit=30');
+    const r = await fetch(WORKER_URL + cfg.analysis + '?limit=30');
     const d = await r.json();
     if(!d.ok || !d.analyses || !d.analyses.length){
       empty.innerHTML = `<p class="text-sm text-[#8A93A6]">No daily analysis yet — the first one runs at 07:00 UTC.</p>`;

@@ -100,6 +100,31 @@
       <p id="chartCountNote" class="text-[11px] text-[#8A93A6] mt-1 font-mono-data"></p>
     </section>
 
+    <!-- Recap table: prediction / reality / deviation, one row per logged
+         call. Reuses chartRaw.predictions (already fetched for the chart) —
+         no new backend endpoint needed, same data just shown as a table
+         instead of markers. Deviation = realized return minus the median
+         return the model expected, not just right/wrong — magnitude matters
+         as much as direction here. -->
+    <section id="recapSection" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold">Prediction Recap</h2>
+        <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'recapNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="recapNote">Every prediction targets a 24h horizon. "Predicted" is the model's called direction/confidence and expected median move; "Reality" is what actually happened once the 24h passed; "Deviation" is the gap between the expected move and the real one — a small deviation means the model's magnitude sense was good even if the direction call is what gets graded for accuracy. Pending rows haven't reached their 24h mark yet.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-[#8A93A6] uppercase tracking-wide border-b border-[#1B2029]"><tr>
+            <th class="text-left font-medium px-2 py-2">Date</th>
+            <th class="text-right font-medium px-2 py-2">Predicted</th>
+            <th class="text-right font-medium px-2 py-2">Reality</th>
+            <th class="text-right font-medium px-2 py-2">Deviation</th>
+          </tr></thead>
+          <tbody id="recapTbody"><tr><td colspan="4" class="px-2 py-6 text-center text-[#8A93A6]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
     <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 transition-colors hover:border-[#1B2029]/80">
       <summary class="text-sm font-semibold text-[#E7E9EE] cursor-pointer flex justify-between items-center select-none">
         <span>Build Sequence &amp; Roadmap</span>
@@ -422,6 +447,47 @@ function renderChart(){
   });
 }
 
+function renderRecapTable(){
+  const cfg = COIN_CONFIG[currentCoin];
+  const tbody = document.getElementById('recapTbody');
+  const preds = [...chartRaw.predictions].sort((a,b) => b.ts - a.ts).slice(0, 20); // newest first, cap 20
+
+  if(!preds.length){
+    tbody.innerHTML = '<tr><td colspan="4" class="px-2 py-6 text-center text-[#8A93A6]">No predictions logged yet.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = preds.map(p => {
+    const date = new Date(p.ts).toUTCString().slice(0,16);
+    const dirArrow = p.p_up >= 0.5 ? '▲' : '▼';
+    const dirColor = p.p_up >= 0.5 ? 'text-[#3BF38B]' : 'text-[#F5606C]';
+    const predictedCell = `<span class="${dirColor}">${dirArrow} ${Math.round(p.p_up*100)}%</span> <span class="text-[#8A93A6]">(${p.median_analog_return>0?'+':''}${p.median_analog_return?.toFixed(2)}%)</span>`;
+
+    const resolved = p.realized_up !== null && p.realized_up !== undefined;
+    let realityCell, deviationCell;
+    if(!resolved){
+      const hoursLeft = Math.max(0, Math.round((p.target_ts - Date.now()) / (60*60*1000)));
+      realityCell = `<span class="text-[#8A93A6]">Pending (~${hoursLeft}h)</span>`;
+      deviationCell = `<span class="text-[#8A93A6]">—</span>`;
+    }else{
+      const correct = p.realized_up === 1;
+      const realColor = p.realized_return >= 0 ? 'text-[#3BF38B]' : 'text-[#F5606C]';
+      realityCell = `<span class="${realColor}">${p.realized_return>0?'+':''}${p.realized_return?.toFixed(2)}%</span> ${correct ? '✓' : '✗'}`;
+      const deviation = p.realized_return - p.median_analog_return;
+      const devAbs = Math.abs(deviation);
+      const devColor = devAbs < 1 ? 'text-[#3BF38B]' : devAbs < 3 ? 'text-[#F5A623]' : 'text-[#F5606C]';
+      deviationCell = `<span class="${devColor}">${deviation>0?'+':''}${deviation.toFixed(2)}%</span>`;
+    }
+
+    return `<tr class="border-b border-[#1B2029]/50 font-mono-data">
+      <td class="px-2 py-2 text-[#8A93A6]">${date}</td>
+      <td class="px-2 py-2 text-right">${predictedCell}</td>
+      <td class="px-2 py-2 text-right">${realityCell}</td>
+      <td class="px-2 py-2 text-right">${deviationCell}</td>
+    </tr>`;
+  }).join('');
+}
+
 async function loadChart(){
   const cfg = COIN_CONFIG[currentCoin];
   try{
@@ -436,6 +502,7 @@ async function loadChart(){
   }
   buildRangeTabs();
   renderChart();
+  renderRecapTable();
 }
 
 buildCoinTabs();

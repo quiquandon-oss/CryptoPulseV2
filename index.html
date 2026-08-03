@@ -55,7 +55,10 @@
        of BTC — different data source, simpler self-bootstrapping technical
        score, younger and rougher calibration. Switching re-fetches and
        re-renders the prediction/chart/analysis for whichever coin is active. -->
-  <div id="coinTabs" class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 mb-6 w-fit"></div>
+  <div class="flex items-center gap-2 mb-6 flex-wrap">
+    <div id="coinTabs" class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 w-fit"></div>
+    <div id="horizonTabs" class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 w-fit"></div>
+  </div>
 
   <div id="view-dashboard">
 
@@ -64,10 +67,10 @@
         <p id="predictionTitle" class="text-[10px] uppercase tracking-wide text-[#8A93A6] font-semibold">BTC · Next 24h</p>
         <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'predictionNote')">ⓘ Info</button>
       </div>
-      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what BTC actually did in the 24h after each of them. The range is the 25th-75th percentile of those outcomes — read it as a spread of what similar setups did, not a guarantee.</p>
+      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what BTC actually did over the prediction horizon after each of them. The range is the 25th-75th percentile of those outcomes — read it as a spread of what similar setups did, not a guarantee.</p>
       <div class="flex items-baseline gap-3 mb-2">
         <span id="predPUp" class="text-3xl font-bold font-mono-data">—</span>
-        <span class="text-sm text-[#8A93A6]">chance of a positive 24h return</span>
+        <span class="text-sm text-[#8A93A6]" id="predChanceLabel">chance of a positive 24h return</span>
       </div>
       <p id="predDetail" class="text-xs text-[#8A93A6] mb-3 font-mono-data"></p>
       <div id="predAnalogs" class="text-xs text-[#8A93A6] space-y-1.5 mb-3"></div>
@@ -111,7 +114,7 @@
         <h2 class="text-sm font-semibold">Prediction Recap</h2>
         <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'recapNote')">ⓘ Info</button>
       </div>
-      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="recapNote">Every prediction targets a 24h horizon. "Predicted" is the model's called direction/confidence and expected median move; "Reality" is what actually happened once the 24h passed; "Deviation" is the gap between the expected move and the real one — a small deviation means the model's magnitude sense was good even if the direction call is what gets graded for accuracy. Pending rows haven't reached their 24h mark yet.</p>
+      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="recapNote">Every prediction targets a fixed horizon (12h or 24h, whichever tab is selected). "Predicted" is the model's called direction/confidence and expected median move; "Reality" is what actually happened once the 24h passed; "Deviation" is the gap between the expected move and the real one — a small deviation means the model's magnitude sense was good even if the direction call is what gets graded for accuracy. Pending rows haven't reached their horizon mark yet.</p>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead class="text-[#8A93A6] uppercase tracking-wide border-b border-[#1B2029]"><tr>
@@ -247,7 +250,9 @@ const COIN_CONFIG = {
   },
 };
 const COINS = ['BTC', 'LINK'];
+const HORIZONS = [12, 24];
 let currentCoin = 'BTC';
+let currentHorizon = 24;
 
 function buildCoinTabs(){
   const host = document.getElementById('coinTabs');
@@ -255,14 +260,24 @@ function buildCoinTabs(){
     `<button data-coin="${c}" class="coin-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${c===currentCoin ? 'bg-[#F5A623] text-[#0A0C10]' : 'text-[#8A93A6] hover:text-[#E7E9EE]'}">${c}</button>`
   ).join('');
   host.querySelectorAll('.coin-tab').forEach(btn => {
-    btn.onclick = () => { currentCoin = btn.dataset.coin; buildCoinTabs(); switchCoin(); };
+    btn.onclick = () => { currentCoin = btn.dataset.coin; buildCoinTabs(); refreshAll(); };
   });
 }
 
-function switchCoin(){
+function buildHorizonTabs(){
+  const host = document.getElementById('horizonTabs');
+  host.innerHTML = HORIZONS.map(h =>
+    `<button data-horizon="${h}" class="horizon-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${h===currentHorizon ? 'bg-[#F5A623] text-[#0A0C10]' : 'text-[#8A93A6] hover:text-[#E7E9EE]'}">${h}H</button>`
+  ).join('');
+  host.querySelectorAll('.horizon-tab').forEach(btn => {
+    btn.onclick = () => { currentHorizon = Number(btn.dataset.horizon); buildHorizonTabs(); refreshAll(); };
+  });
+}
+
+function refreshAll(){
   const cfg = COIN_CONFIG[currentCoin];
-  document.getElementById('predictionTitle').textContent = cfg.label + ' · Next 24h';
-  document.getElementById('chartTitle').textContent = cfg.label + ' Price vs. Predictions';
+  document.getElementById('predictionTitle').textContent = `${cfg.label} · Next ${currentHorizon}h`;
+  document.getElementById('chartTitle').textContent = `${cfg.label} Price vs. Predictions (${currentHorizon}h)`;
   if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
   loadPrediction();
   loadChart();
@@ -277,12 +292,12 @@ async function loadPrediction(){
   empty.classList.remove('hidden');
   empty.innerHTML = `<div class="h-3 bg-[#1B2029] rounded-full w-1/4 animate-pulse"></div><div class="h-8 bg-[#1B2029] rounded-xl w-1/2 animate-pulse mt-3"></div><div class="h-3 bg-[#1B2029] rounded-full w-3/4 animate-pulse mt-3"></div>`;
   try{
-    const r = await fetch(WORKER_URL + cfg.predict);
+    const r = await fetch(WORKER_URL + cfg.predict + '?horizon=' + currentHorizon);
     const d = await r.json();
     if(!d.ok || d.status !== 'ok'){
       empty.innerHTML = `<p class="text-sm text-[#8A93A6]">${
         d.status === 'insufficient_data' ? `Not enough history yet (${d.n_available}/${d.min_required} days needed).` :
-        d.status === 'insufficient_resolved_analogs' ? `Too few resolved 24h outcomes (${d.n_resolved}/${d.min_required}).` :
+        d.status === 'insufficient_resolved_analogs' ? `Too few resolved ${currentHorizon}h outcomes (${d.n_resolved}/${d.min_required}).` :
         'Model unavailable right now.'
       }</p>`;
       if(currentCoin === 'BTC'){ document.getElementById('modelStatus').textContent = 'No data'; setDot('dotModel', false); }
@@ -291,6 +306,7 @@ async function loadPrediction(){
     card.classList.remove('hidden');
     empty.classList.add('hidden');
     document.getElementById('predPUp').textContent = Math.round(d.p_up * 100) + '%';
+    document.getElementById('predChanceLabel').textContent = `chance of a positive ${currentHorizon}h return`;
     const priceNow = d[cfg.priceNowField];
     document.getElementById('predDetail').textContent =
       `${cfg.label} $${priceNow.toLocaleString()} now · range ${d.return_range_pct[0]>0?'+':''}${d.return_range_pct[0]}% to ${d.return_range_pct[1]>0?'+':''}${d.return_range_pct[1]}% (median ${d.median_analog_return_pct>0?'+':''}${d.median_analog_return_pct}%) · ${d.n_analogs} similar days`;
@@ -305,7 +321,7 @@ async function loadPrediction(){
     document.getElementById('predNote').textContent = d.note;
     if(currentCoin === 'BTC'){ document.getElementById('modelStatus').textContent = Math.round(d.p_up*100) + '% up'; setDot('dotModel', true); }
 
-    const c = await (await fetch(WORKER_URL + cfg.calib)).json();
+    const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon)).json();
     document.getElementById('calibNote').textContent = c.n_resolved === 0
       ? c.note
       : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;
@@ -491,7 +507,7 @@ function renderRecapTable(){
 async function loadChart(){
   const cfg = COIN_CONFIG[currentCoin];
   try{
-    const r = await fetch(WORKER_URL + cfg.chart);
+    const r = await fetch(WORKER_URL + cfg.chart + '?horizon=' + currentHorizon);
     const d = await r.json();
     if(d.ok){
       chartRaw.prices = d.prices;
@@ -506,6 +522,7 @@ async function loadChart(){
 }
 
 buildCoinTabs();
+buildHorizonTabs();
 loadChart();
 
 // ---- Nav tabs ----

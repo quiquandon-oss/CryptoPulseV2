@@ -747,6 +747,7 @@ function renderCalibChart(points, naiveBaseline){
   }
 
   calibChartInstance = new Chart(ctx, {
+    type: 'line',
     data: { datasets },
     plugins: [glowLinePlugin],
     options: {

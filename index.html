@@ -20,6 +20,8 @@
   .font-mono-data { font-family: 'Courier New', ui-monospace, monospace; }
   .glow { box-shadow: 0 0 0 1px rgba(245,166,35,0.15), 0 8px 30px -12px rgba(245,166,35,0.25); }
   @keyframes pulse-dot { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+  @keyframes spin-once { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .spinning { animation: spin-once 0.6s linear infinite; }
   .pulsing { animation: pulse-dot 1.6s ease-in-out infinite; }
 </style>
 </head>
@@ -35,12 +37,17 @@
       <!-- Compact status pill: dot + short label + short live value per
            item (not dots-only) — keeps the at-a-glance detail the old 3
            cards had, without the vertical space they took. -->
-      <div class="flex items-center gap-3 bg-[#10131A] border border-[#1B2029] rounded-xl px-3.5 py-2 text-xs shadow-sm">
-        <span class="flex items-center gap-1.5 text-[#8A93A6]">Worker<span id="dotWorker" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span><span id="workerStatus" class="font-mono-data text-[#E7E9EE]">—</span></span>
-        <span class="text-[#1B2029]">|</span>
-        <span class="flex items-center gap-1.5 text-[#8A93A6]">D1<span id="dotDb" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span><span id="dbStatus" class="font-mono-data text-[#E7E9EE]">—</span></span>
-        <span class="text-[#1B2029]">|</span>
-        <span class="flex items-center gap-1.5 text-[#8A93A6]">Model<span id="dotModel" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span><span id="modelStatus" class="font-mono-data text-[#E7E9EE]">—</span></span>
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3 bg-[#10131A] border border-[#1B2029] rounded-xl px-3.5 py-2 text-xs shadow-sm">
+          <span class="flex items-center gap-1.5 text-[#8A93A6]">Worker<span id="dotWorker" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span><span id="workerStatus" class="font-mono-data text-[#E7E9EE]">—</span></span>
+          <span class="text-[#1B2029]">|</span>
+          <span class="flex items-center gap-1.5 text-[#8A93A6]">D1<span id="dotDb" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span><span id="dbStatus" class="font-mono-data text-[#E7E9EE]">—</span></span>
+          <span class="text-[#1B2029]">|</span>
+          <span class="flex items-center gap-1.5 text-[#8A93A6]">Model<span id="dotModel" class="w-2 h-2 rounded-full bg-[#4B5563] pulsing"></span><span id="modelStatus" class="font-mono-data text-[#E7E9EE]">—</span></span>
+        </div>
+        <button id="refreshBtn" title="Refresh: fetch fresh price/technical data and re-run the prediction now" class="bg-[#10131A] border border-[#1B2029] rounded-xl p-2.5 text-[#8A93A6] hover:text-[#F5A623] hover:border-[#F5A623]/40 transition-colors shadow-sm">
+          <svg id="refreshIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>
+        </button>
       </div>
     </div>
     <p class="text-sm text-[#8A93A6] mt-2 max-w-lg leading-relaxed">A standalone BTC prediction model, learning off the same market history <a href="https://quiquandon-oss.github.io/CryptoPulse/" class="underline decoration-[#F5A623]/40 hover:text-[#F5A623]" target="_blank" rel="noopener">CryptoPulse</a> has been logging — separate app, shared data, nothing here can touch the original.</p>
@@ -805,6 +812,20 @@ document.getElementById('calibFullscreenBtn').onclick = () => {
 };
 
 loadCalibChart();
+
+// Manual refresh — same purpose as V1's header refresh button: force a
+// fresh fetch of everything for the currently selected coin/horizon rather
+// than waiting for the next cron tick or a full page reload.
+document.getElementById('refreshBtn').onclick = async () => {
+  const icon = document.getElementById('refreshIcon');
+  icon.classList.add('spinning');
+  try{
+    await Promise.all([checkWorker(), checkDb()]);
+    await refreshAll();
+  } finally {
+    icon.classList.remove('spinning');
+  }
+};
 </script>
 </body>
 </html>

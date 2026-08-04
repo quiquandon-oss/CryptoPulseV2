@@ -128,6 +128,32 @@
       </div>
     </section>
 
+    <!-- Calibration over time: expanding cumulative Brier score, not a
+         single snapshot — the point is to see whether the experimental
+         variant's edge (or lack of one) is stable as more data comes in,
+         same discipline that caught V1's Track Record 99% being a
+         single-regime illusion rather than real skill. Same fullscreen
+         pattern as the price chart, but WITH a legend (price chart hides
+         it — here distinguishing Original/Experimental/Baseline actually
+         matters) and a canvas-shadow glow on each line via a small
+         chart-scoped plugin, not a global one. -->
+    <section id="calibChartSection" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 id="calibChartTitle" class="text-sm font-semibold">Calibration Over Time</h2>
+        <div class="flex items-center gap-2">
+          <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'calibChartNote')">ⓘ Info</button>
+          <button id="calibFullscreenBtn" class="text-[#8A93A6] hover:text-[#E7E9EE] p-1.5 rounded-md hover:bg-[#0A0C10] transition-colors" title="Full screen">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="calibChartNote">Each point is the Brier score computed using every resolved prediction up to and including it — not a per-prediction score, a running average. Lower is better; the dashed line is the naive "always guess 50/50" baseline (0.25) — a model not beating that has no demonstrated edge. Watch for stability, not a single favorable reading: an early lead that fades as the line matures is the exact trap that made V1's Track Record tile misleading.</p>
+      <div id="calibChartContainer" class="relative" style="height:260px;">
+        <canvas id="calibChart"></canvas>
+      </div>
+      <p id="calibChartCountNote" class="text-[11px] text-[#8A93A6] mt-2 font-mono-data"></p>
+    </section>
+
     <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 transition-colors hover:border-[#1B2029]/80">
       <summary class="text-sm font-semibold text-[#E7E9EE] cursor-pointer flex justify-between items-center select-none">
         <span>Build Sequence &amp; Roadmap</span>
@@ -241,11 +267,11 @@ checkDb();
 // right place for whichever coin is active. ----
 const COIN_CONFIG = {
   BTC: {
-    label: 'BTC', predict: '/predict', calib: '/calibration', chart: '/chart-data', analysis: '/gemini-analysis',
+    label: 'BTC', predict: '/predict', calib: '/calibration', calibHistory: '/calibration-history', chart: '/chart-data', analysis: '/gemini-analysis',
     priceNowField: 'btc_price_now', priceHistField: 'btc_price', predPriceField: 'btc_price_at_prediction',
   },
   LINK: {
-    label: 'LINK', predict: '/link-predict', calib: '/link-calibration', chart: '/link-chart-data', analysis: '/link-gemini-analysis',
+    label: 'LINK', predict: '/link-predict', calib: '/link-calibration', calibHistory: '/link-calibration-history', chart: '/link-chart-data', analysis: '/link-gemini-analysis',
     priceNowField: 'link_price_now', priceHistField: 'link_price', predPriceField: 'link_price_at_prediction',
   },
 };
@@ -278,10 +304,13 @@ function refreshAll(){
   const cfg = COIN_CONFIG[currentCoin];
   document.getElementById('predictionTitle').textContent = `${cfg.label} · Next ${currentHorizon}h`;
   document.getElementById('chartTitle').textContent = `${cfg.label} Price vs. Predictions (${currentHorizon}h)`;
+  document.getElementById('calibChartTitle').textContent = `${cfg.label} Calibration Over Time (${currentHorizon}h)`;
   if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
+  if(calibChartInstance){ calibChartInstance.destroy(); calibChartInstance = null; }
   loadPrediction();
   loadChart();
   loadAnalysis();
+  loadCalibChart();
 }
 
 async function loadPrediction(){
@@ -645,6 +674,136 @@ document.getElementById('fullscreenBtn').onclick = () => {
   }
   requestAnimationFrame(() => chartInstance && chartInstance.resize());
 };
+
+// ---- Calibration-over-time chart: expanding cumulative Brier, glowy lines ----
+let calibChartInstance = null;
+
+// Chart-scoped plugin (passed via options.plugins on this one instance, not
+// Chart.register'd globally) — reads each dataset's own borderColor so the
+// glow matches the line instead of one flat color for everything.
+const glowLinePlugin = {
+  id: 'glowLine',
+  beforeDatasetDraw(chart, args) {
+    const color = args.meta?.dataset?.options?.borderColor;
+    if(!color) return;
+    chart.ctx.save();
+    chart.ctx.shadowColor = color;
+    chart.ctx.shadowBlur = 14;
+  },
+  afterDatasetDraw(chart) {
+    chart.ctx.restore();
+  },
+};
+
+function renderCalibChart(points, naiveBaseline){
+  const ctx = document.getElementById('calibChart').getContext('2d');
+
+  const origData = points.map(p => ({ x: p.ts, y: p.brier_original }));
+  const expPoints = points.filter(p => p.brier_experimental !== null);
+  const expData = expPoints.map(p => ({ x: p.ts, y: p.brier_experimental }));
+  const hasExperimental = expData.length > 0;
+
+  const baselineData = points.length
+    ? [{ x: points[0].ts, y: naiveBaseline }, { x: points[points.length-1].ts, y: naiveBaseline }]
+    : [];
+
+  const datasets = [
+    {
+      label: 'Original',
+      data: origData,
+      borderColor: '#8A93A6',
+      backgroundColor: 'transparent',
+      borderWidth: 2.5,
+      pointRadius: 0,
+      tension: 0.15,
+    },
+  ];
+  if(hasExperimental){
+    datasets.push({
+      label: 'Experimental (adaptive-K)',
+      data: expData,
+      borderColor: '#3BF38B',
+      backgroundColor: 'transparent',
+      borderWidth: 2.5,
+      pointRadius: 0,
+      tension: 0.15,
+    });
+  }
+  datasets.push({
+    label: 'Naive baseline (50/50)',
+    data: baselineData,
+    borderColor: 'rgba(245,166,35,0.55)',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderDash: [6,4],
+    pointRadius: 0,
+    tension: 0,
+  });
+
+  if(calibChartInstance){
+    calibChartInstance.data.datasets = datasets;
+    calibChartInstance.update();
+    return;
+  }
+
+  calibChartInstance = new Chart(ctx, {
+    data: { datasets },
+    plugins: [glowLinePlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      scales: {
+        x: { type: 'time', ticks: { color: '#8A93A6', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(27,32,41,0.4)' } },
+        y: { min: 0, ticks: { color: '#8A93A6', font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(27,32,41,0.4)' } },
+      },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#8A93A6', font: { size: 10 }, boxWidth: 12, usePointStyle: true } },
+        tooltip: {
+          backgroundColor: '#10131A', borderColor: '#1B2029', borderWidth: 1,
+          titleColor: '#E7E9EE', bodyColor: '#8A93A6', bodyFont: { family: 'monospace' },
+          callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(3)}` },
+        },
+      },
+    },
+  });
+}
+
+async function loadCalibChart(){
+  const cfg = COIN_CONFIG[currentCoin];
+  const countNote = document.getElementById('calibChartCountNote');
+  try{
+    const r = await fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon);
+    const d = await r.json();
+    if(!d.ok || !d.points || !d.points.length){
+      countNote.textContent = 'No resolved predictions yet — nothing to chart.';
+      return;
+    }
+    renderCalibChart(d.points, d.naive_baseline_5050 ?? 0.25);
+    const last = d.points[d.points.length - 1];
+    countNote.textContent = `${last.n_original} resolved · latest Brier ${last.brier_original.toFixed(3)}` +
+      (last.brier_experimental !== null ? ` (original) vs ${last.brier_experimental.toFixed(3)} (experimental, n=${last.n_experimental})` : '');
+  }catch(e){
+    countNote.textContent = 'Could not load calibration history.';
+  }
+}
+
+let isCalibFullscreen = false;
+document.getElementById('calibFullscreenBtn').onclick = () => {
+  const section = document.getElementById('calibChartSection');
+  const container = document.getElementById('calibChartContainer');
+  isCalibFullscreen = !isCalibFullscreen;
+  if(isCalibFullscreen){
+    section.classList.add('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
+    container.style.height = 'calc(100vh - 140px)';
+  }else{
+    section.classList.remove('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
+    container.style.height = '260px';
+  }
+  requestAnimationFrame(() => calibChartInstance && calibChartInstance.resize());
+};
+
+loadCalibChart();
 </script>
 </body>
 </html>

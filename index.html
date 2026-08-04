@@ -115,16 +115,24 @@
          no new backend endpoint needed, same data just shown as a table
          instead of markers. Deviation = realized return minus the median
          return the model expected, not just right/wrong — magnitude matters
-         as much as direction here. -->
-    <section id="recapSection" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-sm font-semibold">Prediction Recap</h2>
-        <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'recapNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="recapNote">Every prediction targets a fixed horizon (12h or 24h, whichever tab is selected). "Predicted" is the model's called direction/confidence and expected median move; "Reality" is what actually happened once the 24h passed; "Deviation" is the gap between the expected move and the real one — a small deviation means the model's magnitude sense was good even if the direction call is what gets graded for accuracy. Pending rows haven't reached their horizon mark yet.</p>
-      <div class="overflow-x-auto">
+         as much as direction here. Collapsible (same <details> pattern as
+         the roadmap) so it doesn't take permanent space; body scrolls
+         internally with a fixed max-height instead of hard-capping to N
+         rows, so nothing gets silently dropped as more predictions log in
+         over time — only how far you have to scroll changes, not what's
+         actually there. -->
+    <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6" open>
+      <summary class="flex items-center justify-between cursor-pointer select-none">
+        <span class="text-sm font-semibold">Prediction Recap <span id="recapCountBadge" class="text-[#8A93A6] font-normal"></span></span>
+        <span class="flex items-center gap-2">
+          <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="event.preventDefault(); event.stopPropagation(); toggleNote(this,'recapNote')">ⓘ Info</button>
+          <span class="text-xs text-[#F5A623] font-mono-data">▼</span>
+        </span>
+      </summary>
+      <p class="hidden text-xs text-[#8A93A6] mt-3 mb-3 leading-relaxed" id="recapNote">Every prediction targets a fixed horizon (12h or 24h, whichever tab is selected). "Predicted" is the model's called direction/confidence and expected median move; "Reality" is what actually happened once the horizon passed; "Deviation" is the gap between the expected move and the real one — a small deviation means the model's magnitude sense was good even if the direction call is what gets graded for accuracy. Pending rows haven't reached their horizon mark yet. Scroll within the table to see older predictions — nothing is dropped.</p>
+      <div class="overflow-x-auto overflow-y-auto mt-3" style="max-height:420px;">
         <table class="w-full text-xs">
-          <thead class="text-[#8A93A6] uppercase tracking-wide border-b border-[#1B2029]"><tr>
+          <thead class="text-[#8A93A6] uppercase tracking-wide border-b border-[#1B2029] sticky top-0 bg-[#10131A]"><tr>
             <th class="text-left font-medium px-2 py-2">Date</th>
             <th class="text-right font-medium px-2 py-2">Predicted</th>
             <th class="text-right font-medium px-2 py-2">Reality</th>
@@ -133,7 +141,7 @@
           <tbody id="recapTbody"><tr><td colspan="4" class="px-2 py-6 text-center text-[#8A93A6]">Loading…</td></tr></tbody>
         </table>
       </div>
-    </section>
+    </details>
 
     <!-- Calibration over time: expanding cumulative Brier score, not a
          single snapshot — the point is to see whether the experimental
@@ -502,7 +510,9 @@ function renderChart(){
 function renderRecapTable(){
   const cfg = COIN_CONFIG[currentCoin];
   const tbody = document.getElementById('recapTbody');
-  const preds = [...chartRaw.predictions].sort((a,b) => b.ts - a.ts).slice(0, 20); // newest first, cap 20
+  const preds = [...chartRaw.predictions].sort((a,b) => b.ts - a.ts); // newest first, all of them — the scrollable container (not a slice) handles length now
+
+  document.getElementById('recapCountBadge').textContent = preds.length ? `(${preds.length})` : '';
 
   if(!preds.length){
     tbody.innerHTML = '<tr><td colspan="4" class="px-2 py-6 text-center text-[#8A93A6]">No predictions logged yet.</td></tr>';

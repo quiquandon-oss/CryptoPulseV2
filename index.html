@@ -196,6 +196,30 @@
       </div>
     </details>
 
+    <!-- Regime-conditional test: does technical_score's own accuracy differ
+         when that day's sentiment was above vs below median — a sharper
+         hypothesis than "reweight the features," from a paper finding
+         technical indicators work better during "greed" than "fear." -->
+    <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6">
+      <summary class="flex items-center justify-between cursor-pointer select-none">
+        <span class="text-sm font-semibold">Technical Score by Sentiment Regime</span>
+        <span class="text-xs text-[#F5A623] font-mono-data">▼</span>
+      </summary>
+      <p class="text-xs text-[#8A93A6] mt-3 mb-3 leading-relaxed">Same technical_score-only walk-forward test as the backtest above, but every prediction is tagged with that day's actual sentiment reading, then split by whether it was above or below the median. If technical_score performs meaningfully differently between the two halves, that's evidence the right fix isn't a fixed weight — it's switching which feature leads depending on current sentiment regime.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-[#8A93A6] uppercase tracking-wide border-b border-[#1B2029]"><tr>
+            <th class="text-left font-medium px-2 py-2">Regime</th>
+            <th class="text-right font-medium px-2 py-2">n</th>
+            <th class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th class="text-right font-medium px-2 py-2">Brier</th>
+            <th class="text-right font-medium px-2 py-2">vs Baseline</th>
+          </tr></thead>
+          <tbody id="regimeSplitTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#8A93A6]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </details>
+
     <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 transition-colors hover:border-[#1B2029]/80">
       <summary class="text-sm font-semibold text-[#E7E9EE] cursor-pointer flex justify-between items-center select-none">
         <span>Build Sequence &amp; Roadmap</span>
@@ -879,6 +903,35 @@ async function loadBacktestHistory(){
   }
 }
 loadBacktestHistory();
+
+async function loadRegimeSplitHistory(){
+  const tbody = document.getElementById('regimeSplitTbody');
+  try{
+    const r = await fetch(WORKER_URL + '/backtest-regime-split-history');
+    const d = await r.json();
+    if(!d.ok || !d.runs || !d.runs.length){
+      tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#8A93A6]">No regime-split test run yet.</td></tr>';
+      return;
+    }
+    // Only show the most recent run (2 rows: high/low), not every historical run stacked
+    const latestTs = d.runs[0].run_ts;
+    const latest = d.runs.filter(r => r.run_ts === latestTs);
+    tbody.innerHTML = latest.map(run => {
+      const beats = run.beats_naive_baseline === 1;
+      const label = run.split_label === 'high_sentiment' ? `High sentiment (≥${run.median_sentiment_threshold})` : `Low sentiment (<${run.median_sentiment_threshold})`;
+      return `<tr class="border-b border-[#1B2029]/50 font-mono-data">
+        <td class="px-2 py-2 text-[#E7E9EE]">${label}</td>
+        <td class="px-2 py-2 text-right text-[#8A93A6]">${run.n_predictions}</td>
+        <td class="px-2 py-2 text-right text-[#8A93A6]">${run.accuracy != null ? (run.accuracy*100).toFixed(1)+'%' : '—'}</td>
+        <td class="px-2 py-2 text-right text-[#8A93A6]">${run.brier_score != null ? run.brier_score.toFixed(3) : '—'}</td>
+        <td class="px-2 py-2 text-right"><span class="${beats ? 'text-[#3BF38B]' : 'text-[#F5606C]'}">${beats ? 'Beats' : 'Loses'} (${run.naive_baseline_brier?.toFixed(3) ?? '—'})</span></td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#8A93A6]">Could not load regime-split history.</td></tr>';
+  }
+}
+loadRegimeSplitHistory();
 
 // Manual refresh — same purpose as V1's header refresh button: force a
 // fresh fetch of everything for the currently selected coin/horizon rather

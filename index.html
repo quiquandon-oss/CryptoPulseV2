@@ -169,6 +169,33 @@
       <p id="calibChartCountNote" class="text-[11px] text-[#8A93A6] mt-2 font-mono-data"></p>
     </section>
 
+    <!-- Offline backtest results: technical_score-only (multi-year Yahoo
+         data), regime_mag/sentiment-only (D1's own shorter history), and
+         all-4-combined — a genuinely different test than the live
+         calibration loop above, run manually via /backtest-* endpoints
+         rather than on a cron. Logged to backtest_results every run so
+         this comparison stays available to re-check as samples grow,
+         instead of needing to re-derive it from raw D1 queries each time. -->
+    <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-4 sm:p-5 mb-6">
+      <summary class="flex items-center justify-between cursor-pointer select-none">
+        <span class="text-sm font-semibold">Offline Backtest History</span>
+        <span class="text-xs text-[#F5A623] font-mono-data">▼</span>
+      </summary>
+      <p class="text-xs text-[#8A93A6] mt-3 mb-3 leading-relaxed">Each row is a single manually-triggered backtest run (technical_score alone over years of Yahoo price data; regime_mag/sentiment alone over D1's shorter own history; or all 4 combined) — not part of the live cron. Small samples for anything but technical_score — treat as directional until they've been re-run with more history.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-[#8A93A6] uppercase tracking-wide border-b border-[#1B2029]"><tr>
+            <th class="text-left font-medium px-2 py-2">Test</th>
+            <th class="text-right font-medium px-2 py-2">n</th>
+            <th class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th class="text-right font-medium px-2 py-2">Brier</th>
+            <th class="text-right font-medium px-2 py-2">vs Baseline</th>
+          </tr></thead>
+          <tbody id="backtestTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#8A93A6]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </details>
+
     <details class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 transition-colors hover:border-[#1B2029]/80">
       <summary class="text-sm font-semibold text-[#E7E9EE] cursor-pointer flex justify-between items-center select-none">
         <span>Build Sequence &amp; Roadmap</span>
@@ -822,6 +849,36 @@ document.getElementById('calibFullscreenBtn').onclick = () => {
 };
 
 loadCalibChart();
+
+// ---- Offline backtest history table (BTC-only, coin-agnostic UI here
+// since these are always BTC — regime_mag/sentiment/combined tests aren't
+// coin-selectable the way live predictions are) ----
+async function loadBacktestHistory(){
+  const tbody = document.getElementById('backtestTbody');
+  try{
+    const r = await fetch(WORKER_URL + '/backtest-history');
+    const d = await r.json();
+    if(!d.ok || !d.runs || !d.runs.length){
+      tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#8A93A6]">No backtests run yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.runs.map(run => {
+      const beats = run.beats_naive_baseline === 1;
+      const beatsCell = run.brier_score == null ? '—' :
+        `<span class="${beats ? 'text-[#3BF38B]' : 'text-[#F5606C]'}">${beats ? 'Beats' : 'Loses'} (${run.naive_baseline_brier?.toFixed(3) ?? '—'})</span>`;
+      return `<tr class="border-b border-[#1B2029]/50 font-mono-data">
+        <td class="px-2 py-2 text-[#E7E9EE]">${run.coin}</td>
+        <td class="px-2 py-2 text-right text-[#8A93A6]">${run.n_predictions}</td>
+        <td class="px-2 py-2 text-right text-[#8A93A6]">${run.accuracy != null ? (run.accuracy*100).toFixed(1)+'%' : '—'}</td>
+        <td class="px-2 py-2 text-right text-[#8A93A6]">${run.brier_score != null ? run.brier_score.toFixed(3) : '—'}</td>
+        <td class="px-2 py-2 text-right">${beatsCell}</td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#8A93A6]">Could not load backtest history.</td></tr>';
+  }
+}
+loadBacktestHistory();
 
 // Manual refresh — same purpose as V1's header refresh button: force a
 // fresh fetch of everything for the currently selected coin/horizon rather

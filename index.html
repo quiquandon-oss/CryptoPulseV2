@@ -56,6 +56,7 @@
   <nav class="flex gap-1 bg-[#10131A] border border-[#1B2029] rounded-xl p-1 mb-4 w-fit">
     <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="analysis" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="challenger" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
 
   <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
@@ -276,6 +277,34 @@
     </section>
   </div>
 
+  <!-- ═══ Challenger — a separate, deterministic regime-conditional model,
+       fully isolated from the k-NN above (does not touch, import, or affect
+       it in any way). Logged in parallel for comparison, motivated by a
+       confirmed finding: the k-NN scored 22.9% accuracy on regime-anomalous
+       days against a 97.1% naive trend-continuation baseline in the same
+       window. See PulseWorkerV2's runChallengerPrediction for the full
+       reasoning. ═══ -->
+  <div id="view-challenger" class="hidden">
+    <section id="challengerLiveCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#8A93A6] font-semibold">Challenger — Live Read</p>
+        <button class="text-[10px] text-[#8A93A6] hover:text-[#E7E9EE] border border-[#1B2029] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'challengerNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#8A93A6] mb-3 leading-relaxed" id="challengerNote">A separate model, NOT a variant of the k-NN above. When today is regime-anomalous (the same tripwire the k-NN itself flags), this defers to a simple, transparent trend-persistence read instead of trusting the k-NN's own number in exactly the conditions it's been empirically bad in. When NOT anomalous, it defers to the k-NN's own p_up — on the theory that when today DOES resemble history well, the k-NN's own logic is the more trustworthy read. The "Tilted" variant additionally nudges the flat read using Foufi's daily short-term driver tag (macro/tradfi only) and his stated lean for that category, when a fresh (≤30h) digest has one. Pure comparison logging — this does not feed the Dashboard prediction above, the Regime Scorecard, or anything else.</p>
+      <div id="challengerLiveBody"><p class="text-xs text-[#8A93A6]">Loading…</p></div>
+    </section>
+
+    <section id="challengerCalibCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6">
+      <h2 class="text-sm font-semibold mb-3">Challenger vs. Baselines</h2>
+      <div id="challengerCalibBody"><p class="text-xs text-[#8A93A6]">Loading…</p></div>
+    </section>
+
+    <section id="challengerRecapCard" class="rounded-2xl border border-[#1B2029] bg-[#10131A] p-5 mb-6">
+      <h2 class="text-sm font-semibold mb-3">Recent Predictions</h2>
+      <div id="challengerRecapBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#8A93A6]">Loading…</p></div>
+    </section>
+  </div>
+
   <footer class="mt-10 text-[11px] text-[#4B5563]">
     Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" class="underline hover:text-[#8A93A6]">PulseWorkerV2</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" class="underline hover:text-[#8A93A6]">CryptoPulse</a>
   </footer>
@@ -377,6 +406,7 @@ function refreshAll(){
   loadChart();
   loadAnalysis();
   loadCalibChart();
+  loadChallenger();
 }
 
 async function loadPrediction(){
@@ -626,6 +656,7 @@ loadChart();
 const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'analysis', label: 'Analysis' },
+  { key: 'challenger', label: 'Challenger' },
 ];
 let activeView = 'dashboard';
 
@@ -638,6 +669,7 @@ function renderNav(){
   });
   document.getElementById('view-dashboard').classList.toggle('hidden', activeView !== 'dashboard');
   document.getElementById('view-analysis').classList.toggle('hidden', activeView !== 'analysis');
+  document.getElementById('view-challenger').classList.toggle('hidden', activeView !== 'challenger');
 }
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -932,6 +964,119 @@ async function loadRegimeSplitHistory(){
   }
 }
 loadRegimeSplitHistory();
+
+// ---- Challenger view ----
+function loadChallenger(){
+  loadChallengerLive();
+  loadChallengerCalib();
+  loadChallengerRecap();
+}
+
+async function loadChallengerLive(){
+  const host = document.getElementById('challengerLiveBody');
+  if(!host) return;
+  host.innerHTML = '<p class="text-xs text-[#8A93A6]">Loading…</p>';
+  try{
+    const r = await fetch(WORKER_URL + '/challenger-recent?limit=30');
+    const d = await r.json();
+    const rows = (d.predictions || []).filter(p => p.coin === currentCoin && p.horizon_hours === currentHorizon);
+    if(!rows.length){
+      host.innerHTML = '<p class="text-xs text-[#8A93A6]">No challenger predictions logged yet for '+currentCoin+' · '+currentHorizon+'h — starts accumulating on the next 3h cron cycle.</p>';
+      return;
+    }
+    const p = rows[0]; // most recent, already ts DESC from the API
+    const pctFlat = Math.round(p.p_up_flat * 100);
+    const pctTilted = Math.round(p.p_up_tilted * 100);
+    const anomalyBadge = p.is_regime_anomaly
+      ? '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(245,96,108,0.15);color:#F5606C">Regime anomaly — trend-persistence mode</span>'
+      : '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(59,243,139,0.15);color:#3BF38B">Normal regime — defers to k-NN</span>';
+    const driverLine = p.driver_used
+      ? `<p class="text-xs text-[#8A93A6] mt-2">Foufi driver applied: <span class="text-[#E7E9EE] font-mono-data">${p.driver_used}</span> (${p.driver_agreement || 'n/a'})</p>`
+      : `<p class="text-xs text-[#8A93A6] mt-2">No Foufi driver applied this cycle${p.is_regime_anomaly ? ' — none fresh/mapped right now' : ' — not anomalous, driver tilt only applies on anomaly days'}.</p>`;
+    const trailingStr = p.trailing_return_pct != null ? (p.trailing_return_pct > 0 ? '+' : '') + p.trailing_return_pct.toFixed(2) + '%' : '—';
+    host.innerHTML = `
+      ${anomalyBadge}
+      <div class="grid grid-cols-2 gap-3 mt-3">
+        <div>
+          <p class="text-[10px] uppercase text-[#8A93A6]">Flat</p>
+          <p class="text-2xl font-bold font-mono-data">${pctFlat}%</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase text-[#8A93A6]">Tilted</p>
+          <p class="text-2xl font-bold font-mono-data">${pctTilted}%</p>
+        </div>
+      </div>
+      <p class="text-xs text-[#8A93A6] mt-3 font-mono-data">Trailing ${p.horizon_hours}h return: ${trailingStr}</p>
+      ${driverLine}
+      <p class="text-[10px] text-[#4B5563] mt-2">As of ${new Date(p.ts).toUTCString().slice(0,22)}</p>
+    `;
+  }catch(e){
+    host.innerHTML = '<p class="text-xs text-[#F5606C]">Could not load — '+e.message+'</p>';
+  }
+}
+
+async function loadChallengerCalib(){
+  const host = document.getElementById('challengerCalibBody');
+  if(!host) return;
+  host.innerHTML = '<p class="text-xs text-[#8A93A6]">Loading…</p>';
+  try{
+    const r = await fetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon);
+    const d = await r.json();
+    if(!d.ok || (d.n_resolved || 0) < 5){
+      host.innerHTML = `<p class="text-xs text-[#8A93A6]">Only ${d.n_resolved || 0} resolved challenger prediction${(d.n_resolved||0)===1?'':'s'} so far for ${currentCoin} · ${currentHorizon}h — need at least 5 before this comparison means anything.</p>`;
+      return;
+    }
+    const fmt = v => v == null ? '—' : (v*100).toFixed(1) + '%';
+    const beatBadge = beats => beats == null ? '<span class="text-[#8A93A6]">n/a</span>' : (beats ? '<span style="color:#3BF38B" class="font-semibold">beats</span>' : '<span style="color:#F5606C" class="font-semibold">does not beat</span>');
+    host.innerHTML = `
+      <table class="w-full text-xs">
+        <thead><tr class="text-[#8A93A6] text-left">
+          <th class="py-1 pr-2 font-normal">Metric</th>
+          <th class="py-1 pr-2 font-normal">Flat</th>
+          <th class="py-1 font-normal">Tilted</th>
+        </tr></thead>
+        <tbody>
+          <tr class="border-t border-[#1B2029]"><td class="py-1.5 pr-2 text-[#8A93A6]">Accuracy</td><td class="py-1.5 pr-2 font-mono-data">${fmt(d.accuracy_flat)}</td><td class="py-1.5 font-mono-data">${fmt(d.accuracy_tilted)}</td></tr>
+          <tr class="border-t border-[#1B2029]"><td class="py-1.5 pr-2 text-[#8A93A6]">Brier score</td><td class="py-1.5 pr-2 font-mono-data">${d.brier_flat}</td><td class="py-1.5 font-mono-data">${d.brier_tilted}</td></tr>
+          <tr class="border-t border-[#1B2029]"><td class="py-1.5 pr-2 text-[#8A93A6]">vs. naive (${fmt(d.naive_baseline_accuracy)})</td><td class="py-1.5 pr-2">${beatBadge(d.beats_naive_flat)}</td><td class="py-1.5">${beatBadge(d.beats_naive_tilted)}</td></tr>
+          <tr class="border-t border-[#1B2029]"><td class="py-1.5 pr-2 text-[#8A93A6]">vs. MA-crossover (${d.ma_crossover_baseline && d.ma_crossover_baseline.accuracy != null ? fmt(d.ma_crossover_baseline.accuracy) : 'n/a'})</td><td class="py-1.5 pr-2">${beatBadge(d.beats_ma_crossover_flat)}</td><td class="py-1.5">${beatBadge(d.beats_ma_crossover_tilted)}</td></tr>
+        </tbody>
+      </table>
+      <p class="text-[10px] text-[#8A93A6] mt-3 leading-relaxed">n=${d.n_resolved} resolved. Beating naive alone is a low bar; beating MA-crossover is the more meaningful claim. Driver usage: ${d.driver_usage.agree} agree, ${d.driver_usage.disagree} disagree, ${d.driver_usage.uncovered} uncovered (micro), ${d.driver_usage.no_driver_applied} none applied.</p>
+    `;
+  }catch(e){
+    host.innerHTML = '<p class="text-xs text-[#F5606C]">Could not load — '+e.message+'</p>';
+  }
+}
+
+async function loadChallengerRecap(){
+  const host = document.getElementById('challengerRecapBody');
+  if(!host) return;
+  host.innerHTML = '<p class="text-xs text-[#8A93A6]">Loading…</p>';
+  try{
+    const r = await fetch(WORKER_URL + '/challenger-recent?limit=50');
+    const d = await r.json();
+    const rows = (d.predictions || []).filter(p => p.coin === currentCoin && p.horizon_hours === currentHorizon);
+    if(!rows.length){ host.innerHTML = '<p class="text-xs text-[#8A93A6]">None yet.</p>'; return; }
+    host.innerHTML = rows.map(p => {
+      const resolved = p.resolved_ts != null;
+      const correct = resolved ? ((p.p_up_flat > 0.5) === (p.realized_up === 1)) : null;
+      const dateStr = new Date(p.ts).toUTCString().slice(0,16);
+      const statusBadge = !resolved
+        ? '<span class="text-[10px] text-[#8A93A6]">pending</span>'
+        : correct
+          ? '<span class="text-[10px]" style="color:#3BF38B">✓ correct</span>'
+          : '<span class="text-[10px]" style="color:#F5606C">✗ miss</span>';
+      return `<div class="flex items-center justify-between border-t border-[#1B2029] py-1.5 text-xs">
+        <span class="text-[#8A93A6] font-mono-data">${dateStr}</span>
+        <span class="font-mono-data">${Math.round(p.p_up_flat*100)}% / ${Math.round(p.p_up_tilted*100)}%</span>
+        ${statusBadge}
+      </div>`;
+    }).join('');
+  }catch(e){
+    host.innerHTML = '<p class="text-xs text-[#F5606C]">Could not load — '+e.message+'</p>';
+  }
+}
 
 // Manual refresh — same purpose as V1's header refresh button: force a
 // fresh fetch of everything for the currently selected coin/horizon rather

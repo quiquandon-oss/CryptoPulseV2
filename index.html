@@ -603,7 +603,7 @@ function renderChart(){
   const rotation = preds.map(p => p.p_up >= 0.5 ? 0 : 180);
   const bg = preds.map(p => {
     const a = confidenceAlpha(p.p_up).toFixed(2);
-    return p.p_up >= 0.5 ? `rgba(59,243,139,${a})` : `rgba(245,96,108,${a})`;
+    return p.p_up >= 0.5 ? `rgba(74,225,118,${a})` : `rgba(255,180,171,${a})`;
   });
   const border = preds.map(p =>
     p.realized_up === null || p.realized_up === undefined ? '#4B5563' :
@@ -1102,8 +1102,8 @@ async function loadChallengerLive(){
     const pctFlat = Math.round(p.p_up_flat * 100);
     const pctTilted = Math.round(p.p_up_tilted * 100);
     const anomalyBadge = p.is_regime_anomaly
-      ? '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(245,96,108,0.15);color:#FFB4AB">Regime anomaly — trend-persistence mode</span>'
-      : '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(59,243,139,0.15);color:#4AE176">Normal regime — defers to k-NN</span>';
+      ? '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(255,180,171,0.15);color:#FFB4AB">Regime anomaly — trend-persistence mode</span>'
+      : '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(74,225,118,0.15);color:#4AE176">Normal regime — defers to k-NN</span>';
     const driverLine = p.driver_used
       ? `<p class="text-xs text-[#BAC9CD] mt-2">Foufi driver applied: <span class="text-[#E1E2E7] font-mono-data">${p.driver_used}</span> (${p.driver_agreement || 'n/a'})</p>`
       : `<p class="text-xs text-[#BAC9CD] mt-2">No Foufi driver applied this cycle${p.is_regime_anomaly ? ' — none fresh/mapped right now' : ' — not anomalous, driver tilt only applies on anomaly days'}.</p>`;

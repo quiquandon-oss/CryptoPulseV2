@@ -62,6 +62,7 @@
     <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="analysis" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="challenger" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
 
   <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
@@ -313,6 +314,52 @@
     </section>
   </div>
 
+  <!-- ═══ LAB TAB ═══ A testing space for undecided design choices, not a
+       settled feature — same "don't trust one number, compare it" ethos
+       as Challenger vs. k-NN, applied to presentation decisions instead
+       of model logic. Nothing here is final; whichever option gets
+       picked is what a future pass would hardcode into the real
+       Dashboard. ═══ -->
+  <div id="view-lab" class="hidden">
+    <section id="labWeightingCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Combined Accuracy — which formula?</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labWeightingNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labWeightingNote">Simple average treats all 4 coin/horizon combos equally regardless of how many resolved predictions back each one. Pooled (n-weighted) is mathematically the same as Σcorrect/Σresolved — a combo with 150 resolved predictions gets proportionally more say than one with 20. They're the only two meaningfully different formulas; a third "weighted by n" option would just be pooled again.</p>
+      <div id="labWeightingBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <section id="labHeroCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Hero label — which name?</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labHeroNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labHeroNote">"Sentiment" isn't used here on purpose — V1 already has an actual Sentiment Engine (Fear & Greed, ETF flows, etc.); reusing the word for "which way these two k-NN models lean" would blur the two apps together. Both cards use the pooled accuracy from the section above and live, identical numbers — only the label text differs.</p>
+      <div id="labHeroBody" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    </section>
+
+    <section id="labCompareCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger vs. every other model — <span id="labCompareCoinLabel"></span></p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCompareNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCompareNote">All 6 bars come from data already computed elsewhere in the app (the k-NN's own /calibration, Challenger's /challenger-calibration) — this just puts them on one chart. These are NOT computed on identical sample sizes (Challenger started later, Experimental needs 20+ logged predictions) — each bar's own n is printed underneath for that reason. Uses whichever coin/horizon is selected above.</p>
+      <div style="height:260px" id="labCompareChartContainer"><canvas id="labCompareChart"></canvas></div>
+      <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCompareCountNote"></p>
+    </section>
+
+    <section id="labPrecisionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger precision over time — <span id="labPrecisionCoinLabel"></span></p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labPrecisionNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labPrecisionNote">Expanding-window accuracy — each point is "accuracy using every resolved Challenger prediction up to and including this one." Same principle as the k-NN's own Calibration Over Time chart: a single snapshot can hide whether an apparent edge is real or just one lucky stretch. Early points with few resolved predictions will be noisy and swing a lot — that's expected, not a bug.</p>
+      <div style="height:260px" id="labPrecisionChartContainer"><canvas id="labPrecisionChart"></canvas></div>
+      <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labPrecisionCountNote"></p>
+    </section>
+  </div>
+
   <footer class="mt-10 text-[11px] text-[#4B5563]">
     Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" class="underline hover:text-[#BAC9CD]">PulseWorkerV2</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" class="underline hover:text-[#BAC9CD]">CryptoPulse</a>
   </footer>
@@ -336,6 +383,10 @@
   <button data-view="challenger" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]">compare_arrows</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Challenger</span>
+  </button>
+  <button data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]">science</span>
+    <span class="text-[10px] font-semibold uppercase tracking-wide">Lab</span>
   </button>
 </nav>
 
@@ -435,6 +486,7 @@ function refreshAll(){
   loadAnalysis();
   loadCalibChart();
   loadChallenger();
+  loadLab();
 }
 
 async function loadPrediction(){
@@ -661,8 +713,8 @@ function renderChart(){
       maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: true },
       scales: {
-        x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(27,32,41,0.4)' } },
-        y: { ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: 'rgba(27,32,41,0.4)' } },
+        x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
+        y: { ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => '$' + v.toLocaleString() }, grid: { color: 'rgba(59,73,76,0.4)' } },
       },
       plugins: {
         legend: { display: false },
@@ -764,6 +816,7 @@ const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'analysis', label: 'Analysis' },
   { key: 'challenger', label: 'Challenger' },
+  { key: 'lab', label: 'Lab' },
 ];
 let activeView = 'dashboard';
 
@@ -783,6 +836,7 @@ function renderNav(){
   document.getElementById('view-dashboard').classList.toggle('hidden', activeView !== 'dashboard');
   document.getElementById('view-analysis').classList.toggle('hidden', activeView !== 'analysis');
   document.getElementById('view-challenger').classList.toggle('hidden', activeView !== 'challenger');
+  document.getElementById('view-lab').classList.toggle('hidden', activeView !== 'lab');
 }
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -945,7 +999,7 @@ function renderCalibChart(points, naiveBaseline){
   datasets.push({
     label: 'Naive baseline (50/50)',
     data: baselineData,
-    borderColor: 'rgba(245,166,35,0.55)',
+    borderColor: 'rgba(186,201,205,0.55)',
     backgroundColor: 'transparent',
     borderWidth: 1.5,
     borderDash: [6,4],
@@ -968,8 +1022,8 @@ function renderCalibChart(points, naiveBaseline){
       maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: false },
       scales: {
-        x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(27,32,41,0.4)' } },
-        y: { min: 0, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(27,32,41,0.4)' } },
+        x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
+        y: { min: 0, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
       },
       plugins: {
         legend: { display: true, position: 'top', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 12, usePointStyle: true } },
@@ -1019,6 +1073,7 @@ document.getElementById('calibFullscreenBtn').onclick = () => {
 
 loadCalibChart();
 loadChallenger();
+loadLab();
 
 // ---- Offline backtest history table (BTC-only, coin-agnostic UI here
 // since these are always BTC — regime_mag/sentiment/combined tests aren't
@@ -1206,6 +1261,235 @@ document.getElementById('refreshBtn').onclick = async () => {
     icon.classList.remove('spinning');
   }
 };
+
+// ═══ LAB TAB ═══
+function loadLab(){
+  loadLabWeightingAndHero();
+  loadLabCompareChart();
+  loadLabPrecisionChart();
+}
+
+// ---- Sections 1+2: combined-accuracy weighting test + hero label test ----
+// Both draw from the same 4 already-existing /calibration calls (BTC/LINK
+// x 12h/24h) — no new endpoints, just fetched together instead of one at
+// a time like the rest of the app does per-view.
+async function fetchAllCalibrations(){
+  const combos = [
+    { coin: 'BTC', horizon: 12, path: COIN_CONFIG.BTC.calib },
+    { coin: 'BTC', horizon: 24, path: COIN_CONFIG.BTC.calib },
+    { coin: 'LINK', horizon: 12, path: COIN_CONFIG.LINK.calib },
+    { coin: 'LINK', horizon: 24, path: COIN_CONFIG.LINK.calib },
+  ];
+  return Promise.all(combos.map(async c => {
+    try{
+      const r = await fetch(WORKER_URL + c.path + '?horizon=' + c.horizon);
+      const d = await r.json();
+      return { coin: c.coin, horizon: c.horizon, accuracy: d.accuracy ?? null, n_resolved: d.n_resolved || 0 };
+    }catch(e){
+      return { coin: c.coin, horizon: c.horizon, accuracy: null, n_resolved: 0 };
+    }
+  }));
+}
+
+function computeCombinedAccuracy(combos){
+  const valid = combos.filter(c => c.accuracy != null && c.n_resolved > 0);
+  if(!valid.length) return { simple: null, pooled: null, totalN: 0 };
+  const simple = valid.reduce((s,c) => s + c.accuracy, 0) / valid.length;
+  const totalN = valid.reduce((s,c) => s + c.n_resolved, 0);
+  const totalCorrect = valid.reduce((s,c) => s + c.accuracy * c.n_resolved, 0);
+  return { simple, pooled: totalN > 0 ? totalCorrect / totalN : null, totalN };
+}
+
+function renderMiniHero(label, pct, upCombos, totalCombos){
+  const bullish = upCombos >= totalCombos / 2;
+  return `
+    <div class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 relative overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-br from-[#00E0FF]/10 via-transparent to-transparent pointer-events-none"></div>
+      <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-3">${label}</p>
+      <div class="flex justify-between items-end">
+        <div>
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] mb-1">Combined Accuracy</p>
+          <p class="text-3xl font-bold font-mono-data text-[#BAF2FF] glow-text">${pct!=null ? Math.round(pct*100)+'%' : '—'}</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] mb-1">Direction</p>
+          <p class="text-sm font-mono-data font-semibold" style="color:${bullish ? '#4AE176' : '#FFB4AB'}">${bullish ? 'BULLISH' : 'BEARISH'} (${upCombos}/${totalCombos})</p>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function loadLabWeightingAndHero(){
+  const weightBody = document.getElementById('labWeightingBody');
+  const heroBody = document.getElementById('labHeroBody');
+  if(!weightBody || !heroBody) return;
+  weightBody.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+  try{
+    const [combos, predResults] = await Promise.all([
+      fetchAllCalibrations(),
+      Promise.all([
+        fetch(WORKER_URL + COIN_CONFIG.BTC.predict + '?horizon=12').then(r=>r.json()).catch(()=>null),
+        fetch(WORKER_URL + COIN_CONFIG.BTC.predict + '?horizon=24').then(r=>r.json()).catch(()=>null),
+        fetch(WORKER_URL + COIN_CONFIG.LINK.predict + '?horizon=12').then(r=>r.json()).catch(()=>null),
+        fetch(WORKER_URL + COIN_CONFIG.LINK.predict + '?horizon=24').then(r=>r.json()).catch(()=>null),
+      ]),
+    ]);
+    const { simple, pooled, totalN } = computeCombinedAccuracy(combos);
+    const upCombos = predResults.filter(p => p && p.ok && p.status === 'ok' && p.p_up >= 0.5).length;
+    const totalCombos = predResults.filter(p => p && p.ok && p.status === 'ok').length;
+
+    weightBody.innerHTML = `
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div class="rounded-xl bg-[#0B0E11] p-3 text-center">
+          <p class="text-[10px] uppercase text-[#BAC9CD] mb-1">Simple average</p>
+          <p class="text-2xl font-bold font-mono-data text-[#00E0FF]">${simple!=null ? Math.round(simple*100)+'%' : '—'}</p>
+        </div>
+        <div class="rounded-xl bg-[#0B0E11] p-3 text-center">
+          <p class="text-[10px] uppercase text-[#BAC9CD] mb-1">Pooled (n-weighted)</p>
+          <p class="text-2xl font-bold font-mono-data text-[#DDB7FF]">${pooled!=null ? Math.round(pooled*100)+'%' : '—'}</p>
+        </div>
+      </div>
+      <table class="w-full text-xs font-mono-data">
+        <thead><tr class="text-[#BAC9CD] text-left"><th class="font-normal py-1">Combo</th><th class="font-normal py-1 text-right">Accuracy</th><th class="font-normal py-1 text-right">n</th></tr></thead>
+        <tbody>${combos.map(c => `<tr class="border-t border-[#3B494C]/50">
+          <td class="py-1">${c.coin} ${c.horizon}h</td>
+          <td class="py-1 text-right">${c.accuracy!=null ? Math.round(c.accuracy*100)+'%' : '—'}</td>
+          <td class="py-1 text-right text-[#BAC9CD]">${c.n_resolved}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <p class="text-[10px] text-[#BAC9CD] mt-2">${totalN} total resolved predictions across all 4 combos.</p>`;
+
+    heroBody.innerHTML =
+      renderMiniHero('MODEL READ', pooled, upCombos, totalCombos) +
+      renderMiniHero('COMBINED SIGNAL', pooled, upCombos, totalCombos);
+  }catch(e){
+    weightBody.innerHTML = '<p class="text-xs text-[#FFB4AB]">Could not load — '+e.message+'</p>';
+  }
+}
+
+// ---- Section 3: Challenger vs. every other model (bar chart) ----
+// Uses the currently selected coin/horizon, same as every other tab.
+let labCompareChartInstance = null;
+async function loadLabCompareChart(){
+  const cfg = COIN_CONFIG[currentCoin];
+  const countNote = document.getElementById('labCompareCountNote');
+  document.getElementById('labCompareCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
+  if(!countNote) return;
+  try{
+    const [core, challenger] = await Promise.all([
+      fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon).then(r=>r.json()),
+      fetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
+    ]);
+    const bars = [];
+    if(core && core.n_resolved > 0){
+      bars.push({ label: 'Original k-NN', acc: core.accuracy, n: core.n_resolved, color: '#00E0FF' });
+      if(core.experimental_vs_original && core.experimental_vs_original.available){
+        bars.push({ label: 'Experimental (adaptive-K)', acc: core.experimental_vs_original.accuracy_experimental, n: core.experimental_vs_original.n_resolved, color: '#BAF2FF' });
+      }
+    }
+    if(challenger && challenger.n_resolved > 0){
+      bars.push({ label: 'Challenger Flat', acc: challenger.accuracy_flat, n: challenger.n_resolved, color: '#DDB7FF' });
+      bars.push({ label: 'Challenger Tilted', acc: challenger.accuracy_tilted, n: challenger.n_resolved, color: '#9A6FD1' });
+      bars.push({ label: 'Naive baseline', acc: challenger.naive_baseline_accuracy, n: challenger.n_resolved, color: '#BAC9CD' });
+      if(challenger.ma_crossover_baseline && challenger.ma_crossover_baseline.accuracy != null){
+        bars.push({ label: 'MA-crossover', acc: challenger.ma_crossover_baseline.accuracy, n: challenger.ma_crossover_baseline.n, color: '#8A93A6' });
+      }
+    }
+    if(!bars.length){
+      countNote.textContent = 'Not enough resolved predictions yet for this coin/horizon.';
+      if(labCompareChartInstance){ labCompareChartInstance.destroy(); labCompareChartInstance = null; }
+      return;
+    }
+    const ctx = document.getElementById('labCompareChart').getContext('2d');
+    const data = {
+      labels: bars.map(b => b.label + '\n(n=' + b.n + ')'),
+      datasets: [{
+        data: bars.map(b => Math.round((b.acc||0)*1000)/10),
+        backgroundColor: bars.map(b => b.color + 'CC'),
+        borderColor: bars.map(b => b.color),
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }],
+    };
+    if(labCompareChartInstance){ labCompareChartInstance.data = data; labCompareChartInstance.update(); }
+    else {
+      labCompareChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 9 } }, grid: { display: false } },
+            y: { min: 0, max: 100, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(59,73,76,0.4)' } },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
+              titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
+              callbacks: { label: (item) => `${item.parsed.y}% accuracy` },
+            },
+          },
+        },
+      });
+    }
+    countNote.textContent = `Sample sizes differ per bar — not a fair race, a snapshot of where each stands right now.`;
+  }catch(e){
+    countNote.textContent = 'Could not load comparison.';
+  }
+}
+
+// ---- Section 4: Challenger precision over time (expanding-window line chart) ----
+let labPrecisionChartInstance = null;
+async function loadLabPrecisionChart(){
+  const countNote = document.getElementById('labPrecisionCountNote');
+  document.getElementById('labPrecisionCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
+  if(!countNote) return;
+  try{
+    const r = await fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon);
+    const d = await r.json();
+    if(!d.ok || !d.points || !d.points.length){
+      countNote.textContent = 'No resolved Challenger predictions yet for this coin/horizon.';
+      if(labPrecisionChartInstance){ labPrecisionChartInstance.destroy(); labPrecisionChartInstance = null; }
+      return;
+    }
+    const flatData = d.points.map(p => ({ x: p.ts, y: p.accuracy_flat * 100 }));
+    const tiltedData = d.points.map(p => ({ x: p.ts, y: p.accuracy_tilted * 100 }));
+    const datasets = [
+      { label: 'Flat', data: flatData, borderColor: '#DDB7FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 },
+      { label: 'Tilted', data: tiltedData, borderColor: '#9A6FD1', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15, borderDash: [5,3] },
+    ];
+    const ctx = document.getElementById('labPrecisionChart').getContext('2d');
+    if(labPrecisionChartInstance){ labPrecisionChartInstance.data.datasets = datasets; labPrecisionChartInstance.update(); }
+    else {
+      labPrecisionChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        plugins: [glowLinePlugin],
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'nearest', intersect: false },
+          scales: {
+            x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
+            y: { min: 0, max: 100, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(59,73,76,0.4)' } },
+          },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 12, usePointStyle: true } },
+            tooltip: {
+              backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
+              titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
+              callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
+            },
+          },
+        },
+      });
+    }
+    const last = d.points[d.points.length - 1];
+    countNote.textContent = `${last.n} resolved · latest: Flat ${(last.accuracy_flat*100).toFixed(1)}% · Tilted ${(last.accuracy_tilted*100).toFixed(1)}%`;
+  }catch(e){
+    countNote.textContent = 'Could not load precision history.';
+  }
+}
 </script>
 </body>
 </html>

@@ -358,6 +358,16 @@
       <div style="height:260px" id="labPrecisionChartContainer"><canvas id="labPrecisionChart"></canvas></div>
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labPrecisionCountNote"></p>
     </section>
+
+    <section id="labCombinedHistoryCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">All models, same graph — <span id="labCombinedHistoryCoinLabel"></span></p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCombinedHistoryNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCombinedHistoryNote">Same expanding-window accuracy as the chart above, but Original k-NN, Experimental, Challenger Flat, and Challenger Tilted all on one time axis instead of four separate charts. Challenger's lines start later and have fewer points than the k-NN's — it began logging afterward — so its line is shorter and will look noisier early on. That's expected, not a bug: a shorter, choppier line isn't automatically a worse model, it's a younger one with less evidence behind it yet.</p>
+      <div style="height:280px" id="labCombinedHistoryChartContainer"><canvas id="labCombinedHistoryChart"></canvas></div>
+      <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCombinedHistoryCountNote"></p>
+    </section>
   </div>
 
   <footer class="mt-10 text-[11px] text-[#4B5563]">
@@ -1267,6 +1277,7 @@ function loadLab(){
   loadLabWeightingAndHero();
   loadLabCompareChart();
   loadLabPrecisionChart();
+  loadLabCombinedHistoryChart();
 }
 
 // ---- Sections 1+2: combined-accuracy weighting test + hero label test ----
@@ -1488,6 +1499,77 @@ async function loadLabPrecisionChart(){
     countNote.textContent = `${last.n} resolved · latest: Flat ${(last.accuracy_flat*100).toFixed(1)}% · Tilted ${(last.accuracy_tilted*100).toFixed(1)}%`;
   }catch(e){
     countNote.textContent = 'Could not load precision history.';
+  }
+}
+
+// ---- Combined multi-model history: Original k-NN, Experimental,
+// Challenger Flat, Challenger Tilted — all on one time axis. Challenger's
+// lines are shorter (started logging later) — that's expected, handled by
+// simply not padding/aligning the series, Chart.js's time axis places each
+// point at its real timestamp regardless of which series has more of them. ----
+let labCombinedHistoryChartInstance = null;
+async function loadLabCombinedHistoryChart(){
+  const cfg = COIN_CONFIG[currentCoin];
+  const countNote = document.getElementById('labCombinedHistoryCountNote');
+  document.getElementById('labCombinedHistoryCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
+  if(!countNote) return;
+  try{
+    const [knnRes, challengerRes] = await Promise.all([
+      fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()),
+      fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
+    ]);
+    const knnPoints = (knnRes && knnRes.points) || [];
+    const challengerPoints = (challengerRes && challengerRes.ok && challengerRes.points) || [];
+    if(!knnPoints.length && !challengerPoints.length){
+      countNote.textContent = 'No resolved predictions yet for this coin/horizon.';
+      if(labCombinedHistoryChartInstance){ labCombinedHistoryChartInstance.destroy(); labCombinedHistoryChartInstance = null; }
+      return;
+    }
+    const datasets = [];
+    if(knnPoints.length){
+      datasets.push({ label: 'Original k-NN', data: knnPoints.map(p => ({ x: p.ts, y: p.accuracy_original * 100 })), borderColor: '#00E0FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 });
+      const expPoints = knnPoints.filter(p => p.accuracy_experimental != null);
+      if(expPoints.length){
+        datasets.push({ label: 'Experimental', data: expPoints.map(p => ({ x: p.ts, y: p.accuracy_experimental * 100 })), borderColor: '#BAF2FF', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [2,3] });
+      }
+    }
+    if(challengerPoints.length){
+      datasets.push({ label: 'Challenger Flat', data: challengerPoints.map(p => ({ x: p.ts, y: p.accuracy_flat * 100 })), borderColor: '#DDB7FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 });
+      datasets.push({ label: 'Challenger Tilted', data: challengerPoints.map(p => ({ x: p.ts, y: p.accuracy_tilted * 100 })), borderColor: '#9A6FD1', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [5,3] });
+    }
+    const ctx = document.getElementById('labCombinedHistoryChart').getContext('2d');
+    if(labCombinedHistoryChartInstance){ labCombinedHistoryChartInstance.data.datasets = datasets; labCombinedHistoryChartInstance.update(); }
+    else {
+      labCombinedHistoryChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        plugins: [glowLinePlugin],
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'nearest', intersect: false },
+          scales: {
+            x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
+            y: { min: 0, max: 100, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(59,73,76,0.4)' } },
+          },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: '#BAC9CD', font: { size: 9 }, boxWidth: 10, usePointStyle: true } },
+            tooltip: {
+              backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
+              titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
+              callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
+            },
+          },
+        },
+      });
+    }
+    const knnLast = knnPoints[knnPoints.length-1];
+    const chLast = challengerPoints[challengerPoints.length-1];
+    const parts = [];
+    if(knnLast) parts.push(`k-NN n=${knnLast.n_original}`);
+    if(chLast) parts.push(`Challenger n=${chLast.n}`);
+    countNote.textContent = parts.length ? parts.join(' · ') + ' — different sample sizes, expected' : '';
+  }catch(e){
+    countNote.textContent = 'Could not load combined history.';
   }
 }
 </script>

@@ -374,7 +374,7 @@
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Health & Recent Trend — is it actually improving?</p>
         <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labModelHealthNote')">ⓘ Info</button>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labModelHealthNote">"Recent" is the last 40 resolved predictions for each combo; "Prior" is everything before that — computed by differencing the same expanding-window data the charts above already use, not a separate fetch. This exists specifically to answer "did that last fix actually help" without needing to remember what the numbers were last time or query the database by hand. A combo with fewer than 50 total resolved predictions doesn't have enough history yet to split meaningfully and shows as pending instead of a misleading number. Recent sample sizes here are still small (30-50) — a single-digit swing is normal noise, not a verdict.</p>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labModelHealthNote">"Recent" is the last 40 resolved predictions for each combo; "Prior" is everything before that — computed by differencing the same expanding-window data the charts above already use, not a separate fetch. This exists specifically to answer "did that last fix actually help" without needing to remember what the numbers were last time or query the database by hand. A combo with fewer than 50 total resolved predictions doesn't have enough history yet to split meaningfully and shows as pending instead of a misleading number. Recent sample sizes here are still small (30-50) — a single-digit swing is normal noise, not a verdict.<br><br>The indented "↳ Calibrated" rows are a genuinely different thing from the row above them, not a duplicate: they're a probability adjustment built from that model's OWN accumulated resolved history (decile-bucket recalibration, rebuilt daily), reused as-is for both the core model and Challenger. Never replaces the row above it — shown separately so whether this adaptive layer actually helps gets decided by watching it over real time, not assumed on the way in. Needs its own 20+ resolved predictions before the underlying curve exists at all, on top of the 50 this table already requires — will show "not enough history" for longer than the row above it, that's expected.</p>
       <div id="labModelHealthBody" class="text-sm text-[#BAC9CD]">Loading…</div>
     </section>
   </div>
@@ -1644,6 +1644,16 @@ async function loadLabModelHealth(){
         coin, horizon,
         knn: computeRecentVsPrior(knnPoints, 'n_original', 'accuracy_original', MODEL_HEALTH_RECENT_N),
         challenger: computeRecentVsPrior(chPoints, 'n', 'accuracy_flat', MODEL_HEALTH_RECENT_N),
+        // New, genuinely adaptive variants (calibrated_p_up / calibrated_p_up_flat)
+        // — see checkCoinCatalysts-adjacent worker.js changes for the full
+        // design. Same computeRecentVsPrior differencing already proven for
+        // the rows above, just pointed at the new accuracy_calibrated /
+        // accuracy_calibrated_flat fields. Will correctly show "not enough
+        // history" for a while — the underlying curve itself needs 20+
+        // resolved rows before it exists at all, on top of the 50 this
+        // function already requires to split recent/prior.
+        knnCalibrated: computeRecentVsPrior(knnPoints, 'n_calibrated', 'accuracy_calibrated', MODEL_HEALTH_RECENT_N),
+        challengerCalibrated: computeRecentVsPrior(chPoints, 'n_calibrated', 'accuracy_calibrated_flat', MODEL_HEALTH_RECENT_N),
       };
     }));
 
@@ -1659,6 +1669,16 @@ async function loadLabModelHealth(){
           <td class="py-1 font-bold" style="color:${t.color}">${t.symbol}</td>
         </tr>`);
       }
+      if(r.knnCalibrated){
+        const t = trendArrow(r.knnCalibrated.recentAcc, r.knnCalibrated.priorAcc);
+        rows.push(`<tr>
+          <td class="py-1 pr-2 text-[#7DD3FC] font-semibold">↳ Calibrated</td>
+          <td class="py-1 pr-2 tnum">${r.knnCalibrated.overallAcc.toFixed(1)}% (n=${r.knnCalibrated.overallN})</td>
+          <td class="py-1 pr-2 tnum">${r.knnCalibrated.recentAcc.toFixed(1)}% (n=${r.knnCalibrated.recentN})</td>
+          <td class="py-1 pr-2 tnum">${r.knnCalibrated.priorAcc!=null?r.knnCalibrated.priorAcc.toFixed(1)+'%':'—'}</td>
+          <td class="py-1 font-bold" style="color:${t.color}">${t.symbol}</td>
+        </tr>`);
+      }
       if(r.challenger){
         const t = trendArrow(r.challenger.recentAcc, r.challenger.priorAcc);
         rows.push(`<tr>
@@ -1666,6 +1686,16 @@ async function loadLabModelHealth(){
           <td class="py-1 pr-2 tnum">${r.challenger.overallAcc.toFixed(1)}% (n=${r.challenger.overallN})</td>
           <td class="py-1 pr-2 tnum">${r.challenger.recentAcc.toFixed(1)}% (n=${r.challenger.recentN})</td>
           <td class="py-1 pr-2 tnum">${r.challenger.priorAcc!=null?r.challenger.priorAcc.toFixed(1)+'%':'—'}</td>
+          <td class="py-1 font-bold" style="color:${t.color}">${t.symbol}</td>
+        </tr>`);
+      }
+      if(r.challengerCalibrated){
+        const t = trendArrow(r.challengerCalibrated.recentAcc, r.challengerCalibrated.priorAcc);
+        rows.push(`<tr>
+          <td class="py-1 pr-2 text-[#C4B5FD] font-semibold">↳ Calibrated</td>
+          <td class="py-1 pr-2 tnum">${r.challengerCalibrated.overallAcc.toFixed(1)}% (n=${r.challengerCalibrated.overallN})</td>
+          <td class="py-1 pr-2 tnum">${r.challengerCalibrated.recentAcc.toFixed(1)}% (n=${r.challengerCalibrated.recentN})</td>
+          <td class="py-1 pr-2 tnum">${r.challengerCalibrated.priorAcc!=null?r.challengerCalibrated.priorAcc.toFixed(1)+'%':'—'}</td>
           <td class="py-1 font-bold" style="color:${t.color}">${t.symbol}</td>
         </tr>`);
       }

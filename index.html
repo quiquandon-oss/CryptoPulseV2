@@ -368,6 +368,15 @@
       <div style="height:280px" id="labCombinedHistoryChartContainer"><canvas id="labCombinedHistoryChart"></canvas></div>
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCombinedHistoryCountNote"></p>
     </section>
+
+    <section id="labModelHealthCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Health & Recent Trend — is it actually improving?</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labModelHealthNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labModelHealthNote">"Recent" is the last 40 resolved predictions for each combo; "Prior" is everything before that — computed by differencing the same expanding-window data the charts above already use, not a separate fetch. This exists specifically to answer "did that last fix actually help" without needing to remember what the numbers were last time or query the database by hand. A combo with fewer than 50 total resolved predictions doesn't have enough history yet to split meaningfully and shows as pending instead of a misleading number. Recent sample sizes here are still small (30-50) — a single-digit swing is normal noise, not a verdict.</p>
+      <div id="labModelHealthBody" class="text-sm text-[#BAC9CD]">Loading…</div>
+    </section>
   </div>
 
   <footer class="mt-10 text-[11px] text-[#4B5563]">
@@ -1278,6 +1287,7 @@ function loadLab(){
   loadLabCompareChart();
   loadLabPrecisionChart();
   loadLabCombinedHistoryChart();
+  loadLabModelHealth();
 }
 
 // ---- Sections 1+2: combined-accuracy weighting test + hero label test ----
@@ -1570,6 +1580,114 @@ async function loadLabCombinedHistoryChart(){
     countNote.textContent = parts.length ? parts.join(' · ') + ' — different sample sizes, expected' : '';
   }catch(e){
     countNote.textContent = 'Could not load combined history.';
+  }
+}
+
+// ---- Model Health & Recent Trend — "is it actually improving?" without
+// needing to remember last time's numbers or query D1 by hand. Computed
+// entirely from data the app already fetches elsewhere (calibration-history/
+// challenger-calibration-history) via differencing, not a new endpoint:
+// each point already holds a CUMULATIVE (expanding-window) accuracy, so
+// subtracting one cumulative point from a later one gives the exact
+// accuracy of just the predictions between them -- a clean "recent window"
+// reading with no new backend work. ----
+const MODEL_HEALTH_RECENT_N = 40;
+
+function computeRecentVsPrior(points, nField, accField, recentN){
+  if(!points || !points.length) return null;
+  const last = points[points.length-1];
+  const totalN = last[nField];
+  if(totalN == null || totalN < recentN + 10) return null; // not enough history to split meaningfully
+  const totalCorrect = last[accField] * totalN;
+  const targetN = totalN - recentN;
+  let boundary = points[0];
+  for(const p of points){ if(p[nField] != null && p[nField] <= targetN) boundary = p; else break; }
+  const priorN = boundary[nField] || 0;
+  const priorCorrect = (boundary[accField] || 0) * priorN;
+  const recentActualN = totalN - priorN;
+  const recentCorrect = totalCorrect - priorCorrect;
+  if(recentActualN < 5) return null; // boundary snapping left too few in the "recent" bucket to trust
+  return {
+    overallAcc: last[accField] * 100,
+    overallN: totalN,
+    recentAcc: recentCorrect / recentActualN * 100,
+    recentN: recentActualN,
+    priorAcc: priorN > 0 ? priorCorrect / priorN * 100 : null,
+    priorN: priorN,
+  };
+}
+
+function trendArrow(recentAcc, priorAcc){
+  if(priorAcc == null) return { symbol: '—', color: '#BAC9CD' };
+  const delta = recentAcc - priorAcc;
+  if(Math.abs(delta) < 3) return { symbol: '→', color: '#BAC9CD' }; // within noise, call it flat
+  return delta > 0 ? { symbol: '↑', color: '#4AE176' } : { symbol: '↓', color: '#FFB4AB' };
+}
+
+async function loadLabModelHealth(){
+  const body = document.getElementById('labModelHealthBody');
+  if(!body) return;
+  try{
+    const combos = [
+      { coin: 'BTC', horizon: 12 }, { coin: 'BTC', horizon: 24 },
+      { coin: 'LINK', horizon: 12 }, { coin: 'LINK', horizon: 24 },
+    ];
+    const results = await Promise.all(combos.map(async ({coin, horizon}) => {
+      const cfg = COIN_CONFIG[coin];
+      const [knnRes, chRes] = await Promise.all([
+        fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + horizon).then(r=>r.json()).catch(()=>null),
+        fetch(WORKER_URL + '/challenger-calibration-history?coin=' + coin + '&horizon=' + horizon).then(r=>r.json()).catch(()=>null),
+      ]);
+      const knnPoints = (knnRes && knnRes.points) || [];
+      const chPoints = (chRes && chRes.ok && chRes.points) || [];
+      return {
+        coin, horizon,
+        knn: computeRecentVsPrior(knnPoints, 'n_original', 'accuracy_original', MODEL_HEALTH_RECENT_N),
+        challenger: computeRecentVsPrior(chPoints, 'n', 'accuracy_flat', MODEL_HEALTH_RECENT_N),
+      };
+    }));
+
+    body.innerHTML = results.map(r => {
+      const rows = [];
+      if(r.knn){
+        const t = trendArrow(r.knn.recentAcc, r.knn.priorAcc);
+        rows.push(`<tr>
+          <td class="py-1 pr-2 text-[#00E0FF] font-semibold">Original k-NN</td>
+          <td class="py-1 pr-2 tnum">${r.knn.overallAcc.toFixed(1)}% (n=${r.knn.overallN})</td>
+          <td class="py-1 pr-2 tnum">${r.knn.recentAcc.toFixed(1)}% (n=${r.knn.recentN})</td>
+          <td class="py-1 pr-2 tnum">${r.knn.priorAcc!=null?r.knn.priorAcc.toFixed(1)+'%':'—'}</td>
+          <td class="py-1 font-bold" style="color:${t.color}">${t.symbol}</td>
+        </tr>`);
+      }
+      if(r.challenger){
+        const t = trendArrow(r.challenger.recentAcc, r.challenger.priorAcc);
+        rows.push(`<tr>
+          <td class="py-1 pr-2 text-[#DDB7FF] font-semibold">Challenger Flat</td>
+          <td class="py-1 pr-2 tnum">${r.challenger.overallAcc.toFixed(1)}% (n=${r.challenger.overallN})</td>
+          <td class="py-1 pr-2 tnum">${r.challenger.recentAcc.toFixed(1)}% (n=${r.challenger.recentN})</td>
+          <td class="py-1 pr-2 tnum">${r.challenger.priorAcc!=null?r.challenger.priorAcc.toFixed(1)+'%':'—'}</td>
+          <td class="py-1 font-bold" style="color:${t.color}">${t.symbol}</td>
+        </tr>`);
+      }
+      if(!rows.length){
+        return `<div class="mb-3"><p class="text-xs font-semibold text-[#E1E2E7] mb-1">${r.coin} · ${r.horizon}h</p><p class="text-xs text-[#BAC9CD]">Not enough resolved history yet to split into recent/prior — check back once more predictions have resolved.</p></div>`;
+      }
+      return `<div class="mb-4">
+        <p class="text-xs font-semibold text-[#E1E2E7] mb-1">${r.coin} · ${r.horizon}h</p>
+        <table class="w-full text-[11px]">
+          <thead><tr class="text-[#BAC9CD] text-left">
+            <th class="pb-1 pr-2 font-normal">Model</th>
+            <th class="pb-1 pr-2 font-normal">Overall</th>
+            <th class="pb-1 pr-2 font-normal">Recent (last ${MODEL_HEALTH_RECENT_N})</th>
+            <th class="pb-1 pr-2 font-normal">Prior</th>
+            <th class="pb-1 font-normal">Trend</th>
+          </tr></thead>
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+  }catch(e){
+    body.innerHTML = '<p class="text-[#FFB4AB] text-xs">Could not load model health.</p>';
   }
 }
 </script>

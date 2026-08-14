@@ -985,8 +985,8 @@ const glowLinePlugin = {
 // into the Lab tab's combined-history chart (see wireFullscreenToggle /
 // loadLabCombinedHistoryChart for the replacement).
 
-loadChallenger();
-loadLab();
+// loadChallenger() and loadLab() moved to the very end of the script — see
+// the closing comment near the bottom of this file for why.
 
 // ---- Offline backtest history table (BTC-only, coin-agnostic UI here
 // since these are always BTC — regime_mag/sentiment/combined tests aren't
@@ -1719,6 +1719,25 @@ async function loadLabModelHealth(){
     body.innerHTML = '<p class="text-[#FFB4AB] text-xs">Could not load model health.</p>';
   }
 }
+
+// Real bug found and fixed: this used to fire much earlier in the script
+// (right where the old, now-removed calibration chart's boot call lived).
+// wireFullscreenToggle/buildLabRangeTabs reference const fullscreenState/
+// labChartRangeState/LAB_RANGES, which are declared further down the file
+// — a const isn't accessible until the script's execution actually reaches
+// its own declaration line, unlike a function declaration (hoisted, safe
+// regardless of call-site position). Calling loadLab() before the script
+// had reached those declarations threw "Cannot access before
+// initialization" on every chart that used the new shared helpers,
+// silently leaving them stuck on their initial "Loading…" text forever
+// (an unhandled promise rejection inside an async function, not a
+// synchronous throw a nearby try/catch could catch). Confirmed by running
+// the actual deployed file through its own real boot sequence in jsdom —
+// my own earlier tests had all appended test code at the end of the file,
+// which always runs after the whole script has already executed once,
+// masking exactly this class of mid-script ordering bug.
+loadChallenger();
+loadLab();
 </script>
 </body>
 </html>

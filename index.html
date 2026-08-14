@@ -153,31 +153,18 @@
       </div>
     </details>
 
-    <!-- Calibration over time: expanding cumulative Brier score, not a
-         single snapshot — the point is to see whether the experimental
-         variant's edge (or lack of one) is stable as more data comes in,
-         same discipline that caught V1's Track Record 99% being a
-         single-regime illusion rather than real skill. Same fullscreen
-         pattern as the price chart, but WITH a legend (price chart hides
-         it — here distinguishing Original/Experimental/Baseline actually
-         matters) and a canvas-shadow glow on each line via a small
-         chart-scoped plugin, not a global one. -->
-    <section id="calibChartSection" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 id="calibChartTitle" class="text-sm font-semibold">Calibration Over Time</h2>
-        <div class="flex items-center gap-2">
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'calibChartNote')">ⓘ Info</button>
-          <button id="calibFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-          </button>
-        </div>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="calibChartNote">Each point is the Brier score computed using every resolved prediction up to and including it — not a per-prediction score, a running average. Lower is better; the dashed line is the naive "always guess 50/50" baseline (0.25) — a model not beating that has no demonstrated edge. Watch for stability, not a single favorable reading: an early lead that fades as the line matures is the exact trap that made V1's Track Record tile misleading.</p>
-      <div id="calibChartContainer" class="relative" style="height:260px;">
-        <canvas id="calibChart"></canvas>
-      </div>
-      <p id="calibChartCountNote" class="text-[11px] text-[#BAC9CD] mt-2 font-mono-data"></p>
-    </section>
+    <!-- Calibration Over Time removed from Dashboard — consolidated into
+         the Lab tab's "All models, same graph" chart, which now covers
+         Original k-NN, Experimental, k-NN Calibrated, Challenger Flat,
+         Challenger Tilted, and Challenger Calibrated together on one
+         shared timeline, rather than this Dashboard chart's narrower
+         Original/Experimental-only view sitting alongside two other
+         partial charts in the Lab tab. One canonical benchmark chart
+         instead of three overlapping ones. -->
+    <div class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6 flex items-center justify-between gap-3">
+      <p class="text-xs text-[#BAC9CD]">Model accuracy over time now lives in the <span class="text-[#00E0FF] font-semibold">Lab</span> tab — one chart covering every model variant, not just this one.</p>
+      <button onclick="activeView='lab'; renderNav();" class="shrink-0 text-xs font-semibold text-[#0B0E11] bg-[#00E0FF] rounded-lg px-3 py-1.5">Open Lab</button>
+    </div>
 
     <!-- Offline backtest results: technical_score-only (multi-year Yahoo
          data), regime_mag/sentiment-only (D1's own shorter history), and
@@ -340,39 +327,53 @@
     </section>
 
     <section id="labCompareCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger vs. every other model — <span id="labCompareCoinLabel"></span></p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCompareNote')">ⓘ Info</button>
+        <div class="flex items-center gap-2">
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCompareNote')">ⓘ Info</button>
+          <button id="labCompareFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCompareNote">All 6 bars come from data already computed elsewhere in the app (the k-NN's own /calibration, Challenger's /challenger-calibration) — this just puts them on one chart. These are NOT computed on identical sample sizes (Challenger started later, Experimental needs 20+ logged predictions) — each bar's own n is printed underneath for that reason. Uses whichever coin/horizon is selected above.</p>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCompareNote">Up to 8 bars now (was 6) — added k-NN Calibrated and Challenger Calibrated, sourced from the same expanding-history data the chart below already uses, not a new fetch. These are NOT computed on identical sample sizes (Challenger started later, Experimental and the Calibrated variants each need their own minimum resolved count before they exist) — each bar's own n is printed underneath for that reason. Uses whichever coin/horizon is selected above.</p>
       <div style="height:260px" id="labCompareChartContainer"><canvas id="labCompareChart"></canvas></div>
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCompareCountNote"></p>
     </section>
 
-    <section id="labPrecisionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger precision over time — <span id="labPrecisionCoinLabel"></span></p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labPrecisionNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labPrecisionNote">Expanding-window accuracy — each point is "accuracy using every resolved Challenger prediction up to and including this one." Same principle as the k-NN's own Calibration Over Time chart: a single snapshot can hide whether an apparent edge is real or just one lucky stretch. Early points with few resolved predictions will be noisy and swing a lot — that's expected, not a bug.</p>
-      <div style="height:260px" id="labPrecisionChartContainer"><canvas id="labPrecisionChart"></canvas></div>
-      <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labPrecisionCountNote"></p>
-    </section>
+    <!-- "Challenger precision over time" removed here — consolidated into
+         the "All models, same graph" chart above, which now includes
+         Challenger Flat/Tilted/Calibrated alongside the core model, on one
+         shared timeline, rather than a separate chart showing only
+         Challenger's own subset of variants. -->
 
     <section id="labCombinedHistoryCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">All models, same graph — <span id="labCombinedHistoryCoinLabel"></span></p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCombinedHistoryNote')">ⓘ Info</button>
+        <div class="flex items-center gap-2">
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCombinedHistoryNote')">ⓘ Info</button>
+          <button id="labCombinedHistoryFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCombinedHistoryNote">Same expanding-window accuracy as the chart above, but Original k-NN, Experimental, Challenger Flat, and Challenger Tilted all on one time axis instead of four separate charts. Challenger's lines start later and have fewer points than the k-NN's — it began logging afterward — so its line is shorter and will look noisier early on. That's expected, not a bug: a shorter, choppier line isn't automatically a worse model, it's a younger one with less evidence behind it yet.</p>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCombinedHistoryNote">The one canonical benchmark chart — every model variant that exists (Original k-NN, Experimental, k-NN Calibrated, Challenger Flat, Challenger Tilted, Challenger Calibrated), always compared together, on one time axis, since V2's actual beginning. Standing rule: a younger variant's line starts wherever its own data starts and is simply shorter — never padded, never hidden for having less history. Defaults to ALL; the range tabs zoom in from there, they don't change what's being compared.</p>
+      <div class="flex items-center justify-between mb-2">
+        <div id="labCombinedHistoryRangeTabs" class="flex gap-1"></div>
+      </div>
       <div style="height:280px" id="labCombinedHistoryChartContainer"><canvas id="labCombinedHistoryChart"></canvas></div>
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCombinedHistoryCountNote"></p>
     </section>
 
     <section id="labModelHealthCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Health & Recent Trend — is it actually improving?</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labModelHealthNote')">ⓘ Info</button>
+        <div class="flex items-center gap-2">
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labModelHealthNote')">ⓘ Info</button>
+          <button id="labModelHealthFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
       </div>
       <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labModelHealthNote">"Recent" is the last 40 resolved predictions for each combo; "Prior" is everything before that — computed by differencing the same expanding-window data the charts above already use, not a separate fetch. This exists specifically to answer "did that last fix actually help" without needing to remember what the numbers were last time or query the database by hand. A combo with fewer than 50 total resolved predictions doesn't have enough history yet to split meaningfully and shows as pending instead of a misleading number. Recent sample sizes here are still small (30-50) — a single-digit swing is normal noise, not a verdict.<br><br>The indented "↳ Calibrated" rows are a genuinely different thing from the row above them, not a duplicate: they're a probability adjustment built from that model's OWN accumulated resolved history (decile-bucket recalibration, rebuilt daily), reused as-is for both the core model and Challenger. Never replaces the row above it — shown separately so whether this adaptive layer actually helps gets decided by watching it over real time, not assumed on the way in. Needs its own 20+ resolved predictions before the underlying curve exists at all, on top of the 50 this table already requires — will show "not enough history" for longer than the row above it, that's expected.</p>
       <p class="text-xs text-[#BAC9CD] mb-2" id="labModelHealthChartLabel">Prior vs. Recent — <span id="labModelHealthChartCoin"></span></p>
@@ -499,13 +500,10 @@ function refreshAll(){
   const cfg = COIN_CONFIG[currentCoin];
   document.getElementById('predictionTitle').textContent = `${cfg.label} · Next ${currentHorizon}h`;
   document.getElementById('chartTitle').textContent = `${cfg.label} Price vs. Predictions (${currentHorizon}h)`;
-  document.getElementById('calibChartTitle').textContent = `${cfg.label} Calibration Over Time (${currentHorizon}h)`;
   if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
-  if(calibChartInstance){ calibChartInstance.destroy(); calibChartInstance = null; }
   loadPrediction();
   loadChart();
   loadAnalysis();
-  loadCalibChart();
   loadChallenger();
   loadLab();
 }
@@ -963,12 +961,11 @@ document.getElementById('fullscreenBtn').onclick = () => {
   requestAnimationFrame(() => chartInstance && chartInstance.resize());
 };
 
-// ---- Calibration-over-time chart: expanding cumulative Brier, glowy lines ----
-let calibChartInstance = null;
-
 // Chart-scoped plugin (passed via options.plugins on this one instance, not
 // Chart.register'd globally) — reads each dataset's own borderColor so the
-// glow matches the line instead of one flat color for everything.
+// glow matches the line instead of one flat color for everything. Still
+// used by the Lab tab's combined-history chart even though the Dashboard
+// chart that originally introduced it is gone.
 const glowLinePlugin = {
   id: 'glowLine',
   beforeDatasetDraw(chart, args) {
@@ -983,116 +980,11 @@ const glowLinePlugin = {
   },
 };
 
-function renderCalibChart(points, naiveBaseline){
-  const ctx = document.getElementById('calibChart').getContext('2d');
+// renderCalibChart / loadCalibChart / the old bespoke fullscreen handler
+// removed — Calibration Over Time is gone from the Dashboard, consolidated
+// into the Lab tab's combined-history chart (see wireFullscreenToggle /
+// loadLabCombinedHistoryChart for the replacement).
 
-  const origData = points.map(p => ({ x: p.ts, y: p.brier_original }));
-  const expPoints = points.filter(p => p.brier_experimental !== null);
-  const expData = expPoints.map(p => ({ x: p.ts, y: p.brier_experimental }));
-  const hasExperimental = expData.length > 0;
-
-  const baselineData = points.length
-    ? [{ x: points[0].ts, y: naiveBaseline }, { x: points[points.length-1].ts, y: naiveBaseline }]
-    : [];
-
-  const datasets = [
-    {
-      label: 'Original',
-      data: origData,
-      borderColor: '#BAC9CD',
-      backgroundColor: 'transparent',
-      borderWidth: 2.5,
-      pointRadius: 0,
-      tension: 0.15,
-    },
-  ];
-  if(hasExperimental){
-    datasets.push({
-      label: 'Experimental (adaptive-K)',
-      data: expData,
-      borderColor: '#4AE176',
-      backgroundColor: 'transparent',
-      borderWidth: 2.5,
-      pointRadius: 0,
-      tension: 0.15,
-    });
-  }
-  datasets.push({
-    label: 'Naive baseline (50/50)',
-    data: baselineData,
-    borderColor: 'rgba(186,201,205,0.55)',
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderDash: [6,4],
-    pointRadius: 0,
-    tension: 0,
-  });
-
-  if(calibChartInstance){
-    calibChartInstance.data.datasets = datasets;
-    calibChartInstance.update();
-    return;
-  }
-
-  calibChartInstance = new Chart(ctx, {
-    type: 'line',
-    data: { datasets },
-    plugins: [glowLinePlugin],
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'nearest', intersect: false },
-      scales: {
-        x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
-        y: { min: 0, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
-      },
-      plugins: {
-        legend: { display: true, position: 'top', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 12, usePointStyle: true } },
-        tooltip: {
-          backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
-          titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
-          callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(3)}` },
-        },
-      },
-    },
-  });
-}
-
-async function loadCalibChart(){
-  const cfg = COIN_CONFIG[currentCoin];
-  const countNote = document.getElementById('calibChartCountNote');
-  try{
-    const r = await fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon);
-    const d = await r.json();
-    if(!d.ok || !d.points || !d.points.length){
-      countNote.textContent = 'No resolved predictions yet — nothing to chart.';
-      return;
-    }
-    renderCalibChart(d.points, d.naive_baseline_5050 ?? 0.25);
-    const last = d.points[d.points.length - 1];
-    countNote.textContent = `${last.n_original} resolved · latest Brier ${last.brier_original.toFixed(3)}` +
-      (last.brier_experimental !== null ? ` (original) vs ${last.brier_experimental.toFixed(3)} (experimental, n=${last.n_experimental})` : '');
-  }catch(e){
-    countNote.textContent = 'Could not load calibration history.';
-  }
-}
-
-let isCalibFullscreen = false;
-document.getElementById('calibFullscreenBtn').onclick = () => {
-  const section = document.getElementById('calibChartSection');
-  const container = document.getElementById('calibChartContainer');
-  isCalibFullscreen = !isCalibFullscreen;
-  if(isCalibFullscreen){
-    section.classList.add('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
-    container.style.height = 'calc(100vh - 140px)';
-  }else{
-    section.classList.remove('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
-    container.style.height = '260px';
-  }
-  requestAnimationFrame(() => calibChartInstance && calibChartInstance.resize());
-};
-
-loadCalibChart();
 loadChallenger();
 loadLab();
 
@@ -1287,7 +1179,6 @@ document.getElementById('refreshBtn').onclick = async () => {
 function loadLab(){
   loadLabWeightingAndHero();
   loadLabCompareChart();
-  loadLabPrecisionChart();
   loadLabCombinedHistoryChart();
   loadLabModelHealth();
 }
@@ -1398,10 +1289,17 @@ async function loadLabCompareChart(){
   const countNote = document.getElementById('labCompareCountNote');
   document.getElementById('labCompareCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
   if(!countNote) return;
+  wireFullscreenToggle('labCompareFullscreenBtn', 'labCompareCard', 'labCompareChartContainer', () => labCompareChartInstance, '260px');
   try{
-    const [core, challenger] = await Promise.all([
+    const [core, challenger, knnHistory, challengerHistory] = await Promise.all([
       fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon).then(r=>r.json()),
       fetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
+      // Calibrated variants' overall accuracy isn't on the snapshot
+      // endpoints above yet — reusing the -history endpoints' own latest
+      // point instead of adding a new backend computation, since that
+      // data's already being fetched elsewhere in this same tab.
+      fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
+      fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
     ]);
     const bars = [];
     if(core && core.n_resolved > 0){
@@ -1409,10 +1307,18 @@ async function loadLabCompareChart(){
       if(core.experimental_vs_original && core.experimental_vs_original.available){
         bars.push({ label: 'Experimental (adaptive-K)', acc: core.experimental_vs_original.accuracy_experimental, n: core.experimental_vs_original.n_resolved, color: '#BAF2FF' });
       }
+      const knnLast = knnHistory && knnHistory.points && knnHistory.points.length ? knnHistory.points[knnHistory.points.length-1] : null;
+      if(knnLast && knnLast.accuracy_calibrated != null){
+        bars.push({ label: 'k-NN Calibrated', acc: knnLast.accuracy_calibrated, n: knnLast.n_calibrated, color: '#7DD3FC' });
+      }
     }
     if(challenger && challenger.n_resolved > 0){
       bars.push({ label: 'Challenger Flat', acc: challenger.accuracy_flat, n: challenger.n_resolved, color: '#DDB7FF' });
       bars.push({ label: 'Challenger Tilted', acc: challenger.accuracy_tilted, n: challenger.n_resolved, color: '#9A6FD1' });
+      const chLast = challengerHistory && challengerHistory.ok && challengerHistory.points && challengerHistory.points.length ? challengerHistory.points[challengerHistory.points.length-1] : null;
+      if(chLast && chLast.accuracy_calibrated_flat != null){
+        bars.push({ label: 'Challenger Calibrated', acc: chLast.accuracy_calibrated_flat, n: chLast.n_calibrated, color: '#C4B5FD' });
+      }
       bars.push({ label: 'Naive baseline', acc: challenger.naive_baseline_accuracy, n: challenger.n_resolved, color: '#BAC9CD' });
       if(challenger.ma_crossover_baseline && challenger.ma_crossover_baseline.accuracy != null){
         bars.push({ label: 'MA-crossover', acc: challenger.ma_crossover_baseline.accuracy, n: challenger.ma_crossover_baseline.n, color: '#8A93A6' });
@@ -1463,56 +1369,9 @@ async function loadLabCompareChart(){
 }
 
 // ---- Section 4: Challenger precision over time (expanding-window line chart) ----
-let labPrecisionChartInstance = null;
-async function loadLabPrecisionChart(){
-  const countNote = document.getElementById('labPrecisionCountNote');
-  document.getElementById('labPrecisionCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
-  if(!countNote) return;
-  try{
-    const r = await fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon);
-    const d = await r.json();
-    if(!d.ok || !d.points || !d.points.length){
-      countNote.textContent = 'No resolved Challenger predictions yet for this coin/horizon.';
-      if(labPrecisionChartInstance){ labPrecisionChartInstance.destroy(); labPrecisionChartInstance = null; }
-      return;
-    }
-    const flatData = d.points.map(p => ({ x: p.ts, y: p.accuracy_flat * 100 }));
-    const tiltedData = d.points.map(p => ({ x: p.ts, y: p.accuracy_tilted * 100 }));
-    const datasets = [
-      { label: 'Flat', data: flatData, borderColor: '#DDB7FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 },
-      { label: 'Tilted', data: tiltedData, borderColor: '#9A6FD1', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15, borderDash: [5,3] },
-    ];
-    const ctx = document.getElementById('labPrecisionChart').getContext('2d');
-    if(labPrecisionChartInstance){ labPrecisionChartInstance.data.datasets = datasets; labPrecisionChartInstance.update(); }
-    else {
-      labPrecisionChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: { datasets },
-        plugins: [glowLinePlugin],
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          interaction: { mode: 'nearest', intersect: false },
-          scales: {
-            x: { type: 'time', ticks: { color: '#BAC9CD', maxRotation: 0, font: { family: 'monospace', size: 10 } }, grid: { color: 'rgba(59,73,76,0.4)' } },
-            y: { min: 0, max: 100, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(59,73,76,0.4)' } },
-          },
-          plugins: {
-            legend: { display: true, position: 'top', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 12, usePointStyle: true } },
-            tooltip: {
-              backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
-              titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
-              callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
-            },
-          },
-        },
-      });
-    }
-    const last = d.points[d.points.length - 1];
-    countNote.textContent = `${last.n} resolved · latest: Flat ${(last.accuracy_flat*100).toFixed(1)}% · Tilted ${(last.accuracy_tilted*100).toFixed(1)}%`;
-  }catch(e){
-    countNote.textContent = 'Could not load precision history.';
-  }
-}
+// loadLabPrecisionChart removed — consolidated into loadLabCombinedHistoryChart,
+// which now includes Challenger Flat/Tilted/Calibrated alongside the core
+// model on one shared timeline instead of a separate chart.
 
 // ---- Combined multi-model history: Original k-NN, Experimental,
 // Challenger Flat, Challenger Tilted — all on one time axis. Challenger's
@@ -1520,23 +1379,86 @@ async function loadLabPrecisionChart(){
 // simply not padding/aligning the series, Chart.js's time axis places each
 // point at its real timestamp regardless of which series has more of them. ----
 let labCombinedHistoryChartInstance = null;
+// ---- Shared fullscreen toggle, one implementation reused by every chart
+// instead of a bespoke handler per chart (the price chart and calibration
+// chart each had their own copy before this — this replaces both call
+// sites too, not just the new ones). ----
+const fullscreenState = {};
+function wireFullscreenToggle(btnId, sectionId, containerId, getChartInstance, normalHeight){
+  const btn = document.getElementById(btnId);
+  if(!btn) return;
+  fullscreenState[sectionId] = false;
+  btn.onclick = () => {
+    const section = document.getElementById(sectionId);
+    const container = document.getElementById(containerId);
+    fullscreenState[sectionId] = !fullscreenState[sectionId];
+    if(fullscreenState[sectionId]){
+      section.classList.add('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
+      container.style.height = 'calc(100vh - 140px)';
+    }else{
+      section.classList.remove('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
+      container.style.height = normalHeight;
+    }
+    requestAnimationFrame(() => { const inst = getChartInstance(); inst && inst.resize(); });
+  };
+}
+
+// ---- Shared, reusable range-tab builder for Lab charts. Supports
+// multiple INDEPENDENT range states (one per chart, keyed by stateKey) —
+// unlike the single global activeRange the price chart uses, these must
+// never couple to each other or to the price chart's own range. Defaults
+// to ALL: analyzing since V2's actual beginning is the standing
+// expectation now, range tabs are an optional zoom-in from there, not
+// the starting view. ----
+const LAB_RANGES = [
+  { key: '1W', label: '1W', ms: 7*86400000 },
+  { key: '1M', label: '1M', ms: 30*86400000 },
+  { key: '3M', label: '3M', ms: 90*86400000 },
+  { key: 'ALL', label: 'ALL', ms: Infinity },
+];
+const labChartRangeState = {};
+function buildLabRangeTabs(hostId, stateKey, onChange){
+  if(!(stateKey in labChartRangeState)) labChartRangeState[stateKey] = 'ALL';
+  const host = document.getElementById(hostId);
+  if(!host) return;
+  host.innerHTML = LAB_RANGES.map(r =>
+    `<button data-range="${r.key}" class="range-tab px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors ${r.key===labChartRangeState[stateKey] ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${r.label}</button>`
+  ).join('');
+  host.querySelectorAll('.range-tab').forEach(btn => {
+    btn.onclick = () => { labChartRangeState[stateKey] = btn.dataset.range; buildLabRangeTabs(hostId, stateKey, onChange); onChange(); };
+  });
+}
+function clipToLabRange(points, tsField, stateKey){
+  const range = labChartRangeState[stateKey] || 'ALL';
+  if(range === 'ALL') return points;
+  const rangeMeta = LAB_RANGES.find(r => r.key === range);
+  const cutoff = Date.now() - rangeMeta.ms;
+  return points.filter(p => p[tsField] >= cutoff);
+}
+
 async function loadLabCombinedHistoryChart(){
   const cfg = COIN_CONFIG[currentCoin];
   const countNote = document.getElementById('labCombinedHistoryCountNote');
   document.getElementById('labCombinedHistoryCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
   if(!countNote) return;
+  buildLabRangeTabs('labCombinedHistoryRangeTabs', 'combinedHistory', loadLabCombinedHistoryChart);
+  wireFullscreenToggle('labCombinedHistoryFullscreenBtn', 'labCombinedHistoryCard', 'labCombinedHistoryChartContainer', () => labCombinedHistoryChartInstance, '280px');
   try{
     const [knnRes, challengerRes] = await Promise.all([
       fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()),
       fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
     ]);
-    const knnPoints = (knnRes && knnRes.points) || [];
-    const challengerPoints = (challengerRes && challengerRes.ok && challengerRes.points) || [];
-    if(!knnPoints.length && !challengerPoints.length){
+    const knnPointsAll = (knnRes && knnRes.points) || [];
+    const challengerPointsAll = (challengerRes && challengerRes.ok && challengerRes.points) || [];
+    if(!knnPointsAll.length && !challengerPointsAll.length){
       countNote.textContent = 'No resolved predictions yet for this coin/horizon.';
       if(labCombinedHistoryChartInstance){ labCombinedHistoryChartInstance.destroy(); labCombinedHistoryChartInstance = null; }
       return;
     }
+    // Range clipping applied after fetch, same principle as the price
+    // chart — one full fetch, clip client-side, no re-fetch on tab switch.
+    const knnPoints = clipToLabRange(knnPointsAll, 'ts', 'combinedHistory');
+    const challengerPoints = clipToLabRange(challengerPointsAll, 'ts', 'combinedHistory');
     const datasets = [];
     if(knnPoints.length){
       datasets.push({ label: 'Original k-NN', data: knnPoints.map(p => ({ x: p.ts, y: p.accuracy_original * 100 })), borderColor: '#00E0FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 });
@@ -1544,10 +1466,22 @@ async function loadLabCombinedHistoryChart(){
       if(expPoints.length){
         datasets.push({ label: 'Experimental', data: expPoints.map(p => ({ x: p.ts, y: p.accuracy_experimental * 100 })), borderColor: '#BAF2FF', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [2,3] });
       }
+      // Calibrated variant — same "shorter line from its own start, never
+      // padded or excluded" principle as Experimental/Challenger already
+      // follow, now a standing rule rather than something only applied
+      // when it happened to come up.
+      const calPoints = knnPoints.filter(p => p.accuracy_calibrated != null);
+      if(calPoints.length){
+        datasets.push({ label: 'k-NN Calibrated', data: calPoints.map(p => ({ x: p.ts, y: p.accuracy_calibrated * 100 })), borderColor: '#7DD3FC', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [1,4] });
+      }
     }
     if(challengerPoints.length){
       datasets.push({ label: 'Challenger Flat', data: challengerPoints.map(p => ({ x: p.ts, y: p.accuracy_flat * 100 })), borderColor: '#DDB7FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 });
       datasets.push({ label: 'Challenger Tilted', data: challengerPoints.map(p => ({ x: p.ts, y: p.accuracy_tilted * 100 })), borderColor: '#9A6FD1', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [5,3] });
+      const chCalPoints = challengerPoints.filter(p => p.accuracy_calibrated_flat != null);
+      if(chCalPoints.length){
+        datasets.push({ label: 'Challenger Calibrated', data: chCalPoints.map(p => ({ x: p.ts, y: p.accuracy_calibrated_flat * 100 })), borderColor: '#C4B5FD', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [1,4] });
+      }
     }
     const ctx = document.getElementById('labCombinedHistoryChart').getContext('2d');
     if(labCombinedHistoryChartInstance){ labCombinedHistoryChartInstance.data.datasets = datasets; labCombinedHistoryChartInstance.update(); }
@@ -1688,6 +1622,7 @@ function renderModelHealthChart(combo){
 async function loadLabModelHealth(){
   const body = document.getElementById('labModelHealthBody');
   if(!body) return;
+  wireFullscreenToggle('labModelHealthFullscreenBtn', 'labModelHealthCard', 'labModelHealthChartContainer', () => labModelHealthChartInstance, '240px');
   try{
     const combos = [
       { coin: 'BTC', horizon: 12 }, { coin: 'BTC', horizon: 24 },

@@ -375,7 +375,9 @@
         <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labModelHealthNote')">ⓘ Info</button>
       </div>
       <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labModelHealthNote">"Recent" is the last 40 resolved predictions for each combo; "Prior" is everything before that — computed by differencing the same expanding-window data the charts above already use, not a separate fetch. This exists specifically to answer "did that last fix actually help" without needing to remember what the numbers were last time or query the database by hand. A combo with fewer than 50 total resolved predictions doesn't have enough history yet to split meaningfully and shows as pending instead of a misleading number. Recent sample sizes here are still small (30-50) — a single-digit swing is normal noise, not a verdict.<br><br>The indented "↳ Calibrated" rows are a genuinely different thing from the row above them, not a duplicate: they're a probability adjustment built from that model's OWN accumulated resolved history (decile-bucket recalibration, rebuilt daily), reused as-is for both the core model and Challenger. Never replaces the row above it — shown separately so whether this adaptive layer actually helps gets decided by watching it over real time, not assumed on the way in. Needs its own 20+ resolved predictions before the underlying curve exists at all, on top of the 50 this table already requires — will show "not enough history" for longer than the row above it, that's expected.</p>
-      <div id="labModelHealthBody" class="text-sm text-[#BAC9CD]">Loading…</div>
+      <p class="text-xs text-[#BAC9CD] mb-2" id="labModelHealthChartLabel">Prior vs. Recent — <span id="labModelHealthChartCoin"></span></p>
+      <div style="height:240px" id="labModelHealthChartContainer"><canvas id="labModelHealthChart"></canvas></div>
+      <div id="labModelHealthBody" class="text-sm text-[#BAC9CD] mt-4">Loading…</div>
     </section>
   </div>
 
@@ -1624,6 +1626,65 @@ function trendArrow(recentAcc, priorAcc){
   return delta > 0 ? { symbol: '↑', color: '#4AE176' } : { symbol: '↓', color: '#FFB4AB' };
 }
 
+// ---- Model Health chart — grouped bars, Prior vs Recent, one bar-pair per
+// tracked model variant, scoped to whichever coin/horizon is currently
+// selected (same convention as the other Lab charts). Reuses the exact
+// data loadLabModelHealth already computed for the table below it — no
+// separate fetch, this just visualizes what's already there. ----
+let labModelHealthChartInstance = null;
+function renderModelHealthChart(combo){
+  const canvas = document.getElementById('labModelHealthChart');
+  const coinLabel = document.getElementById('labModelHealthChartCoin');
+  if(!canvas) return;
+  if(coinLabel) coinLabel.textContent = combo ? `${combo.coin} · ${combo.horizon}h` : '';
+
+  const rows = [
+    { label: 'Original k-NN', data: combo?.knn, color: '#00E0FF' },
+    { label: 'k-NN Calibrated', data: combo?.knnCalibrated, color: '#7DD3FC' },
+    { label: 'Challenger Flat', data: combo?.challenger, color: '#DDB7FF' },
+    { label: 'Challenger Calibrated', data: combo?.challengerCalibrated, color: '#C4B5FD' },
+  ].filter(r => r.data); // only chart variants that actually have enough history to show — an absent bar communicates "not enough data yet" better than a fake 0
+
+  if(!rows.length){
+    if(labModelHealthChartInstance){ labModelHealthChartInstance.destroy(); labModelHealthChartInstance = null; }
+    return;
+  }
+
+  const labels = rows.map(r => r.label);
+  const priorData = rows.map(r => r.data.priorAcc != null ? r.data.priorAcc : null);
+  const recentData = rows.map(r => r.data.recentAcc);
+  const barColors = rows.map(r => r.color);
+
+  const ctx = canvas.getContext('2d');
+  const cfg = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Prior', data: priorData, backgroundColor: barColors.map(c => c + '55'), borderColor: barColors, borderWidth: 1.5 },
+        { label: 'Recent (last ' + MODEL_HEALTH_RECENT_N + ')', data: recentData, backgroundColor: barColors, borderColor: barColors, borderWidth: 1.5 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: '#BAC9CD', font: { size: 9 } }, grid: { display: false } },
+        y: { min: 0, max: 100, ticks: { color: '#BAC9CD', font: { size: 10 }, callback: v => v + '%' }, grid: { color: 'rgba(59,73,76,0.4)' } },
+      },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#BAC9CD', font: { size: 9 }, boxWidth: 10 } },
+        tooltip: {
+          backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
+          titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
+          callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y != null ? item.parsed.y.toFixed(1) + '%' : 'n/a'}` },
+        },
+      },
+    },
+  };
+  if(labModelHealthChartInstance){ labModelHealthChartInstance.data = cfg.data; labModelHealthChartInstance.update(); }
+  else { labModelHealthChartInstance = new Chart(ctx, cfg); }
+}
+
 async function loadLabModelHealth(){
   const body = document.getElementById('labModelHealthBody');
   if(!body) return;
@@ -1656,6 +1717,9 @@ async function loadLabModelHealth(){
         challengerCalibrated: computeRecentVsPrior(chPoints, 'n_calibrated', 'accuracy_calibrated_flat', MODEL_HEALTH_RECENT_N),
       };
     }));
+
+    const currentCombo = results.find(r => r.coin === currentCoin && r.horizon === currentHorizon);
+    renderModelHealthChart(currentCombo);
 
     body.innerHTML = results.map(r => {
       const rows = [];

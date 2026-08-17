@@ -365,6 +365,15 @@
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCombinedHistoryCountNote"></p>
     </section>
 
+    <section id="selectedModelCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Selected Model — <span id="selectedModelCoinLabel"></span></p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'selectedModelNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="selectedModelNote">The "council build" — Condition-Matched Selection. Not "which variant has the best recent accuracy" (that's the shallow, explicitly-rejected approach this session already identified as noise-chasing) — instead, "among historical moments that looked like THIS one, which variant was actually right when it made THIS SAME directional call." A variant needs 50+ resolved predictions of its own before being considered, and its local edge must clear a significance bar that gets stricter the more variants are being compared. If nothing clears the bar, it explicitly falls back to Original k-NN rather than forcing a confident-looking pick — that fallback is the common, healthy state early on, not an error.</p>
+      <div id="selectedModelBody" class="text-sm text-[#BAC9CD]">Loading…</div>
+    </section>
+
     <section id="labModelHealthCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Health & Recent Trend — is it actually improving?</p>
@@ -1193,6 +1202,7 @@ function loadLab(){
   loadLabWeightingAndHero();
   loadLabCompareChart();
   loadLabCombinedHistoryChart();
+  loadSelectedModel();
   loadLabModelHealth();
 }
 
@@ -1630,6 +1640,48 @@ function renderModelHealthChart(combo){
   };
   if(labModelHealthChartInstance){ labModelHealthChartInstance.data = cfg.data; labModelHealthChartInstance.update(); }
   else { labModelHealthChartInstance = new Chart(ctx, cfg); }
+}
+
+// ---- Selected Model — the council build's live decision, per coin/horizon.
+// Fetches /selection-history (the log this mechanism writes to), shows the
+// most recent decision plus a short trail of prior ones so a flip is
+// visible, not just the current state. ----
+const SELECTION_VARIANT_LABELS = {
+  original: 'Original k-NN', experimental: 'Experimental (adaptive-K)', calibrated: 'k-NN Calibrated',
+  challenger_flat: 'Challenger Flat', challenger_tilted: 'Challenger Tilted', challenger_calibrated: 'Challenger Calibrated',
+};
+async function loadSelectedModel(){
+  const body = document.getElementById('selectedModelBody');
+  if(!body) return;
+  document.getElementById('selectedModelCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
+  try{
+    const r = await fetch(WORKER_URL + '/selection-history?coin=' + currentCoin + '&horizon=' + currentHorizon + '&limit=5');
+    const d = await r.json();
+    if(!d.ok || !d.decisions || !d.decisions.length){
+      body.innerHTML = `<p class="text-xs text-mutet">No selection decisions logged yet for ${currentCoin} · ${currentHorizon}h — this runs automatically alongside each prediction cycle, check back after the next one.</p>`;
+      return;
+    }
+    const [latest, ...prior] = d.decisions;
+    const label = SELECTION_VARIANT_LABELS[latest.chosen_variant] || latest.chosen_variant;
+    const clearedBadge = latest.cleared_gate
+      ? `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded" style="background:rgba(74,225,118,0.15);color:#4AE176">CLEARED SIGNIFICANCE BAR</span>`
+      : `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded" style="background:rgba(186,201,205,0.15);color:#BAC9CD">FALLBACK — bar not cleared</span>`;
+    let html = `<div class="mb-3">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-lg font-bold" style="color:${latest.cleared_gate ? '#4AE176' : '#00E0FF'}">${label}</span>
+        ${clearedBadge}
+      </div>
+      <p class="text-xs text-mutet leading-relaxed">${latest.reason}</p>
+    </div>`;
+    if(prior.length){
+      const allChosen = d.decisions.map(x => x.chosen_variant);
+      const flips = allChosen.slice(0,-1).filter((v,i) => v !== allChosen[i+1]).length;
+      html += `<p class="text-[11px] text-mutet border-t border-[#3B494C] pt-2 mt-2">Last ${d.decisions.length} decisions (${flips} change${flips===1?'':'s'}): ${allChosen.map(v => SELECTION_VARIANT_LABELS[v] || v).join(' → ')}</p>`;
+    }
+    body.innerHTML = html;
+  }catch(e){
+    body.innerHTML = '<p class="text-down text-xs">Could not load selection history.</p>';
+  }
 }
 
 async function loadLabModelHealth(){

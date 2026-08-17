@@ -470,8 +470,17 @@ const COIN_CONFIG = {
     label: 'LINK', predict: '/link-predict', calib: '/link-calibration', calibHistory: '/link-calibration-history', chart: '/link-chart-data', analysis: '/link-gemini-analysis',
     priceNowField: 'link_price_now', priceHistField: 'link_price', predPriceField: 'link_price_at_prediction',
   },
+  // ETH's own model, deliberately narrower feature set (technical_score +
+  // eth_regime_mag only, both self-computed — no borrowed BTC data, unlike
+  // LINK). No analysis route — no ETH-specific Gemini narrative exists,
+  // same honest gap as the model itself: newer, less proven, shown as such
+  // rather than papered over.
+  ETH: {
+    label: 'ETH', predict: '/eth-predict', calib: '/eth-calibration', calibHistory: '/eth-calibration-history', chart: '/eth-chart-data', analysis: null,
+    priceNowField: 'eth_price_now', priceHistField: 'eth_price', predPriceField: 'eth_price_at_prediction',
+  },
 };
-const COINS = ['BTC', 'LINK'];
+const COINS = ['BTC', 'LINK', 'ETH'];
 const HORIZONS = [12, 24];
 let currentCoin = 'BTC';
 let currentHorizon = 24;
@@ -898,6 +907,10 @@ async function loadAnalysis(){
   const empty = document.getElementById('analysisEmpty');
   card.classList.add('hidden');
   empty.classList.remove('hidden');
+  if(!cfg.analysis){
+    empty.innerHTML = `<p class="text-sm text-[#BAC9CD]">No daily Gemini analysis for ${currentCoin} yet — this model is newer, that piece hasn't been built for it.</p>`;
+    return;
+  }
   try{
     const r = await fetch(WORKER_URL + cfg.analysis + '?limit=30');
     const d = await r.json();
@@ -1627,6 +1640,7 @@ async function loadLabModelHealth(){
     const combos = [
       { coin: 'BTC', horizon: 12 }, { coin: 'BTC', horizon: 24 },
       { coin: 'LINK', horizon: 12 }, { coin: 'LINK', horizon: 24 },
+      { coin: 'ETH', horizon: 12 }, { coin: 'ETH', horizon: 24 },
     ];
     const results = await Promise.all(combos.map(async ({coin, horizon}) => {
       const cfg = COIN_CONFIG[coin];

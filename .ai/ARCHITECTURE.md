@@ -210,3 +210,39 @@ Do NOT initially implement:
 - LLM-generated features directly used in prediction
 - automatic model retraining from one day's results
 - uncontrolled self-modifying behavior
+
+---
+
+# Dashboard Contract
+
+Any dashboard or standalone presentation surface (including the production
+CryptoPulseV2 frontend and any scratch/prototype dashboard built alongside it)
+consumes data through the Worker/API layer. It does not independently recompute
+accuracy, calibration, Brier score, or any other metric the learning engine already
+owns.
+
+```
+CoinGecko / market sources
+          |
+          v
+     CryptoPulse API
+          |
+          v
+       D1 / Worker
+          |
+ +--------+---------+
+ v                  v
+Dashboard       AI Learning
+                    |
+                ChatGPT
+                    |
+              Claude tasks
+```
+
+The Worker/API is the single source of truth for any number a dashboard displays
+about model performance. This prevents the dashboard and the learning API from
+silently disagreeing about the same underlying prediction history.
+
+Status: documented, not yet implemented. The current standalone dashboard prototype
+predates the `/api/learning/*` endpoints and does not yet consume them — see the
+continuous-learning-foundation PR's "Remaining work" for tracking.

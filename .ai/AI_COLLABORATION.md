@@ -48,6 +48,190 @@ ChatGPT creates experiment proposals only when evidence justifies them.
 
 ---
 
+# Gemini — Market Intelligence Agent
+
+Gemini is the dedicated external Market Intelligence agent.
+
+Gemini answers:
+
+> What happened in the market?
+
+Gemini is responsible for:
+
+- current market-event investigation
+- catalyst discovery
+- source collection
+- event timestamp identification
+- publication timestamp identification
+- market-wide vs asset-specific analysis
+- macro and crypto-specific context
+
+Gemini is NOT responsible for:
+
+- model engineering
+- prediction generation
+- model selection
+- calibration
+- experiment approval
+- production deployment
+
+---
+
+# Three-AI Collaboration Model
+
+## Gemini
+
+DISCOVER
+
+Find credible evidence about what happened.
+
+↓
+
+## ChatGPT
+
+AUDIT
+
+Determine what the evidence means for CryptoPulse and whether the model
+failure/success is significant.
+
+↓
+
+## Claude
+
+BUILD
+
+Implement an experiment based on an approved hypothesis.
+
+↓
+
+## Human
+
+APPROVE
+
+Decide whether a validated Challenger should become Production.
+
+---
+
+# Information Flow
+
+CryptoPulse
+    |
+    +--> Prediction/outcome data
+    |
+    +--> Market event trigger
+              |
+              v
+          Gemini
+              |
+              v
+       Catalyst evidence
+              |
+              v
+      CryptoPulse validation
+              |
+              v
+             D1
+              |
+              v
+          ChatGPT audit
+              |
+              v
+       Experiment proposal
+              |
+              v
+            Claude
+              |
+              v
+       Implementation + tests
+              |
+              v
+             PR
+              |
+              v
+       Independent review
+              |
+              v
+        Human approval
+
+---
+
+# Independence Rule
+
+Gemini and ChatGPT must remain analytically independent.
+
+ChatGPT must not blindly accept Gemini's catalyst attribution.
+
+Gemini provides evidence.
+
+ChatGPT evaluates the evidence.
+
+---
+
+# Timestamp Rule
+
+Gemini may report:
+
+- event_timestamp
+- first_public_timestamp
+- publication_timestamp
+- discovery_timestamp
+
+CryptoPulse computes:
+
+available_before_prediction
+
+using deterministic timestamp comparison.
+
+The LLM must never decide whether an event was available to the model.
+
+---
+
+# Production Safety
+
+Gemini must never:
+
+- modify Production model behavior
+- change model weights
+- change feature weights
+- change calibration
+- promote Challenger
+- trigger deployment
+- write directly to D1
+
+Gemini output is advisory evidence until validated by CryptoPulse.
+
+---
+
+# Experiment Flow (Gemini-Originated Findings)
+
+A Gemini finding does NOT automatically create an experiment.
+
+Required flow:
+
+Gemini finding
+    ↓
+ChatGPT audit
+    ↓
+Evidence sufficient?
+    |
+    +-- NO --> record finding only
+    |
+    +-- YES
+          ↓
+       hypothesis
+          ↓
+       experiment
+          ↓
+        Claude
+          ↓
+     backtest/OOS
+          ↓
+     independent review
+          ↓
+     human approval
+
+---
+
 # Required Experiment Flow
 
 ChatGPT:

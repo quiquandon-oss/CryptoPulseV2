@@ -8,11 +8,177 @@ This is an analytical layer, not a prediction feature initially.
 
 ---
 
+# Gemini Market Intelligence Integration
+
+Gemini is the external market-intelligence provider for catalyst discovery.
+
+Gemini is responsible for finding and explaining possible catalysts.
+
+CryptoPulse remains responsible for:
+
+- timestamp validation
+- prediction-time availability
+- schema validation
+- deduplication
+- D1 persistence
+
+ChatGPT remains responsible for independent interpretation.
+
+---
+
+# Catalyst Evidence Levels
+
+Every catalyst should be considered one of:
+
+EVIDENCE_CONFIRMED
+EVIDENCE_PROBABLE
+EVIDENCE_WEAK
+NO_CLEAR_CATALYST
+
+Gemini may initially propose the classification.
+
+The system should preserve the distinction between AI attribution and
+verified source evidence.
+
+---
+
+# Three Timestamp Model
+
+Catalyst analysis must distinguish:
+
+## Event Timestamp
+
+When the underlying event actually occurred.
+
+## First Public Timestamp
+
+When credible public information about the event became available.
+
+## Discovery Timestamp
+
+When Gemini discovered the information.
+
+These timestamps are NOT interchangeable.
+
+Example:
+
+Event:
+12:00
+
+First public report:
+12:15
+
+Gemini discovery:
+13:00
+
+Prediction:
+12:30
+
+Result:
+
+available_before_prediction = false
+
+Even though the event occurred before the prediction, credible public
+information was not available until after the prediction.
+
+---
+
+# Deterministic Availability
+
+CryptoPulse must calculate:
+
+available_before_prediction
+
+using:
+
+first_public_timestamp <= prediction_timestamp
+
+If first_public_timestamp is unknown:
+
+available_before_prediction = unknown
+
+Never infer availability from event_timestamp alone.
+
+---
+
+# Catalyst Provenance
+
+Every AI-derived catalyst must retain provenance.
+
+At minimum:
+
+- investigation_id
+- source URL
+- source title
+- publisher
+- publication timestamp
+- event timestamp
+- first public timestamp
+- discovery timestamp
+- Gemini confidence
+- validation status
+
+---
+
+# Gemini Failure
+
+If Gemini cannot establish a credible catalyst:
+
+store:
+
+NO_CLEAR_CATALYST
+
+or retain the event as unresolved.
+
+Do not manufacture an explanation.
+
+---
+
+# ChatGPT Interpretation
+
+ChatGPT may classify the final analytical interpretation as:
+
+PREDICTABLE_EVENT
+PARTIALLY_PREDICTABLE
+UNPREDICTABLE_EVENT
+INSUFFICIENT_EVIDENCE
+
+This is an audit conclusion and must remain separate from Gemini's original
+catalyst attribution.
+
+---
+
+# Catalyst → Model Learning
+
+A catalyst must NOT automatically become a model feature.
+
+First establish historical evidence.
+
+Example:
+
+If 30 high-confidence prediction failures occurred around major macro events,
+ChatGPT may propose:
+
+EXP-XXX — Event-risk regime experiment
+
+Claude then tests the hypothesis.
+
+Only successful out-of-sample evidence can justify production consideration.
+
+---
+
 # Core Question
 
 For every significant resolved prediction:
 
-"What happened in the market, and was the cause knowable when the prediction was made?"
+1. What happened in the market?
+2. What credible catalyst explains the movement?
+3. When did the event occur?
+4. When did credible public information become available?
+5. When did Gemini discover it?
+6. Was the information available at prediction time?
+7. Did the model have an observable warning?
+8. Does historical evidence show similar failures?
 
 ---
 

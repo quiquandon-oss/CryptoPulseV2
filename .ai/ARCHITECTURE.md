@@ -77,6 +77,132 @@ The repository owner has final authority over:
 
 ---
 
+# Three-Agent Intelligence Architecture
+
+CryptoPulseV2 uses three specialized AI roles.
+
+## Gemini — Market Intelligence Agent
+
+Purpose:
+
+Discover and structure external market information.
+
+Primary question:
+
+> What happened?
+
+Inputs:
+
+- market event
+- asset
+- event window
+- relevant prediction timestamps
+
+Outputs:
+
+- candidate catalysts
+- sources
+- timestamps
+- market classification
+- confidence
+- evidence
+
+Gemini does not modify model behavior.
+
+---
+
+## ChatGPT — Independent Auditor
+
+Purpose:
+
+Evaluate CryptoPulse performance and interpret market evidence.
+
+Primary question:
+
+> What does what happened mean for the model?
+
+Inputs:
+
+- predictions
+- outcomes
+- model metrics
+- Gemini catalyst evidence
+- historical performance
+
+Outputs:
+
+- audit findings
+- causal interpretation
+- recurring failure patterns
+- experiment hypotheses
+
+ChatGPT does not directly modify Production.
+
+---
+
+## Claude — Model Engineer
+
+Purpose:
+
+Implement and validate experiments.
+
+Primary question:
+
+> What can we build and test?
+
+Inputs:
+
+- experiment specification
+- hypothesis
+- acceptance criteria
+
+Outputs:
+
+- code
+- tests
+- backtests
+- out-of-sample validation
+- Pull Request
+
+Claude does not automatically promote Production.
+
+---
+
+# Market Intelligence Data Flow
+
+Market event
+     |
+     v
+Trigger engine
+     |
+     v
+Gemini
+     |
+     v
+Structured catalyst evidence
+     |
+     v
+CryptoPulse validation
+     |
+     +--> timestamp validation
+     +--> source validation
+     +--> deduplication
+     +--> availability calculation
+     |
+     v
+D1 catalyst log
+     |
+     v
+Daily Learning Report
+     |
+     v
+ChatGPT
+     |
+     v
+Experiment hypothesis
+
+---
+
 # System Architecture
 
 The target architecture is:
@@ -200,6 +326,42 @@ Do not expose administrative endpoints to AI consumers.
 
 ---
 
+# AI Boundary Rules
+
+Gemini is an evidence provider.
+
+ChatGPT is an auditor.
+
+Claude is an engineer.
+
+No AI agent may silently assume another agent's output is ground truth.
+
+All AI-generated information must remain identifiable as AI-derived until
+validated by deterministic system logic or reliable source evidence.
+
+---
+
+# External Intelligence Is Non-Critical
+
+Failure of Gemini must never prevent:
+
+- prediction generation
+- prediction storage
+- outcome resolution
+- daily metric calculation
+
+Market intelligence is an enrichment layer.
+
+Prediction infrastructure must remain operational if Gemini is:
+
+- unavailable
+- rate limited
+- malformed
+- misconfigured
+- returning no useful result
+
+---
+
 # Non-goals
 
 Do NOT initially implement:
@@ -246,3 +408,46 @@ silently disagreeing about the same underlying prediction history.
 Status: documented, not yet implemented. The current standalone dashboard prototype
 predates the `/api/learning/*` endpoints and does not yet consume them — see the
 continuous-learning-foundation PR's "Remaining work" for tracking.
+
+---
+
+# Learning Intelligence Stack
+
+```
+                    CryptoPulse
+                         |
+             +-----------+-----------+
+             |                       |
+             v                       v
+        Prediction               Market Event
+          Ledger                   Trigger
+             |                       |
+             |                       v
+             |                    Gemini
+             |                       |
+             |                 Catalyst Evidence
+             |                       |
+             +-----------+-----------+
+                         |
+                         v
+                    Learning D1
+                         |
+                         v
+                      ChatGPT
+                         |
+                         v
+                 Experiment Proposal
+                         |
+                         v
+                       Claude
+                         |
+                         v
+                  Tests / Backtest
+                         |
+                         v
+                        PR
+                         |
+                         v
+                 Human Approval
+```
+

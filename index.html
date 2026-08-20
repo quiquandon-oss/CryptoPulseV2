@@ -63,6 +63,7 @@
     <button data-view="analysis" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="challenger" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="learning" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
 
   <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
@@ -391,6 +392,123 @@
     </section>
   </div>
 
+  <!-- ═══ AI LEARNING TAB ═══ Exposes CryptoPulseV2's continuous-learning
+       loop. Two live, already-deployed endpoints back this: /select-variant
+       and /selection-history (both real, both in production today). The
+       richer /api/learning/daily and /api/learning/chatgpt endpoints exist
+       in code but are on an unmerged branch (feature/continuous-learning-
+       foundation, PulseWorkerV2) — this view calls them anyway (that's the
+       real, intended path) and shows an honest "Unavailable" state until
+       that branch merges and deploys, rather than blocking on it. Gemini
+       investigation results, the full experiment lifecycle (EXP-NNN
+       stages), and per-variant eligibility for variants that never reached
+       50 resolved predictions have NO backend endpoint at all yet — those
+       sections say so plainly instead of inventing data. ═══ -->
+  <div id="view-learning" class="hidden">
+
+    <!-- Section 1 — Status -->
+    <section id="learnStatusCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+        <div>
+          <h2 class="text-base font-bold">AI Learning</h2>
+          <p class="text-xs text-[#BAC9CD] mt-0.5">How CryptoPulse learns from predictions, outcomes and experiments.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnStatusNote')">ⓘ Info</button>
+          <button id="learnRefreshBtn" class="text-[10px] text-[#BAC9CD] hover:text-[#00E0FF] border border-[#3B494C] hover:border-[#00E0FF]/40 rounded-md px-2 py-1 transition-colors flex items-center gap-1">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>Refresh
+          </button>
+        </div>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 mt-2 leading-relaxed" id="learnStatusNote">Each item below reflects a real signal from the backend — a status only shows "Healthy"/"Active" when a call actually succeeded, never a placeholder. "Unavailable" means no endpoint exists yet or the current deploy doesn't include it, not that something is broken.</p>
+      <div id="learnStatusGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
+    </section>
+
+    <!-- Section 2 — Learning Loop -->
+    <section id="learnLoopCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Loop</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnLoopNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnLoopNote">Each stage is a real step in the architecture, not a promise of automatic flow between them — a "connected" badge means this build actually calls a live endpoint for that stage; "not yet wired" means the stage is designed (see .ai/ in the CryptoPulseV2 repo) but has no queryable API today. No stage ever auto-advances to the next.</p>
+      <div id="learnLoop" class="flex flex-col md:flex-row md:items-stretch gap-1.5 mt-3"></div>
+    </section>
+
+    <!-- Section 3 — KPI Snapshot -->
+    <section id="learnKpiCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Learning Snapshot</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnKpiNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnKpiNote">Sourced entirely from GET /api/learning/daily — accuracy/Brier/calibration shown here are the BTC (all horizons combined) figures from that endpoint, never recomputed in this browser. The four "awaiting" experiment counts aren't broken out by stage in the current backend response — they show "Not available" rather than a guess.</p>
+      <div id="learnKpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
+    </section>
+
+    <!-- Section 4 — Model Selection (live, per current coin/horizon) -->
+    <section id="learnSelectionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Selection — <span id="learnSelectionCoinLabel"></span></p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnSelectionNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnSelectionNote">Live from GET /select-variant — runs the real Dynamic Classifier Selection logic on request, the same call the backend cron uses. A variant needs 50+ of its own resolved predictions before it's even compared (SELECTION_MIN_HISTORY) — variants below that bar aren't in the "eligible variants compared" list at all, since the backend doesn't return them. ELIGIBLE (compared, cleared the history bar) is not the same as SELECTED (the one actually chosen this round) — both are shown separately below.</p>
+      <div id="learnSelectionBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <!-- Section 5 — Recent Learning Events -->
+    <section id="learnEventsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <h2 class="text-sm font-semibold mb-1">Recent Learning Events — <span id="learnEventsCoinLabel" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
+      <p class="text-xs text-[#BAC9CD] mb-3">Real selection decisions from GET /selection-history for the coin/horizon selected above — not a fabricated cross-pipeline feed.</p>
+      <div id="learnEventsBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <!-- Section 6 — Experiment Pipeline -->
+    <section id="learnExperimentsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Experiment Pipeline</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnExperimentsNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnExperimentsNote">candidate_experiments from GET /api/learning/daily is the only backend-populated source for this section today, and nothing currently writes to it — an empty list here is an accurate reflection of the backend, not a loading failure. Full experiment lifecycle tracking (EXP-NNN, stages, backtest/OOS results) exists as markdown files in PulseWorkerV2's /learning/ directory, not yet as a queryable API.</p>
+      <div id="learnExperimentsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <!-- Section 7 — AI Responsibility Cards -->
+    <section id="learnRolesCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-3">AI Responsibility Model</p>
+      <div id="learnRolesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    </section>
+
+    <!-- Section 8 — Learning by Regime -->
+    <section id="learnRegimeCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning by Regime</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnRegimeNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnRegimeNote">Regime taxonomy is whatever the backend's regime_analysis actually returns (trend/volatility/anomaly buckets built from each prediction's own stored volatility_percentile and trend_strength) — nothing here is a frontend-invented category.</p>
+      <div id="learnRegimeBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <!-- Section 9 — Model Variant Comparison -->
+    <section id="learnVariantsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Variant Comparison — <span id="learnVariantsCoinLabel"></span></p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnVariantsNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnVariantsNote">Same live /select-variant response as the Current Selection section above, reused (not a second fetch). Only shows variants that cleared the 50-resolved-prediction eligibility bar — the backend doesn't return variants below it, so this list can't show "active but not yet eligible" variants even though some may exist.</p>
+      <div id="learnVariantsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <!-- Section 10 — Audit Trail -->
+    <section id="learnAuditCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <button id="learnAuditToggleBtn" class="w-full flex items-center justify-between text-left" onclick="toggleLearnAudit()" aria-expanded="false" aria-controls="learnAuditBody">
+        <span class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Audit Trail</span>
+        <span id="learnAuditChevron" class="material-symbols-outlined text-[16px] text-[#BAC9CD] transition-transform">expand_more</span>
+      </button>
+      <p class="text-xs text-[#BAC9CD] mt-1">Every selection decision, traceable — same underlying data as Recent Learning Events, in raw audit form.</p>
+      <div id="learnAuditBody" class="hidden mt-3"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+  </div>
+
   <footer class="mt-10 text-[11px] text-[#4B5563]">
     Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" class="underline hover:text-[#BAC9CD]">PulseWorkerV2</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" class="underline hover:text-[#BAC9CD]">CryptoPulse</a>
   </footer>
@@ -418,6 +536,10 @@
   <button data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]">science</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Lab</span>
+  </button>
+  <button data-view="learning" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]">school</span>
+    <span class="text-[10px] font-semibold uppercase tracking-wide">Learning</span>
   </button>
 </nav>
 
@@ -524,6 +646,13 @@ function refreshAll(){
   loadAnalysis();
   loadChallenger();
   loadLab();
+  // Learning selection/events/variants are coin+horizon-scoped like the
+  // views above, but only worth fetching if AI Learning is the view
+  // actually on screen — unlike the eager fetch-everything pattern above
+  // (already the existing convention for the other four views), pulling
+  // learning data on every coin/horizon change regardless of visibility
+  // would be pure wasted polling for a tab most sessions won't open.
+  if (activeView === 'learning' && _learningLoaded) loadLearningSelection();
 }
 
 async function loadPrediction(){
@@ -854,8 +983,10 @@ const NAV = [
   { key: 'analysis', label: 'Analysis' },
   { key: 'challenger', label: 'Challenger' },
   { key: 'lab', label: 'Lab' },
+  { key: 'learning', label: 'AI Learning' },
 ];
-let activeView = 'dashboard';
+let activeView = (location.hash || '').replace('#', '') || 'dashboard';
+if (!NAV.some(n => n.key === activeView)) activeView = 'dashboard';
 
 function renderNav(){
   document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -874,10 +1005,12 @@ function renderNav(){
   document.getElementById('view-analysis').classList.toggle('hidden', activeView !== 'analysis');
   document.getElementById('view-challenger').classList.toggle('hidden', activeView !== 'challenger');
   document.getElementById('view-lab').classList.toggle('hidden', activeView !== 'lab');
+  document.getElementById('view-learning').classList.toggle('hidden', activeView !== 'learning');
+  if (activeView === 'learning' && !_learningLoaded) loadLearningOverview();
 }
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
-  btn.onclick = () => { activeView = btn.dataset.view; renderNav(); };
+  btn.onclick = () => { activeView = btn.dataset.view; history.replaceState(null, '', '#' + activeView); renderNav(); };
 });
 renderNav();
 
@@ -1802,6 +1935,529 @@ async function loadLabModelHealth(){
 // my own earlier tests had all appended test code at the end of the file,
 // which always runs after the whole script has already executed once,
 // masking exactly this class of mid-script ordering bug.
+// ═══════════════════════════════════════════════════════════════════
+// AI LEARNING VIEW
+//
+// Backend reality check, as of this build:
+//   REAL, LIVE, deployed today:      GET /select-variant, GET /selection-history
+//   REAL, code exists, not deployed: GET /api/learning/daily, GET /api/learning/chatgpt
+//     (branch feature/continuous-learning-foundation, PulseWorkerV2 —
+//     expected to 404 against production until that PR merges; handled
+//     as an Unavailable state below, never assumed to work.)
+//   NOT IMPLEMENTED ANYWHERE:        Gemini investigation query endpoint,
+//     per-experiment lifecycle API (EXP-NNN/stages), model_variants and
+//     variant_history tables (don't exist in D1 — confirmed by querying
+//     it directly), any GEMINI/CHATGPT/CLAUDE/HUMAN-attributed audit
+//     entries (selection_decisions rows are always SYSTEM-authored).
+// Every render function below shows an explicit unavailable/empty state
+// for anything in the second and third category — nothing is guessed,
+// and no browser-side recalculation of accuracy/Brier/calibration/
+// eligibility ever happens; those numbers are used exactly as returned.
+//
+// KNOWN OVERLAP, not resolved in this pass: the existing Lab tab's
+// "Selected Model" card (loadSelectedModel(), further up this file) ALSO
+// calls GET /selection-history for the current coin/horizon, independently
+// of Section 4/5/9/10 below. Both fire when Lab has already loaded once
+// (refreshAll()'s existing eager-fetch pattern) and the Learning tab is
+// then opened — a real, minor duplicate fetch this pass didn't
+// consolidate. SELECTION_VARIANT_LABELS (defined with that card) IS
+// reused here for consistent display names, which was a quick, safe win;
+// sharing the actual fetch/cache between the two is a reasonable
+// follow-up, not done here to avoid touching that existing card's code
+// under time pressure.
+// ═══════════════════════════════════════════════════════════════════
+
+const learningApi = {
+  async getDailyOverview(){
+    try{
+      const r = await fetch(WORKER_URL + '/api/learning/daily');
+      if(!r.ok) return { ok:false, unavailable:true };
+      const d = await r.json();
+      if(d.ok === false) return { ok:false, unavailable:true };
+      return { ok:true, data:d };
+    }catch(e){ return { ok:false, unavailable:true }; }
+  },
+  async getChatGptOverview(){
+    try{
+      const r = await fetch(WORKER_URL + '/api/learning/chatgpt');
+      if(!r.ok) return { ok:false, unavailable:true };
+      const d = await r.json();
+      if(d.ok === false) return { ok:false, unavailable:true };
+      return { ok:true, data:d };
+    }catch(e){ return { ok:false, unavailable:true }; }
+  },
+  async getSelection(coin, horizon){
+    try{
+      const r = await fetch(WORKER_URL + '/select-variant?coin=' + coin + '&horizon=' + horizon);
+      if(!r.ok) return { ok:false, unavailable:true };
+      const d = await r.json();
+      if(d.ok === false) return { ok:false, unavailable:true };
+      return { ok:true, data:d };
+    }catch(e){ return { ok:false, unavailable:true }; }
+  },
+  async getSelectionHistory(coin, horizon, limit){
+    try{
+      const r = await fetch(WORKER_URL + '/selection-history?coin=' + coin + '&horizon=' + horizon + '&limit=' + (limit || 20));
+      if(!r.ok) return { ok:false, unavailable:true };
+      const d = await r.json();
+      if(d.ok === false) return { ok:false, unavailable:true };
+      return { ok:true, data:d };
+    }catch(e){ return { ok:false, unavailable:true }; }
+  },
+  // The four below have no dedicated backend endpoint at all yet. Kept as
+  // explicit adapter methods, per the requested shape, so wiring a real
+  // endpoint later is a one-line change here rather than a new
+  // integration — each currently derives from a call above instead of
+  // hitting an invented URL. See the render functions using them for
+  // exactly what's real vs. derived.
+  async getVariants(coin, horizon){ return this.getSelection(coin, horizon); },
+  async getRegimePerformance(){ return this.getDailyOverview(); },
+  async getExperiments(){ return this.getDailyOverview(); },
+  async getEvents(coin, horizon){ return this.getSelectionHistory(coin, horizon, 20); },
+  async getAuditTrail(coin, horizon){ return this.getSelectionHistory(coin, horizon, 20); },
+  async getStatus(){ return null; }, // status grid composes the calls above directly — see renderLearningStatus
+};
+
+let _learningLoaded = false;
+let _learningGlobalCache = null;
+let _learningSelectionCache = {};
+
+const STATUS_COLORS = {
+  Healthy:     { dot: '#4AE176', text: '#4AE176' },
+  Active:      { dot: '#00E0FF', text: '#00E0FF' },
+  Pending:     { dot: '#FFB020', text: '#FFB020' },
+  Awaiting:    { dot: '#FFB020', text: '#FFB020' },
+  Blocked:     { dot: '#FFB4AB', text: '#FFB4AB' },
+  Unavailable: { dot: '#4B5563', text: '#BAC9CD' },
+  Unknown:     { dot: '#4B5563', text: '#BAC9CD' },
+};
+function statusChip(label, status, text, ts, tooltip){
+  const c = STATUS_COLORS[status] || STATUS_COLORS.Unknown;
+  const tsHtml = ts ? `<p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${new Date(ts).toLocaleString()}</p>` : '';
+  return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5"${tooltip ? ` title="${String(tooltip).replace(/"/g,'&quot;')}"` : ''}>
+    <p class="text-[9px] text-[#4B5563] uppercase tracking-wide mb-1">${label}</p>
+    <div class="flex items-center gap-1.5 mb-1">
+      <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${c.dot}"></span>
+      <span class="text-[10px] font-semibold" style="color:${c.text}">${status}</span>
+    </div>
+    <p class="text-[10px] text-[#BAC9CD] leading-tight">${text}</p>
+    ${tsHtml}
+  </div>`;
+}
+
+async function loadLearningOverview(){
+  _learningLoaded = true;
+  renderLearningLoop();
+  renderAiResponsibilities(null, null);
+  const [daily, chatgpt] = await Promise.all([
+    learningApi.getDailyOverview(),
+    learningApi.getChatGptOverview(),
+  ]);
+  _learningGlobalCache = { daily, chatgpt };
+  renderLearningStatus(daily, chatgpt);
+  renderLearningKpis(daily);
+  renderExperiments(daily);
+  renderAiResponsibilities(daily, chatgpt);
+  renderRegimePerformance(daily);
+  loadLearningSelection();
+}
+
+async function loadLearningSelection(){
+  const key = currentCoin + ':' + currentHorizon;
+  document.getElementById('learnSelectionCoinLabel').textContent = currentCoin + ' · ' + currentHorizon + 'H';
+  document.getElementById('learnEventsCoinLabel').textContent = currentCoin + ' · ' + currentHorizon + 'H';
+  document.getElementById('learnVariantsCoinLabel').textContent = currentCoin + ' · ' + currentHorizon + 'H';
+  document.getElementById('learnSelectionBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+  document.getElementById('learnEventsBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+  document.getElementById('learnVariantsBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+  document.getElementById('learnAuditBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+
+  const [selection, history] = await Promise.all([
+    learningApi.getSelection(currentCoin, currentHorizon),
+    learningApi.getSelectionHistory(currentCoin, currentHorizon, 20),
+  ]);
+  _learningSelectionCache[key] = { selection, history };
+  renderLearningStatus(_learningGlobalCache ? _learningGlobalCache.daily : null, _learningGlobalCache ? _learningGlobalCache.chatgpt : null);
+  renderCurrentSelection(selection, history);
+  renderLearningEvents(history);
+  renderVariantComparison(selection);
+  renderLearningAudit(history);
+}
+
+// ---- Section 1: Status grid ----
+function renderLearningStatus(daily, chatgpt){
+  const items = [];
+  const selCache = _learningSelectionCache[currentCoin + ':' + currentHorizon];
+  const sel = selCache && selCache.selection && selCache.selection.ok ? selCache.selection.data : null;
+
+  items.push(sel
+    ? statusChip('Prediction Ledger', 'Active', 'Predictions are being logged', null, 'Inferred from a successful GET /select-variant response.')
+    : statusChip('Prediction Ledger', 'Unknown', 'Not checked yet', null, 'Open Current Selection below to check.'));
+
+  items.push(sel && sel.comparison_count > 0
+    ? statusChip('Outcome Resolution', 'Active', sel.comparison_count + ' variant(s) with resolved outcomes', null, null)
+    : sel
+      ? statusChip('Outcome Resolution', 'Pending', 'No resolved comparisons yet for this coin/horizon', null, null)
+      : statusChip('Outcome Resolution', 'Unknown', 'Not checked yet', null, null));
+
+  if (daily && daily.ok){
+    const s = daily.data.status;
+    items.push(s === 'GREEN'
+      ? statusChip('Learning Engine', 'Healthy', 'Daily report is current', daily.data.generated_at, null)
+      : s === 'YELLOW'
+        ? statusChip('Learning Engine', 'Active', 'Report generated, flagged for review', daily.data.generated_at, null)
+        : statusChip('Learning Engine', 'Blocked', 'Report flags a data/model issue', daily.data.generated_at, null));
+  } else {
+    items.push(statusChip('Learning Engine', 'Unavailable', 'GET /api/learning/daily did not respond', null, 'Code exists on an unmerged branch — expected to 404 until it deploys.'));
+  }
+
+  items.push(statusChip('Gemini Intelligence', 'Unavailable', 'No query endpoint for investigation results yet', null, 'gemini_investigations table exists in D1; nothing exposes it over HTTP yet.'));
+
+  items.push(chatgpt && chatgpt.ok
+    ? statusChip('ChatGPT Audit', 'Active', 'Audit-ready data package available', chatgpt.data.generated_at, "This is the data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced.")
+    : statusChip('ChatGPT Audit', 'Unavailable', 'GET /api/learning/chatgpt did not respond', null, null));
+
+  if (daily && daily.ok){
+    const n = (daily.data.candidate_experiments || []).length;
+    items.push(n > 0
+      ? statusChip('Claude Experiments', 'Active', n + ' candidate experiment(s)', null, null)
+      : statusChip('Claude Experiments', 'Awaiting', 'No candidate experiments identified yet', null, null));
+  } else {
+    items.push(statusChip('Claude Experiments', 'Unavailable', 'Depends on /api/learning/daily', null, null));
+  }
+
+  items.push(statusChip('Validation', 'Unavailable', 'No experiment validation endpoint exists yet', null, null));
+  items.push(statusChip('Production Gate', 'Unavailable', 'Human-gated by design — no live production-state endpoint', null, 'No AI role in this system can write directly to Production.'));
+
+  document.getElementById('learnStatusGrid').innerHTML = items.join('');
+}
+
+// ---- Section 2: Learning Loop (static structure + honest wiring badges) ----
+const LEARNING_LOOP_STAGES = [
+  { label:'Prediction', desc:'What the model predicted', wired:true },
+  { label:'Outcomes', desc:'What actually happened', wired:true },
+  { label:'Performance', desc:'How the prediction performed', wired:'partial' },
+  { label:'Intelligence', desc:'Market conditions/catalysts that may explain the result', wired:false },
+  { label:'Audit', desc:'Independent challenge of the interpretation', wired:false },
+  { label:'Experiment', desc:'What change should be tested', wired:'partial' },
+  { label:'Engineering', desc:'What Claude is implementing', wired:false },
+  { label:'Validation', desc:'Backtest / OOS / statistical validation', wired:false },
+  { label:'Human Approval', desc:'Production decision', wired:false },
+  { label:'Production', desc:'Current approved model', wired:'partial' },
+];
+function renderLearningLoop(){
+  const wiredBadge = (w) => w === true
+    ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20 whitespace-nowrap">connected</span>'
+    : w === 'partial'
+      ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-[#FFB020]/10 text-[#FFB020] border border-[#FFB020]/20 whitespace-nowrap">partial</span>'
+      : '<span class="text-[8px] px-1.5 py-0.5 rounded bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C] whitespace-nowrap">not yet wired</span>';
+  document.getElementById('learnLoop').innerHTML = LEARNING_LOOP_STAGES.map((s, i) => `
+    <div class="flex-1 flex flex-col md:flex-row items-stretch gap-1.5">
+      <div class="w-full bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
+        <div class="flex items-center justify-between gap-1 mb-1">
+          <span class="text-[9px] font-mono-data text-[#4B5563]">${i+1}</span>
+          ${wiredBadge(s.wired)}
+        </div>
+        <p class="text-[11px] font-semibold text-[#E1E2E7]">${s.label}</p>
+        <p class="text-[9px] text-[#BAC9CD] mt-0.5 leading-tight">${s.desc}</p>
+      </div>
+      ${i < LEARNING_LOOP_STAGES.length - 1 ? '<div class="flex items-center justify-center"><span class="material-symbols-outlined text-[16px] text-[#3B494C] rotate-90 md:rotate-0">arrow_forward</span></div>' : ''}
+    </div>
+  `).join('');
+}
+
+// ---- Section 3: KPI snapshot ----
+function kpiCard(label, value, sub){
+  return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
+    <p class="text-[9px] text-[#4B5563] uppercase tracking-wide mb-1">${label}</p>
+    <p class="text-lg font-bold font-mono-data ${value === '—' ? 'text-[#4B5563]' : 'text-[#E1E2E7]'}">${value}</p>
+    ${sub ? `<p class="text-[9px] text-[#BAC9CD] mt-0.5">${sub}</p>` : ''}
+  </div>`;
+}
+function renderLearningKpis(daily){
+  if (!daily || !daily.ok){
+    document.getElementById('learnKpiGrid').innerHTML = [
+      'Resolved Predictions','Accuracy','Brier Score','Calibration Error',
+      'Active Experiments','Awaiting Audit','Awaiting Validation','Awaiting Approval'
+    ].map(l => kpiCard(l, '—', 'Not available')).join('');
+    return;
+  }
+  const d = daily.data;
+  const btc = d.overall_performance && d.overall_performance.BTC;
+  const isOk = !!(btc && btc.status === 'ok');
+  const resolvedTotal = ['BTC','LINK','ETH'].reduce((sum, a) =>
+    sum + ((d.dataset_health && d.dataset_health[a] && d.dataset_health[a].resolved_in_period) || 0), 0);
+  const nExp = (d.candidate_experiments || []).length;
+  document.getElementById('learnKpiGrid').innerHTML = [
+    kpiCard('Resolved Predictions', resolvedTotal || '—', resolvedTotal ? 'BTC+LINK+ETH, this period' : 'Not available'),
+    kpiCard('Accuracy (BTC)', isOk ? (btc.accuracy*100).toFixed(1)+'%' : '—', isOk ? 'n=' + btc.n : 'Insufficient sample'),
+    kpiCard('Brier Score (BTC)', isOk ? btc.brier_score.toFixed(4) : '—', isOk ? 'lower is better' : 'Insufficient sample'),
+    kpiCard('Calibration Error (BTC)', isOk && btc.calibration_error != null ? btc.calibration_error.toFixed(4) : '—', 'lower is better'),
+    kpiCard('Active Experiments', String(nExp), null),
+    kpiCard('Awaiting Audit', '—', 'Not available'),
+    kpiCard('Awaiting Validation', '—', 'Not available'),
+    kpiCard('Awaiting Approval', '—', 'Not available'),
+  ].join('');
+}
+
+// ---- Section 4: Current selection (live) ----
+function renderCurrentSelection(selection, history){
+  const el = document.getElementById('learnSelectionBody');
+  if (!selection || !selection.ok){
+    el.innerHTML = `<div class="text-xs text-[#BAC9CD]">
+      <p class="text-[#FFB4AB] font-semibold mb-1">Selection data unavailable</p>
+      <p>GET /select-variant did not respond. Prediction functionality is unaffected — this only affects the learning display.</p>
+    </div>`;
+    return;
+  }
+  const s = selection.data;
+  const gateHtml = s.cleared_gate
+    ? `<span class="text-[#4AE176] font-semibold">CLEARED</span>`
+    : `<span class="text-[#BAC9CD] font-semibold">NOT CLEARED</span>`;
+  const correctedAlpha = s.comparison_count ? (0.05 / s.comparison_count) : null;
+  const bestLca = (s.scores && s.scores.length) ? Math.max(...s.scores.map(x => x.lca)) : null;
+
+  const scoresHtml = (s.scores || []).length ? `
+    <div class="mt-3 overflow-x-auto">
+      <table class="w-full text-[11px]">
+        <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
+        <tbody>${s.scores.map(sc => `<tr class="border-t border-[#3B494C]/50">
+          <td class="py-1 pr-3 font-semibold ${sc.variant === s.chosen_variant ? 'text-[#00E0FF]' : 'text-[#E1E2E7]'}">${SELECTION_VARIANT_LABELS[sc.variant] || sc.variant}${sc.variant === s.chosen_variant ? ' <span class="text-[8px] px-1 py-0.5 rounded bg-[#00E0FF]/10 border border-[#00E0FF]/30">SELECTED</span>' : ''}</td>
+          <td class="py-1 pr-3 font-mono-data">${(sc.p_up*100).toFixed(1)}%</td>
+          <td class="py-1 pr-3 font-mono-data">${(sc.lca*100).toFixed(1)}%</td>
+          <td class="py-1 font-mono-data">${sc.n_matched}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>` : '';
+
+  let neighborhoodHtml = '';
+  if (history && history.ok && history.data.decisions && history.data.decisions[0] && history.data.decisions[0].neighborhood_json){
+    let neighbors = [];
+    try { neighbors = JSON.parse(history.data.decisions[0].neighborhood_json); } catch(e){}
+    if (neighbors.length){
+      neighborhoodHtml = `
+      <details class="mt-3">
+        <summary class="text-[11px] text-[#00E0FF] cursor-pointer select-none">Matched neighborhood (k=${s.k_sel || '—'}, z-score normalized Euclidean distance)</summary>
+        <div class="mt-2 max-h-40 overflow-y-auto">
+          <table class="w-full text-[10px]">
+            <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">#</th><th class="pb-1 pr-3">Timestamp</th><th class="pb-1">Distance</th></tr></thead>
+            <tbody>${neighbors.map((n,i) => `<tr class="border-t border-[#3B494C]/50"><td class="py-1 pr-3 font-mono-data">${i+1}</td><td class="py-1 pr-3 font-mono-data">${new Date(n.ts).toLocaleString()}</td><td class="py-1 font-mono-data">${n.dist}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+        <details class="mt-2"><summary class="text-[10px] text-[#4B5563] cursor-pointer select-none">Raw JSON</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(neighbors, null, 2)}</pre></details>
+      </details>`;
+    }
+  }
+
+  el.innerHTML = `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Asset</p><p class="text-sm font-bold">${s.coin || currentCoin}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Selected Variant</p><p class="text-sm font-bold text-[#00E0FF]">${SELECTION_VARIANT_LABELS[s.chosen_variant] || s.chosen_variant}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Gate</p><p class="text-sm">${gateHtml}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Selection Score</p><p class="text-sm font-mono-data">${bestLca != null ? (bestLca*100).toFixed(1)+'%' : '—'}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Corrected Threshold</p><p class="text-sm font-mono-data">${correctedAlpha != null ? '+' + (correctedAlpha*100).toFixed(1) + 'pts' : '—'}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Comparison Count</p><p class="text-sm font-mono-data">${s.comparison_count ?? '—'}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">Eligible Variants</p><p class="text-sm font-mono-data">${(s.scores || []).length}</p></div>
+      <div><p class="text-[9px] text-[#4B5563] uppercase">k (neighborhood)</p><p class="text-sm font-mono-data">${s.k_sel ?? '—'}</p></div>
+    </div>
+    <div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5 mb-2">
+      <p class="text-[9px] text-[#4B5563] uppercase mb-1">Decision Reason</p>
+      <p class="text-xs text-[#BAC9CD] leading-relaxed">${s.reason || '—'}</p>
+    </div>
+    ${scoresHtml}
+    ${neighborhoodHtml}
+  `;
+}
+
+// ---- Section 5: Recent learning events ----
+function renderLearningEvents(history){
+  const el = document.getElementById('learnEventsBody');
+  if (!history || !history.ok){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Learning events unavailable — GET /selection-history did not respond.</p>`;
+    return;
+  }
+  const decisions = history.data.decisions || [];
+  if (!decisions.length){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No learning events available yet.</p>`;
+    return;
+  }
+  el.innerHTML = decisions.map(d => `
+    <div class="border-b border-[#3B494C]/50 last:border-0 py-2">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-[10px] font-mono-data text-[#4B5563]">${new Date(d.ts).toLocaleString()}</p>
+        <span class="text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${d.cleared_gate ? 'bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20' : 'bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]'}">${d.cleared_gate ? 'gate cleared' : 'gate not cleared'}</span>
+      </div>
+      <p class="text-xs font-semibold mt-0.5">Selection decision — <span class="text-[#00E0FF]">${SELECTION_VARIANT_LABELS[d.chosen_variant] || d.chosen_variant}</span></p>
+      <p class="text-[11px] text-[#BAC9CD] mt-0.5 leading-relaxed">${d.reason}</p>
+    </div>
+  `).join('');
+}
+
+// ---- Section 6: Experiments ----
+function renderExperiments(daily){
+  const el = document.getElementById('learnExperimentsBody');
+  if (!daily || !daily.ok){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Experiment data unavailable — GET /api/learning/daily did not respond.</p>`;
+    return;
+  }
+  const exps = daily.data.candidate_experiments || [];
+  if (!exps.length){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate experiments identified yet. Full lifecycle tracking (EXP-NNN, stages, backtest/OOS results) lives in <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning" target="_blank" rel="noopener" class="text-[#00E0FF] underline">PulseWorkerV2's /learning/ directory</a> once something exists there — not yet exposed as an API.</p>`;
+    return;
+  }
+  el.innerHTML = `<div class="space-y-2">${exps.map(e => `
+    <div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
+      <p class="text-xs font-semibold text-[#E1E2E7]">${e.observation || e.hypothesis || 'Candidate experiment'}</p>
+      ${e.hypothesis ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#4B5563]">Hypothesis:</span> ${e.hypothesis}</p>` : ''}
+      ${e.suggested_experiment ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#4B5563]">Suggested:</span> ${e.suggested_experiment}</p>` : ''}
+      <details class="mt-1"><summary class="text-[9px] text-[#4B5563] cursor-pointer">Raw</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(e, null, 2)}</pre></details>
+    </div>`).join('')}</div>`;
+}
+
+// ---- Section 7: AI responsibility cards ----
+function roleCard(icon, name, question, bodyHtml){
+  return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl p-3">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="material-symbols-outlined text-[16px] text-[#00E0FF]">${icon}</span>
+      <p class="text-xs font-bold">${name}</p>
+    </div>
+    <p class="text-[10px] text-[#4B5563] italic mb-2">"${question}"</p>
+    ${bodyHtml}
+  </div>`;
+}
+function renderAiResponsibilities(daily, chatgpt){
+  const geminiBody = `<p class="text-[11px] text-[#BAC9CD]">Market intelligence, catalyst evidence.</p>
+    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable — no query endpoint yet</span></p>`;
+
+  const chatgptBody = (chatgpt && chatgpt.ok)
+    ? `<p class="text-[11px] text-[#BAC9CD]">Audit-ready data package generated ${new Date(chatgpt.data.generated_at).toLocaleString()}, status <span class="font-semibold">${chatgpt.data.status}</span>.</p>
+       <p class="text-[10px] text-[#4B5563] mt-1">This is data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced — no API exposes ChatGPT's actual assessment.</p>`
+    : `<p class="text-[11px] text-[#BAC9CD]">Independent audit, challenges conclusions.</p>
+       <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable — GET /api/learning/chatgpt did not respond</span></p>`;
+
+  const claudeBody = (daily && daily.ok)
+    ? (() => { const n = (daily.data.candidate_experiments || []).length;
+        return `<p class="text-[11px] text-[#BAC9CD]">${n > 0 ? n + ' candidate experiment(s) awaiting implementation.' : 'No active experiment implementation right now.'}</p>
+        <p class="text-[10px] text-[#4B5563] mt-1">See <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning/claude_tasks" target="_blank" rel="noopener" class="text-[#00E0FF] underline">claude_tasks/</a> for anything in progress.</p>`; })()
+    : `<p class="text-[11px] text-[#BAC9CD]">Engineering implementation, experiment creation.</p>
+       <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable</span></p>`;
+
+  const humanBody = `<p class="text-[11px] text-[#BAC9CD]">Sole production authority. No AI role in this system — Gemini, ChatGPT, or Claude — can promote a change to Production.</p>
+    <p class="text-[10px] text-[#FFB020] mt-1.5 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[13px]">lock</span>Every promotion requires explicit human approval.</p>`;
+
+  document.getElementById('learnRolesGrid').innerHTML =
+    roleCard('travel_explore', 'GEMINI', 'What happened?', geminiBody) +
+    roleCard('fact_check', 'CHATGPT', 'What does it mean?', chatgptBody) +
+    roleCard('code', 'CLAUDE', 'What can we test?', claudeBody) +
+    roleCard('shield_person', 'HUMAN', 'Should it reach Production?', humanBody);
+}
+
+// ---- Section 8: Learning by regime ----
+function renderRegimePerformance(daily){
+  const el = document.getElementById('learnRegimeBody');
+  if (!daily || !daily.ok){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Regime data unavailable — GET /api/learning/daily did not respond.</p>`;
+    return;
+  }
+  const regimeByAsset = daily.data.regime_analysis || {};
+  const assets = Object.keys(regimeByAsset);
+  if (!assets.length){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No regime data returned for this period.</p>`;
+    return;
+  }
+  el.innerHTML = assets.map(asset => {
+    const buckets = regimeByAsset[asset] || {};
+    const bucketKeys = Object.keys(buckets);
+    if (!bucketKeys.length) return '';
+    return `
+    <div class="mb-3 last:mb-0">
+      <p class="text-[11px] font-semibold text-[#E1E2E7] mb-1">${asset}</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[10px]">
+          <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Regime</th><th class="pb-1 pr-3">n</th><th class="pb-1 pr-3">Accuracy</th><th class="pb-1 pr-3">Brier</th><th class="pb-1">Calibration Err</th></tr></thead>
+          <tbody>${bucketKeys.map(k => {
+            const b = buckets[k];
+            const ok = b && b.status === 'ok';
+            return `<tr class="border-t border-[#3B494C]/50">
+              <td class="py-1 pr-3">${k}</td>
+              <td class="py-1 pr-3 font-mono-data">${b ? b.n : '—'}</td>
+              <td class="py-1 pr-3 font-mono-data">${ok ? (b.accuracy*100).toFixed(1)+'%' : '—'}</td>
+              <td class="py-1 pr-3 font-mono-data">${ok ? b.brier_score.toFixed(3) : '—'}</td>
+              <td class="py-1 font-mono-data">${ok && b.calibration_error != null ? b.calibration_error.toFixed(3) : '—'}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---- Section 9: Model variant comparison (reuses the selection fetch) ----
+function renderVariantComparison(selection){
+  const el = document.getElementById('learnVariantsBody');
+  if (!selection || !selection.ok || !selection.data.scores || !selection.data.scores.length){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">${selection && selection.ok ? 'No eligible variants for this coin/horizon yet (each needs 50+ resolved predictions).' : 'Variant data unavailable — GET /select-variant did not respond.'}</p>`;
+    return;
+  }
+  const s = selection.data;
+  el.innerHTML = `<div class="overflow-x-auto">
+    <table class="w-full text-[11px]">
+      <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">Status</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
+      <tbody>${s.scores.map(sc => {
+        const isSelected = sc.variant === s.chosen_variant;
+        return `<tr class="border-t border-[#3B494C]/50">
+          <td class="py-1.5 pr-3 font-semibold">${SELECTION_VARIANT_LABELS[sc.variant] || sc.variant}</td>
+          <td class="py-1.5 pr-3 whitespace-nowrap">
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-[#00E0FF]/10 text-[#00E0FF] border border-[#00E0FF]/20 mr-1">ELIGIBLE</span>
+            ${isSelected ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20">SELECTED</span>' : ''}
+          </td>
+          <td class="py-1.5 pr-3 font-mono-data">${(sc.p_up*100).toFixed(1)}%</td>
+          <td class="py-1.5 pr-3 font-mono-data">${(sc.lca*100).toFixed(1)}%</td>
+          <td class="py-1.5 font-mono-data">${sc.n_matched}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>
+  <p class="text-[10px] text-[#4B5563] mt-2">Only variants with 50+ resolved predictions appear here — the backend doesn't return variants below that bar, so an "active but not-yet-eligible" variant (if one exists) isn't visible in this table.</p>`;
+}
+
+// ---- Section 10: Audit trail (reuses the selection-history fetch) ----
+function toggleLearnAudit(){
+  const body = document.getElementById('learnAuditBody');
+  const chevron = document.getElementById('learnAuditChevron');
+  const btn = document.getElementById('learnAuditToggleBtn');
+  const hidden = body.classList.toggle('hidden');
+  chevron.style.transform = hidden ? '' : 'rotate(180deg)';
+  btn.setAttribute('aria-expanded', String(!hidden));
+}
+function renderLearningAudit(history){
+  const el = document.getElementById('learnAuditBody');
+  if (!history || !history.ok){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Audit trail unavailable — GET /selection-history did not respond.</p>`;
+    return;
+  }
+  const decisions = history.data.decisions || [];
+  if (!decisions.length){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No audit entries yet.</p>`;
+    return;
+  }
+  el.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-[10px]">
+    <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Timestamp</th><th class="pb-1 pr-3">Event</th><th class="pb-1 pr-3">Entity</th><th class="pb-1 pr-3">Actor</th><th class="pb-1 pr-3">New State</th><th class="pb-1">Reason</th></tr></thead>
+    <tbody>${decisions.map(d => `<tr class="border-t border-[#3B494C]/50 align-top">
+      <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${new Date(d.ts).toLocaleString()}</td>
+      <td class="py-1.5 pr-3 whitespace-nowrap">Model selection</td>
+      <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${d.coin} · ${d.horizon_hours}H</td>
+      <td class="py-1.5 pr-3"><span class="text-[9px] px-1.5 py-0.5 rounded bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]">SYSTEM</span></td>
+      <td class="py-1.5 pr-3 font-semibold whitespace-nowrap">${SELECTION_VARIANT_LABELS[d.chosen_variant] || d.chosen_variant}</td>
+      <td class="py-1.5 text-[#BAC9CD]">${d.reason}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <p class="text-[10px] text-[#4B5563] mt-2">Actor is always SYSTEM — these are automated selectBestVariant runs. No GEMINI/CHATGPT/CLAUDE/HUMAN-attributed audit entries exist in the backend yet.</p>`;
+}
+
+document.getElementById('learnRefreshBtn').onclick = () => { _learningGlobalCache = null; loadLearningOverview(); };
+if (activeView === 'learning') loadLearningOverview();
+
 loadChallenger();
 loadLab();
 </script>

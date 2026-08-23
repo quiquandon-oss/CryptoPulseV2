@@ -471,6 +471,17 @@
       <div id="learnExperimentsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
 
+    <!-- Section 6.5 — Analyst Relay (human-in-the-loop, structurally separate
+         from the automated investigation -- see relayContent's own note) -->
+    <section id="learnRelayCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Analyst Relay</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
+      </div>
+      <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">Human-relayed alternative to the automated Gemini investigation, for when the API path is unavailable. You paste the prompt into the Gemini app yourself and bring the answer back. Real catalyst data either way — but a pasted response has no verifiable search metadata the way a real API response does, so this never counts as proof the automated pipeline works.</p>
+      <div id="relayContent"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
     <!-- Section 7 — AI Responsibility Cards -->
     <section id="learnRolesCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-3">AI Responsibility Model</p>
@@ -2049,6 +2060,7 @@ async function loadLearningOverview(){
   _learningLoaded = true;
   renderLearningLoop();
   renderAiResponsibilities(null, null);
+  loadAnalystRelayPrompt();
   const [daily, chatgpt] = await Promise.all([
     learningApi.getDailyOverview(),
     learningApi.getChatGptOverview(),
@@ -2314,6 +2326,93 @@ function renderExperiments(daily){
     </div>`).join('')}</div>`;
 }
 
+// ---- Section 6.5: Analyst Relay -- human-in-the-loop, structurally
+// separate from the automated investigation. Backend never writes this to
+// gemini_investigations/gemini_provider_calls, so nothing here can be
+// mistaken for proof the automated pipeline works -- see PulseWorkerV2's
+// recordAnalystRelay for the full reasoning. ----
+let _relayCurrentCandidate = null;
+
+async function loadAnalystRelayPrompt(){
+  const el = document.getElementById('relayContent');
+  el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Checking for a candidate…</p>`;
+  let data;
+  try {
+    const res = await fetch(WORKER_URL + '/analyst-relay/prompt');
+    data = await res.json();
+  } catch (e) {
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Could not reach the Worker to check for a candidate.</p>`;
+    return;
+  }
+  if (!data || !data.ok){
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Could not check for a candidate right now.</p>`;
+    return;
+  }
+  if (!data.hasCandidate){
+    _relayCurrentCandidate = null;
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate clears the priority bar this cycle — same threshold the automated investigation uses. Nothing worth relaying right now.</p>`;
+    return;
+  }
+  _relayCurrentCandidate = data;
+  el.innerHTML = `
+    <p class="text-[11px] text-[#BAC9CD] mb-2">Candidate: <span class="font-semibold text-[#E1E2E7]">${data.assets.join(', ')}</span></p>
+    <textarea id="relayPromptText" readonly class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-2" onclick="this.select()"></textarea>
+    <button id="relayCopyBtn" class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold mb-3 text-[#E1E2E7]">Copy Prompt</button>
+    <p class="text-[10px] text-[#4B5563] mb-2">Paste the Gemini app's response below:</p>
+    <textarea id="relayResponseInput" placeholder="Paste Gemini's response here…" class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7] mb-2"></textarea>
+    <button id="relaySubmitBtn" class="w-full bg-[#00E0FF] text-[#0B0E11] rounded-xl py-2 text-xs font-bold">Submit</button>
+    <div id="relayResult" class="mt-2"></div>
+  `;
+  // Set via textContent, not template-string interpolation, so a prompt
+  // containing backticks/${...}-looking text can never break out of the
+  // template literal above.
+  document.getElementById('relayPromptText').textContent = data.prompt;
+  document.getElementById('relayCopyBtn').onclick = () => {
+    navigator.clipboard.writeText(data.prompt).then(() => {
+      const btn = document.getElementById('relayCopyBtn');
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+  };
+  document.getElementById('relaySubmitBtn').onclick = submitAnalystRelay;
+}
+
+async function submitAnalystRelay(){
+  const textarea = document.getElementById('relayResponseInput');
+  const text = textarea.value.trim();
+  const resultEl = document.getElementById('relayResult');
+  if (!text){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Paste a response first.</p>`; return; }
+  if (!_relayCurrentCandidate){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">No candidate loaded — refresh first.</p>`; return; }
+  resultEl.innerHTML = `<p class="text-[10px] text-[#BAC9CD]">Submitting…</p>`;
+  try {
+    const res = await fetch(WORKER_URL + '/analyst-relay/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidateId: _relayCurrentCandidate.candidateId,
+        assets: _relayCurrentCandidate.assets,
+        promptRequestedTs: _relayCurrentCandidate.promptRequestedTs,
+        rawResponseText: text,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok){
+      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submission failed: ${String(data.error || 'unknown error')}</p>`;
+      return;
+    }
+    const statusColor = data.validationStatus === 'ok' ? '#00E0A0' : (data.validationStatus === 'no_catalyst_found' ? '#BAC9CD' : '#FFB020');
+    resultEl.innerHTML = `<p class="text-[10px]" style="color:${statusColor}">Status: ${data.validationStatus} — ${data.catalystsWritten} catalyst(s) written.</p>
+      <p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${data.relayId}</p>`;
+    if (data.validationStatus === 'ok' || data.validationStatus === 'no_catalyst_found'){
+      textarea.value = '';
+      setTimeout(loadAnalystRelayPrompt, 2500); // move on to the next candidate, if any
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submission failed — could not reach the Worker.</p>`;
+  }
+}
+
 // ---- Section 7: AI responsibility cards ----
 function roleCard(icon, name, question, bodyHtml){
   return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl p-3">
@@ -2345,11 +2444,15 @@ function renderAiResponsibilities(daily, chatgpt){
   const humanBody = `<p class="text-[11px] text-[#BAC9CD]">Sole production authority. No AI role in this system — Gemini, ChatGPT, or Claude — can promote a change to Production.</p>
     <p class="text-[10px] text-[#FFB020] mt-1.5 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[13px]">lock</span>Every promotion requires explicit human approval.</p>`;
 
+  const analystBody = `<p class="text-[11px] text-[#BAC9CD]">Manual relay to Gemini's consumer app when the API path is unavailable. Real catalyst data, but grounding can't be verified — never counted as proof the automated pipeline works.</p>
+    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">See Analyst Relay above</span></p>`;
+
   document.getElementById('learnRolesGrid').innerHTML =
     roleCard('travel_explore', 'GEMINI', 'What happened?', geminiBody) +
     roleCard('fact_check', 'CHATGPT', 'What does it mean?', chatgptBody) +
     roleCard('code', 'CLAUDE', 'What can we test?', claudeBody) +
-    roleCard('shield_person', 'HUMAN', 'Should it reach Production?', humanBody);
+    roleCard('shield_person', 'HUMAN', 'Should it reach Production?', humanBody) +
+    roleCard('person_edit', 'ANALYST (YOU)', 'What does Gemini\'s app say?', analystBody);
 }
 
 // ---- Section 8: Learning by regime ----

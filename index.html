@@ -471,14 +471,19 @@
       <div id="learnExperimentsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
 
-    <!-- Section 6.5 — Analyst Relay (human-in-the-loop, structurally separate
-         from the automated investigation -- see relayContent's own note) -->
+    <!-- Section 6.5 — Analyst Relay: the investigation mechanism. Was
+         originally built as a fallback for when the paid grounded API path
+         was rate-limited; that automated path has since been removed
+         entirely (Google Search grounding requires a funded, billing-
+         enabled Cloud project -- a recurring cost this project stopped
+         paying). This is now the only investigation mechanism, not a
+         fallback for anything -- see relayContent's own note. -->
     <section id="learnRelayCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Analyst Relay</p>
         <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
       </div>
-      <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">Human-relayed alternative to the automated Gemini investigation, for when the API path is unavailable. You paste the prompt into the Gemini app yourself and bring the answer back. Real catalyst data either way — but a pasted response has no verifiable search metadata the way a real API response does, so this never counts as proof the automated pipeline works.</p>
+      <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
       <div id="relayContent"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
 
@@ -2330,10 +2335,9 @@ function renderExperiments(daily){
     </div>`).join('')}</div>`;
 }
 
-// ---- Section 6.5: Analyst Relay -- human-in-the-loop, structurally
-// separate from the automated investigation. Backend never writes this to
-// gemini_investigations/gemini_provider_calls, so nothing here can be
-// mistaken for proof the automated pipeline works -- see PulseWorkerV2's
+// ---- Section 6.5: Analyst Relay -- the investigation mechanism. Backend
+// never writes this to gemini_investigations, so nothing here can be
+// mistaken for a machine-verified result -- see PulseWorkerV2's
 // recordAnalystRelay for the full reasoning. ----
 let _relayCurrentCandidate = null;
 
@@ -2354,7 +2358,7 @@ async function loadAnalystRelayPrompt(){
   }
   if (!data.hasCandidate){
     _relayCurrentCandidate = null;
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate clears the priority bar this cycle — same threshold the automated investigation uses. Nothing worth relaying right now.</p>`;
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate clears the priority bar this cycle. Nothing worth relaying right now.</p>`;
     return;
   }
   _relayCurrentCandidate = data;
@@ -2443,8 +2447,8 @@ function roleCard(icon, name, question, bodyHtml){
   </div>`;
 }
 function renderAiResponsibilities(daily, chatgpt){
-  const geminiBody = `<p class="text-[11px] text-[#BAC9CD]">Market intelligence, catalyst evidence.</p>
-    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable — no query endpoint yet</span></p>`;
+  const geminiBody = `<p class="text-[11px] text-[#BAC9CD]">Market intelligence, catalyst evidence — via the free consumer app only. Paid API grounding was removed; see ANALYST (YOU) for how Gemini's analysis actually reaches this system now.</p>
+    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#00E0A0"></span><span class="text-[#BAC9CD]">Active, via Analyst Relay</span></p>`;
 
   const chatgptBody = (chatgpt && chatgpt.ok)
     ? `<p class="text-[11px] text-[#BAC9CD]">Audit-ready data package generated ${new Date(chatgpt.data.generated_at).toLocaleString()}, status <span class="font-semibold">${chatgpt.data.status}</span>.</p>
@@ -2462,7 +2466,7 @@ function renderAiResponsibilities(daily, chatgpt){
   const humanBody = `<p class="text-[11px] text-[#BAC9CD]">Sole production authority. No AI role in this system — Gemini, ChatGPT, or Claude — can promote a change to Production.</p>
     <p class="text-[10px] text-[#FFB020] mt-1.5 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[13px]">lock</span>Every promotion requires explicit human approval.</p>`;
 
-  const analystBody = `<p class="text-[11px] text-[#BAC9CD]">Manual relay to Gemini's consumer app when the API path is unavailable. Real catalyst data, but grounding can't be verified — never counted as proof the automated pipeline works.</p>
+  const analystBody = `<p class="text-[11px] text-[#BAC9CD]">Manual relay to Gemini's free consumer app — the only way Gemini's analysis reaches this system. Real catalyst data, but grounding can't be independently verified the way an API response could.</p>
     <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">See Analyst Relay above</span></p>`;
 
   document.getElementById('learnRolesGrid').innerHTML =

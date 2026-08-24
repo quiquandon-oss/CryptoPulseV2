@@ -2356,16 +2356,25 @@ async function loadAnalystRelayPrompt(){
   _relayCurrentCandidate = data;
   el.innerHTML = `
     <p class="text-[11px] text-[#BAC9CD] mb-2">Candidate: <span class="font-semibold text-[#E1E2E7]">${data.assets.join(', ')}</span></p>
+
+    <p class="text-[9px] uppercase tracking-wide text-[#00E0A0] font-semibold mb-1">Factual Data</p>
+    <p class="text-[9px] text-[#4B5563] mb-1.5">Real observations only — the same evidence Gemini receives, before any interpretation.</p>
+    <pre id="relayFactualSummary" class="w-full bg-[#0B0E11] border border-[#00E0A0]/30 rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-3 whitespace-pre-wrap"></pre>
+
+    <p class="text-[9px] uppercase tracking-wide text-[#4B5563] font-semibold mb-1">Prompt to relay</p>
     <textarea id="relayPromptText" readonly class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-2" onclick="this.select()"></textarea>
     <button id="relayCopyBtn" class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold mb-3 text-[#E1E2E7]">Copy Prompt</button>
     <p class="text-[10px] text-[#4B5563] mb-2">Paste the Gemini app's response below:</p>
     <textarea id="relayResponseInput" placeholder="Paste Gemini's response here…" class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7] mb-2"></textarea>
     <button id="relaySubmitBtn" class="w-full bg-[#00E0FF] text-[#0B0E11] rounded-xl py-2 text-xs font-bold">Submit</button>
     <div id="relayResult" class="mt-2"></div>
+    <p class="text-[9px] text-[#4B5563] mt-2 font-mono-data">context ${(data.contextHash || '').slice(0, 12)}…</p>
   `;
   // Set via textContent, not template-string interpolation, so a prompt
   // containing backticks/${...}-looking text can never break out of the
-  // template literal above.
+  // template literal above. Applies to both the factual summary and the
+  // prompt -- same reasoning, same risk either way.
+  document.getElementById('relayFactualSummary').textContent = data.factualSummary || '(no factual summary returned)';
   document.getElementById('relayPromptText').textContent = data.prompt;
   document.getElementById('relayCopyBtn').onclick = () => {
     navigator.clipboard.writeText(data.prompt).then(() => {
@@ -2394,6 +2403,10 @@ async function submitAnalystRelay(){
         assets: _relayCurrentCandidate.assets,
         promptRequestedTs: _relayCurrentCandidate.promptRequestedTs,
         rawResponseText: text,
+        // Round-tripped so the stored record reflects exactly the
+        // evidence shown above, not a freshly-rebuilt (potentially
+        // drifted) context.
+        context: _relayCurrentCandidate.context,
       }),
     });
     const data = await res.json();
@@ -2403,7 +2416,8 @@ async function submitAnalystRelay(){
     }
     const statusColor = data.validationStatus === 'ok' ? '#00E0A0' : (data.validationStatus === 'no_catalyst_found' ? '#BAC9CD' : '#FFB020');
     resultEl.innerHTML = `<p class="text-[10px]" style="color:${statusColor}">Status: ${data.validationStatus} — ${data.catalystsWritten} catalyst(s) written.</p>
-      <p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${data.relayId}</p>`;
+      <p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${data.relayId}</p>
+      <p class="text-[9px] text-[#4B5563] mt-0.5">Reported findings, not verified fact — grounding on a relayed response can't be independently confirmed the way a real API response can.</p>`;
     if (data.validationStatus === 'ok' || data.validationStatus === 'no_catalyst_found'){
       textarea.value = '';
       setTimeout(loadAnalystRelayPrompt, 2500); // move on to the next candidate, if any

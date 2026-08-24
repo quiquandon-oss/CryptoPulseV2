@@ -526,29 +526,33 @@
 
 </div>
 
-<!-- Bottom mobile nav — same 3 views as the top pill nav (desktop), just
+<!-- Bottom mobile nav — same pattern as the top pill nav (desktop), just
      the mobile-friendly icon pattern from the design review. Wired to the
      exact same activeView state and renderNav()/click logic below, via the
      shared .nav-tab class — no new navigation logic, only a second surface
-     for it. -->
-<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center py-2 px-2 bg-[#0B0E11] border-t border-[#3B494C] z-50">
-  <button data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+     for it. 5 items now (dashboard/analysis/challenger/lab/learning) --
+     px-4 per button was sized for fewer items and clipped the 5th tab off
+     narrow phone widths with no way to reach it; px-2 + overflow-x-auto
+     fits all 5 on typical widths and scrolls instead of silently clipping
+     on anything narrower. -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center py-2 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50 overflow-x-auto">
+  <button data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
     <span class="material-symbols-outlined text-[20px]">monitoring</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Dashboard</span>
   </button>
-  <button data-view="analysis" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+  <button data-view="analysis" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
     <span class="material-symbols-outlined text-[20px]">insights</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Analysis</span>
   </button>
-  <button data-view="challenger" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+  <button data-view="challenger" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
     <span class="material-symbols-outlined text-[20px]">compare_arrows</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Challenger</span>
   </button>
-  <button data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+  <button data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
     <span class="material-symbols-outlined text-[20px]">science</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Lab</span>
   </button>
-  <button data-view="learning" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors">
+  <button data-view="learning" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
     <span class="material-symbols-outlined text-[20px]">school</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Learning</span>
   </button>
@@ -1006,7 +1010,7 @@ function renderNav(){
     if(btn.classList.contains('nav-tab-mobile')){
       // Bottom icon nav: keep the icon+label layout, just recolor.
       btn.querySelector('span:last-child').textContent = item.label;
-      btn.className = 'nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-4 rounded-xl transition-colors ' + (on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]');
+      btn.className = 'nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0 ' + (on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]');
     } else {
       btn.textContent = item.label;
       btn.className = 'nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ' + (on ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]');

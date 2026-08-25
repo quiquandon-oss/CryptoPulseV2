@@ -484,7 +484,7 @@
         <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
       </div>
       <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
-      <div id="relayContent"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      <div id="relayContent"><button class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold text-[#E1E2E7]" onclick="loadAnalystRelayPrompt()">Check for a candidate</button></div>
     </section>
 
     <!-- Section 7 — AI Responsibility Cards -->
@@ -2069,7 +2069,10 @@ async function loadLearningOverview(){
   _learningLoaded = true;
   renderLearningLoop();
   renderAiResponsibilities(null, null);
-  loadAnalystRelayPrompt();
+  // Analyst Relay no longer auto-fetches here -- it does ~15-20 sequential
+  // D1 queries (buildInvestigationContext, per asset) and only matters when
+  // a human is actually about to use it. The "Check for a candidate"
+  // button in its own section triggers loadAnalystRelayPrompt() on demand.
   const [daily, chatgpt] = await Promise.all([
     learningApi.getDailyOverview(),
     learningApi.getChatGptOverview(),

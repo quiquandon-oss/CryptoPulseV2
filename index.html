@@ -623,6 +623,13 @@ function buildHorizonTabs(){
 
 function refreshAll(){
   const cfg = COIN_CONFIG[currentCoin];
+  // Optimistic, instant placeholder only -- loadPrediction() (called via
+  // loadDashboardIfNeeded below) is now the authoritative source of truth
+  // for predictionTitle, using values it captures at its own call time and
+  // guarded against a slower/older call overwriting a newer one. This line
+  // just gives immediate visual feedback that a click registered, before
+  // the real fetch resolves; it will always be correctly overwritten
+  // moments later regardless.
   document.getElementById('predictionTitle').textContent = `${cfg.label} · Next ${currentHorizon}h`;
   document.getElementById('chartTitle').textContent = `${cfg.label} Price vs. Predictions (${currentHorizon}h)`;
   if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
@@ -636,20 +643,44 @@ function refreshAll(){
   if (activeView === 'learning' && _learningLoaded) loadLearningSelection();
 }
 
+let _predictionRequestSeq = 0;
+
 async function loadPrediction(){
-  const cfg = COIN_CONFIG[currentCoin];
+  // Captured once, right now, and used for the ENTIRE rest of this call --
+  // never re-read from the mutable currentCoin/currentHorizon globals
+  // later in this function. Two overlapping calls (e.g. a fast double
+  // toggle-click) each get their own consistent snapshot instead of
+  // reading whatever the globals happen to be by the time their own
+  // await resolves, which is what let title and body genuinely desync
+  // (title set synchronously per-click in refreshAll(); body set here,
+  // asynchronously, sometimes finishing in a different order than the
+  // clicks that triggered it).
+  const mySeq = ++_predictionRequestSeq;
+  const coinAtCall = currentCoin;
+  const horizonAtCall = currentHorizon;
+  const cfg = COIN_CONFIG[coinAtCall];
   const card = document.getElementById('predictionCard');
   const empty = document.getElementById('predictionEmpty');
   card.classList.add('hidden');
   empty.classList.remove('hidden');
   empty.innerHTML = `<div class="h-3 bg-[#3B494C] rounded-full w-1/4 animate-pulse"></div><div class="h-8 bg-[#3B494C] rounded-xl w-1/2 animate-pulse mt-3"></div><div class="h-3 bg-[#3B494C] rounded-full w-3/4 animate-pulse mt-3"></div>`;
   try{
-    const r = await fetch(WORKER_URL + cfg.predict + '?horizon=' + currentHorizon);
+    const r = await fetch(WORKER_URL + cfg.predict + '?horizon=' + horizonAtCall);
     const d = await r.json();
+    // A newer call already started since this one began -- its own render
+    // (already done, or about to happen) is the one that should win.
+    // Writing this response now would either be redundant or, worse,
+    // stale data overwriting a fresher, already-correct render.
+    if (mySeq !== _predictionRequestSeq) return;
+
+    // Title/body always set together, from the SAME captured values that
+    // fetched this exact data -- can never point at different coins.
+    document.getElementById('predictionTitle').textContent = `${cfg.label} · Next ${horizonAtCall}h`;
+
     if(!d.ok || d.status !== 'ok'){
       empty.innerHTML = `<p class="text-sm text-[#BAC9CD]">${
         d.status === 'insufficient_data' ? `Not enough history yet (${d.n_available}/${d.min_required} days needed).` :
-        d.status === 'insufficient_resolved_analogs' ? `Too few resolved ${currentHorizon}h outcomes (${d.n_resolved}/${d.min_required}).` :
+        d.status === 'insufficient_resolved_analogs' ? `Too few resolved ${horizonAtCall}h outcomes (${d.n_resolved}/${d.min_required}).` :
         'Model unavailable right now.'
       }</p>`;
       return;
@@ -670,10 +701,10 @@ async function loadPrediction(){
     const headlinePUp = usingNonOriginal ? selection.chosen_p_up : d.p_up;
 
     document.getElementById('predPUp').textContent = Math.round(headlinePUp * 100) + '%';
-    document.getElementById('predChanceLabel').textContent = `chance of a positive ${currentHorizon}h return`;
+    document.getElementById('predChanceLabel').textContent = `chance of a positive ${horizonAtCall}h return`;
     const variantLabelEl = document.getElementById('predVariantLabel');
     if (usingNonOriginal) {
-      variantLabelEl.textContent = `via ${SELECTION_VARIANT_LABELS[selection.chosen_variant] || selection.chosen_variant} — currently the best-performing model for ${currentCoin} · ${currentHorizon}h`;
+      variantLabelEl.textContent = `via ${SELECTION_VARIANT_LABELS[selection.chosen_variant] || selection.chosen_variant} — currently the best-performing model for ${coinAtCall} · ${horizonAtCall}h`;
       variantLabelEl.classList.remove('hidden');
       document.getElementById('predCalibBadge').innerHTML = ''; // the raw/calibrated comparison badge is specific to the original model's own two reads -- not meaningful once a different variant is headlined
     } else {
@@ -706,14 +737,16 @@ async function loadPrediction(){
     // that history belongs to the number being shown, when it doesn't.
     let accuracyForFooter = 0, nResolvedForFooter = 0;
     if (usingNonOriginal) {
-      const vc = await (await fetch(WORKER_URL + '/variant-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon + '&variant=' + selection.chosen_variant)).json();
+      const vc = await (await fetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant)).json();
+      if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
       document.getElementById('calibNote').textContent = (!vc.ok || !vc.n_resolved)
         ? (vc.note || vc.error || 'No calibration data yet for this variant.')
         : `Calibration (${SELECTION_VARIANT_LABELS[vc.variant] || vc.variant}): ${vc.n_resolved} resolved · ${Math.round(vc.accuracy*100)}% accuracy · Brier ${vc.brier} (baseline ${vc.naive_baseline_brier}) — ${vc.note}`;
       accuracyForFooter = vc.accuracy || 0;
       nResolvedForFooter = vc.n_resolved || 0;
     } else {
-      const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon)).json();
+      const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall)).json();
+      if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
       document.getElementById('calibNote').textContent = c.n_resolved === 0
         ? c.note
         : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;

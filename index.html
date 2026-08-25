@@ -72,11 +72,12 @@
         <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'predictionNote')">ⓘ Info</button>
       </div>
       <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what BTC actually did over the prediction horizon after each of them. The range is the 25th-75th percentile of those outcomes — read it as a spread of what similar setups did, not a guarantee. "Trend strength" is a separate MA-slope guardrail signal (-1 to +1), not part of the k-NN match itself. A "calibrated" badge appears next to the headline % once enough resolved predictions exist to empirically recalibrate it — before that, it's identical to the raw read and stays hidden. The ring at the bottom is this coin/horizon's real resolved-prediction accuracy (— until any have resolved); the signal pill and bars reflect how far today's p_up sits from a coin flip, not a separate forecast.</p>
-      <div class="flex items-baseline gap-3 mb-2">
+      <div class="flex items-baseline gap-3 mb-2 flex-wrap">
         <span id="predPUp" class="text-3xl font-bold font-mono-data text-[#BAF2FF] glow-text">—</span>
         <span class="text-sm text-[#BAC9CD]" id="predChanceLabel">chance of a positive 24h return</span>
         <span id="predCalibBadge"></span>
       </div>
+      <p id="predVariantLabel" class="hidden text-[10px] text-[#00E0FF] font-semibold mb-2"></p>
       <p id="predDetail" class="text-xs text-[#BAC9CD] mb-3 font-mono-data"></p>
       <div id="predTrend"></div>
       <div id="predAnalogs" class="text-xs text-[#BAC9CD] space-y-1.5 mb-3 mt-3"></div>
@@ -655,16 +656,43 @@ async function loadPrediction(){
     }
     card.classList.remove('hidden');
     empty.classList.add('hidden');
-    document.getElementById('predPUp').textContent = Math.round(d.p_up * 100) + '%';
+
+    // ---- Best-model wiring: /predict already runs selectBestVariant()
+    // and returns the result as d.selection, including chosen_p_up -- the
+    // correct probability for whichever variant is CURRENTLY winning,
+    // regardless of which one it is. Previously ignored entirely; the
+    // headline always showed d.p_up (the raw original model) no matter
+    // what the selection layer had actually decided. Same idea as the
+    // Current Selection card on AI Learning, applied here to the number
+    // people actually look at day to day. ----
+    const selection = (d.selection && d.selection.ok && d.selection.chosen_variant) ? d.selection : null;
+    const usingNonOriginal = selection && selection.chosen_variant !== 'original';
+    const headlinePUp = usingNonOriginal ? selection.chosen_p_up : d.p_up;
+
+    document.getElementById('predPUp').textContent = Math.round(headlinePUp * 100) + '%';
     document.getElementById('predChanceLabel').textContent = `chance of a positive ${currentHorizon}h return`;
-    document.getElementById('predCalibBadge').innerHTML = calibBadge(d.p_up, d.calibrated_p_up);
+    const variantLabelEl = document.getElementById('predVariantLabel');
+    if (usingNonOriginal) {
+      variantLabelEl.textContent = `via ${SELECTION_VARIANT_LABELS[selection.chosen_variant] || selection.chosen_variant} — currently the best-performing model for ${currentCoin} · ${currentHorizon}h`;
+      variantLabelEl.classList.remove('hidden');
+      document.getElementById('predCalibBadge').innerHTML = ''; // the raw/calibrated comparison badge is specific to the original model's own two reads -- not meaningful once a different variant is headlined
+    } else {
+      variantLabelEl.classList.add('hidden');
+      document.getElementById('predCalibBadge').innerHTML = calibBadge(d.p_up, d.calibrated_p_up);
+    }
+
     document.getElementById('predTrend').innerHTML = renderTrendBar(d.trend_strength);
     const priceNow = d[cfg.priceNowField];
     document.getElementById('predDetail').textContent =
       `${cfg.label} $${priceNow.toLocaleString()} now · range ${d.return_range_pct[0]>0?'+':''}${d.return_range_pct[0]}% to ${d.return_range_pct[1]>0?'+':''}${d.return_range_pct[1]}% (median ${d.median_analog_return_pct>0?'+':''}${d.median_analog_return_pct}%) · ${d.n_analogs} similar days`;
 
+    // "Most similar days" is always the original k-NN's own reasoning --
+    // Challenger doesn't have an analog-based explanation to substitute,
+    // so this stays as-is, just clearly labeled when a different variant
+    // is the one actually headlined above, so it's never mistaken for
+    // that variant's own reasoning.
     document.getElementById('predAnalogs').innerHTML =
-      '<p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] mb-1.5 font-semibold">Most similar days</p>' +
+      `<p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] mb-1.5 font-semibold">Most similar days${usingNonOriginal ? ' (Original model\'s own reasoning)' : ''}</p>` +
       d.top_analogs.map(a => {
         const badgeClass = a.return_pct >= 0 ? 'bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20' : 'bg-[#FFB4AB]/10 text-[#FFB4AB] border border-[#FFB4AB]/20';
         return `<div class="flex justify-between items-center py-1 px-2 rounded-lg bg-[#0B0E11] font-mono-data text-xs"><span>${a.date}</span><span class="px-2 py-0.5 rounded-md ${badgeClass}">${a.return_pct > 0 ? '+' : ''}${a.return_pct}%</span></div>`;
@@ -672,11 +700,27 @@ async function loadPrediction(){
 
     document.getElementById('predNote').textContent = d.note;
 
-    const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon)).json();
-    document.getElementById('calibNote').textContent = c.n_resolved === 0
-      ? c.note
-      : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;
-    document.getElementById('predSignalFooter').innerHTML = renderSignalFooter(d.p_up, c.accuracy, c.n_resolved || 0);
+    // Calibration block also switches to whichever variant is headlined --
+    // showing the original model's 48%-accuracy-fails-to-beat-baseline
+    // track record underneath a DIFFERENT variant's number would imply
+    // that history belongs to the number being shown, when it doesn't.
+    let accuracyForFooter = 0, nResolvedForFooter = 0;
+    if (usingNonOriginal) {
+      const vc = await (await fetch(WORKER_URL + '/variant-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon + '&variant=' + selection.chosen_variant)).json();
+      document.getElementById('calibNote').textContent = (!vc.ok || !vc.n_resolved)
+        ? (vc.note || vc.error || 'No calibration data yet for this variant.')
+        : `Calibration (${SELECTION_VARIANT_LABELS[vc.variant] || vc.variant}): ${vc.n_resolved} resolved · ${Math.round(vc.accuracy*100)}% accuracy · Brier ${vc.brier} (baseline ${vc.naive_baseline_brier}) — ${vc.note}`;
+      accuracyForFooter = vc.accuracy || 0;
+      nResolvedForFooter = vc.n_resolved || 0;
+    } else {
+      const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon)).json();
+      document.getElementById('calibNote').textContent = c.n_resolved === 0
+        ? c.note
+        : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;
+      accuracyForFooter = c.accuracy;
+      nResolvedForFooter = c.n_resolved || 0;
+    }
+    document.getElementById('predSignalFooter').innerHTML = renderSignalFooter(headlinePUp, accuracyForFooter, nResolvedForFooter);
   }catch(e){
     empty.innerHTML = `<p class="text-sm text-[#BAC9CD]">Could not reach the model.</p>`;
   }

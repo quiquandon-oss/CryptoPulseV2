@@ -55,13 +55,10 @@
         </button>
       </div>
     </div>
-    <p class="text-sm text-[#BAC9CD] mt-2 max-w-lg leading-relaxed">A standalone BTC prediction model, learning off the same market history <a href="https://quiquandon-oss.github.io/CryptoPulse/" class="underline decoration-[#00E0FF]/40 hover:text-[#00E0FF]" target="_blank" rel="noopener">CryptoPulse</a> has been logging — separate app, shared data, nothing here can touch the original.</p>
   </header>
 
   <nav class="hidden md:flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-4 w-fit">
     <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="analysis" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="challenger" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="learning" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
@@ -235,7 +232,16 @@
 
   </div>
 
-  <div id="view-analysis" class="hidden">
+  <!-- ═══ LAB ═══ Consolidates what used to be three separate tabs
+       (Analysis, Challenger, Lab) into one, since the coin/horizon toggle
+       used to eagerly reload all three on every click/tab-switch
+       regardless of which was visible -- see refreshAll()'s comment.
+       Section order below: narrative analysis, then Challenger (a real,
+       stable, currently-deployed model -- kept visually distinct from the
+       experimental section that follows, not just another undecided
+       design choice), then the pre-existing Lab experiments unchanged. ═══ -->
+  <div id="view-lab" class="hidden">
+    <!-- ---- Narrative Analysis (formerly its own tab) ---- -->
     <div class="flex items-center justify-between mb-4">
       <p class="text-xs text-[#BAC9CD]">Runs automatically once daily at 07:00 UTC — or trigger it now.</p>
       <button id="runAnalysisBtn" class="text-xs font-semibold bg-[#00E0FF] text-[#0B0E11] rounded-lg px-3 py-1.5 hover:bg-[#00E0FF]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Run Analysis Now</button>
@@ -272,16 +278,18 @@
       <p id="analysisLevels" class="text-xs text-[#BAC9CD] mb-4 font-mono-data"></p>
       <pre id="analysisNarrative" class="text-xs sm:text-sm text-[#E1E2E7] whitespace-pre-wrap leading-relaxed"></pre>
     </section>
-  </div>
 
-  <!-- ═══ Challenger — a separate, deterministic regime-conditional model,
-       fully isolated from the k-NN above (does not touch, import, or affect
-       it in any way). Logged in parallel for comparison, motivated by a
-       confirmed finding: the k-NN scored 22.9% accuracy on regime-anomalous
-       days against a 97.1% naive trend-continuation baseline in the same
-       window. See PulseWorkerV2's runChallengerPrediction for the full
-       reasoning. ═══ -->
-  <div id="view-challenger" class="hidden">
+    <!-- ---- Challenger — a real, stable, currently-deployed model, NOT
+         an undecided experiment. Deliberately kept visually distinct from
+         the "Experimental" section below via the colored label, so
+         merging tabs doesn't accidentally read as "we're not sure this
+         one's staying." Fully isolated from the k-NN above (does not
+         touch, import, or affect it in any way) -- logged in parallel for
+         comparison, motivated by a confirmed finding: the k-NN scored
+         22.9% accuracy on regime-anomalous days against a 97.1% naive
+         trend-continuation baseline in the same window. See
+         PulseWorkerV2's runChallengerPrediction for the full reasoning. ---- -->
+    <p class="text-[10px] uppercase tracking-wide text-[#00E0A0] font-bold mb-2 mt-8">Challenger — Stable Model</p>
     <section id="challengerLiveCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger — Live Read</p>
@@ -300,15 +308,14 @@
       <h2 class="text-sm font-semibold mb-3">Recent Predictions</h2>
       <div id="challengerRecapBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
-  </div>
 
-  <!-- ═══ LAB TAB ═══ A testing space for undecided design choices, not a
-       settled feature — same "don't trust one number, compare it" ethos
-       as Challenger vs. k-NN, applied to presentation decisions instead
-       of model logic. Nothing here is final; whichever option gets
-       picked is what a future pass would hardcode into the real
-       Dashboard. ═══ -->
-  <div id="view-lab" class="hidden">
+    <!-- ---- Pre-existing Lab experiments, unchanged. A testing space for
+         undecided design choices, not a settled feature -- same "don't
+         trust one number, compare it" ethos as Challenger vs. k-NN,
+         applied to presentation decisions instead of model logic.
+         Nothing here is final; whichever option gets picked is what a
+         future pass would hardcode into the real Dashboard. ---- -->
+    <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-bold mb-2 mt-8">Experimental — undecided design choices</p>
     <section id="labWeightingCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Combined Accuracy — which formula?</p>
@@ -545,14 +552,6 @@
     <span class="material-symbols-outlined text-[20px]">monitoring</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Dashboard</span>
   </button>
-  <button data-view="analysis" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
-    <span class="material-symbols-outlined text-[20px]">insights</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Analysis</span>
-  </button>
-  <button data-view="challenger" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
-    <span class="material-symbols-outlined text-[20px]">compare_arrows</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Challenger</span>
-  </button>
   <button data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
     <span class="material-symbols-outlined text-[20px]">science</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Lab</span>
@@ -661,17 +660,13 @@ function refreshAll(){
   document.getElementById('predictionTitle').textContent = `${cfg.label} · Next ${currentHorizon}h`;
   document.getElementById('chartTitle').textContent = `${cfg.label} Price vs. Predictions (${currentHorizon}h)`;
   if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
-  loadPrediction();
-  loadChart();
-  loadAnalysis();
-  loadChallenger();
-  loadLab();
-  // Learning selection/events/variants are coin+horizon-scoped like the
-  // views above, but only worth fetching if AI Learning is the view
-  // actually on screen — unlike the eager fetch-everything pattern above
-  // (already the existing convention for the other four views), pulling
-  // learning data on every coin/horizon change regardless of visibility
-  // would be pure wasted polling for a tab most sessions won't open.
+  // Only the currently visible view reloads -- loadDashboardIfNeeded/
+  // loadLabIfNeeded compare against the new coin/horizon combo key, so
+  // switching to a different tab afterward still picks up the change
+  // (via the same functions called from renderNav) without needing a
+  // second network round of loads fired from here too.
+  if (activeView === 'dashboard') loadDashboardIfNeeded();
+  if (activeView === 'lab') loadLabIfNeeded();
   if (activeView === 'learning' && _learningLoaded) loadLearningSelection();
 }
 
@@ -725,7 +720,8 @@ async function loadPrediction(){
   }
 }
 
-loadPrediction();
+// Called from renderNav() via loadDashboardIfNeeded() when the Dashboard
+// view is actually the one on screen, not unconditionally at parse time.
 
 // ---- Price vs predictions chart ----
 const RANGES = [
@@ -995,18 +991,47 @@ async function loadChart(){
 
 buildCoinTabs();
 buildHorizonTabs();
-loadChart();
+// loadChart() now called from renderNav() via loadDashboardIfNeeded().
 
 // ---- Nav tabs ----
 const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
-  { key: 'analysis', label: 'Analysis' },
-  { key: 'challenger', label: 'Challenger' },
   { key: 'lab', label: 'Lab' },
   { key: 'learning', label: 'AI Learning' },
 ];
 let activeView = (location.hash || '').replace('#', '') || 'dashboard';
 if (!NAV.some(n => n.key === activeView)) activeView = 'dashboard';
+
+// ---- Lazy, per-view, per-coin/horizon loading. Previously every one of
+// loadPrediction/loadChart/loadAnalysis/loadChallenger/loadLab fired
+// unconditionally on page load AND on every single coin/horizon toggle
+// click, regardless of which tab (if any) was actually visible --
+// switching BTC->LINK while looking at Dashboard silently reloaded Lab's
+// data too, and vice versa. Now each view's data loads only when that
+// view is the one on screen, and only re-loads if the coin/horizon combo
+// actually changed since the last time it loaded -- tracked by comparing
+// against a "loaded for this key" marker per view, the same pattern
+// already used for AI Learning (_learningLoaded) below. ----
+function comboKey(){ return currentCoin + '-' + currentHorizon; }
+let _dashboardLoadedFor = null;
+let _labLoadedFor = null;
+
+function loadDashboardIfNeeded(){
+  const key = comboKey();
+  if (_dashboardLoadedFor === key) return;
+  _dashboardLoadedFor = key;
+  loadPrediction();
+  loadChart();
+}
+
+function loadLabIfNeeded(){
+  const key = comboKey();
+  if (_labLoadedFor === key) return;
+  _labLoadedFor = key;
+  loadAnalysis();
+  loadChallenger();
+  loadLab();
+}
 
 function renderNav(){
   document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -1022,10 +1047,10 @@ function renderNav(){
     }
   });
   document.getElementById('view-dashboard').classList.toggle('hidden', activeView !== 'dashboard');
-  document.getElementById('view-analysis').classList.toggle('hidden', activeView !== 'analysis');
-  document.getElementById('view-challenger').classList.toggle('hidden', activeView !== 'challenger');
   document.getElementById('view-lab').classList.toggle('hidden', activeView !== 'lab');
   document.getElementById('view-learning').classList.toggle('hidden', activeView !== 'learning');
+  if (activeView === 'dashboard') loadDashboardIfNeeded();
+  if (activeView === 'lab') loadLabIfNeeded();
   if (activeView === 'learning' && !_learningLoaded) loadLearningOverview();
 }
 
@@ -1094,7 +1119,8 @@ async function loadAnalysis(){
   }
 }
 
-loadAnalysis();
+// Called from renderNav() via loadLabIfNeeded() when Lab is actually the
+// view on screen (Analysis' content now lives inside Lab).
 
 // Manual "Run Analysis Now" — same pattern as V1's Outlook tab (cron +
 // manual button). Coin-aware: hits /run-analysis for BTC, /run-link-analysis
@@ -2450,7 +2476,7 @@ function roleCard(icon, name, question, bodyHtml){
   </div>`;
 }
 function renderAiResponsibilities(daily, chatgpt){
-  const geminiBody = `<p class="text-[11px] text-[#BAC9CD]">Market intelligence, catalyst evidence — via the free consumer app only. Paid API grounding was removed; see ANALYST (YOU) for how Gemini's analysis actually reaches this system now.</p>
+  const geminiBody = `<p class="text-[11px] text-[#BAC9CD]">Market intelligence, catalyst evidence — via the free consumer app only. Paid API grounding was removed; see the Analyst Relay section above for how Gemini's analysis actually reaches this system now.</p>
     <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#00E0A0"></span><span class="text-[#BAC9CD]">Active, via Analyst Relay</span></p>`;
 
   const chatgptBody = (chatgpt && chatgpt.ok)
@@ -2469,15 +2495,14 @@ function renderAiResponsibilities(daily, chatgpt){
   const humanBody = `<p class="text-[11px] text-[#BAC9CD]">Sole production authority. No AI role in this system — Gemini, ChatGPT, or Claude — can promote a change to Production.</p>
     <p class="text-[10px] text-[#FFB020] mt-1.5 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[13px]">lock</span>Every promotion requires explicit human approval.</p>`;
 
-  const analystBody = `<p class="text-[11px] text-[#BAC9CD]">Manual relay to Gemini's free consumer app — the only way Gemini's analysis reaches this system. Real catalyst data, but grounding can't be independently verified the way an API response could.</p>
-    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">See Analyst Relay above</span></p>`;
+  // ANALYST (YOU) card removed -- redundant with the Analyst Relay section
+  // directly above this grid, which already explains the same mechanism.
 
   document.getElementById('learnRolesGrid').innerHTML =
     roleCard('travel_explore', 'GEMINI', 'What happened?', geminiBody) +
     roleCard('fact_check', 'CHATGPT', 'What does it mean?', chatgptBody) +
     roleCard('code', 'CLAUDE', 'What can we test?', claudeBody) +
-    roleCard('shield_person', 'HUMAN', 'Should it reach Production?', humanBody) +
-    roleCard('person_edit', 'ANALYST (YOU)', 'What does Gemini\'s app say?', analystBody);
+    roleCard('shield_person', 'HUMAN', 'Should it reach Production?', humanBody);
 }
 
 // ---- Section 8: Learning by regime ----
@@ -2584,10 +2609,13 @@ function renderLearningAudit(history){
 }
 
 document.getElementById('learnRefreshBtn').onclick = () => { _learningGlobalCache = null; loadLearningOverview(); };
-if (activeView === 'learning') loadLearningOverview();
-
-loadChallenger();
-loadLab();
+// renderNav() (called above, right after NAV is defined) already triggers
+// loadLearningOverview()/loadDashboardIfNeeded()/loadLabIfNeeded() for
+// whichever view is actually active on page load -- no separate calls
+// needed here. A duplicate unconditional call used to live here
+// (`if (activeView === 'learning') loadLearningOverview();`, with no
+// !_learningLoaded guard) which would have double-fired the Learning
+// tab's load whenever the page opened directly to #learning.
 </script>
 </body>
 </html>

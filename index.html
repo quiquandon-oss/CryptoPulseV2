@@ -106,7 +106,7 @@
         <p id="predVariantLabel" class="hidden text-[11px] text-[#00E0FF] font-semibold mb-2"></p>
         <div id="predSignalFooter" class="mt-3"></div>
         <div class="mt-4 pt-3 border-t border-[#3B494C]">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-1">Expected return range</p>
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-1">Similar days' returns <span class="normal-case tracking-normal font-normal">(middle 50%: 25th–75th percentile)</span></p>
           <p id="predDetail" class="text-xs text-[#E1E2E7] font-mono-data"></p>
         </div>
         <div id="predTrend"></div>
@@ -163,7 +163,7 @@
       <div id="chartContainer" class="relative" style="height:300px;">
         <canvas id="priceChart" role="img" aria-label="Price line with logged predictions and their outcomes"></canvas>
       </div>
-      <p class="text-[10px] text-[#BAC9CD] mt-2">▲ bullish · ▼ bearish · saturation = confidence · ring: <span class="text-[#4AE176]">green</span> correct · <span class="text-[#FFB4AB]">red</span> wrong · grey pending</p>
+      <p class="text-[10px] text-[#BAC9CD] mt-2">▲ bullish · ▼ bearish · saturation = confidence · ring: <span class="text-[#4AE176]">green</span> call was right · <span class="text-[#FFB4AB]">red</span> call was wrong · grey pending · axis in your local time, tooltips in UTC</p>
       <p id="chartCountNote" class="text-[11px] text-[#BAC9CD] mt-1 font-mono-data"></p>
     </section>
 
@@ -666,6 +666,14 @@ function fmtUtc(ts, withTime = true){
   const iso = d.toISOString();
   return withTime ? iso.slice(0,10) + ' ' + iso.slice(11,16) + ' UTC' : iso.slice(0,10);
 }
+// A logged call is "correct" when its called direction matches the realized
+// direction. realized_up is the price direction only (1 = went up), so it is
+// never read as correctness on its own. Same rule as the backend's accuracy
+// figure: (p_up >= 0.5) === (realized_up === 1). null while pending.
+function callCorrect(p){
+  if(p.realized_up === null || p.realized_up === undefined) return null;
+  return (p.p_up >= 0.5) === (p.realized_up === 1);
+}
 function ageStr(ts){
   if(ts == null) return '';
   const ms = Date.now() - new Date(ts).getTime();
@@ -849,7 +857,7 @@ async function loadPrediction(){
     const rr = Array.isArray(d.return_range_pct) && d.return_range_pct.length === 2 ? d.return_range_pct : null;
     const sgn = v => (v > 0 ? '+' : '') + v;
     document.getElementById('predDetail').textContent = rr
-      ? `${sgn(rr[0])}% to ${sgn(rr[1])}% over ${horizonAtCall}h (median ${sgn(d.median_analog_return_pct)}%) · from ${d.n_analogs} similar days · ${cfg.label} $${priceNow != null ? priceNow.toLocaleString() : '—'} now`
+      ? `${sgn(rr[0])}% to ${sgn(rr[1])}% over ${horizonAtCall}h (median ${d.median_analog_return_pct != null ? sgn(d.median_analog_return_pct) + '%' : 'not reported'}) · across ${d.n_analogs ?? '?'} resolved similar days, not a forecast interval · ${cfg.label} $${priceNow != null ? priceNow.toLocaleString() : '—'} now`
       : `Not supplied by the backend for this read · ${cfg.label} $${priceNow != null ? priceNow.toLocaleString() : '—'} now`;
 
     // "Most similar days" is always the original k-NN's own reasoning --
@@ -871,23 +879,28 @@ async function loadPrediction(){
     // track record underneath a DIFFERENT variant's number would imply
     // that history belongs to the number being shown, when it doesn't.
     if (usingNonOriginal) {
-      const vc = await (await fetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant)).json();
+      const vr = await fetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant);
+      const vc = await vr.json().catch(() => ({ ok: false, error: 'unreadable response' }));
       if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
-      document.getElementById('calibNote').textContent = vc.note || vc.error || '';
+      const vErr = (!vr.ok || vc.ok === false) ? (vc.error || ('HTTP ' + vr.status)) : null;
+      document.getElementById('calibNote').textContent = vErr ? '' : (vc.note || '');
       document.getElementById('evidenceBody').innerHTML = renderEvidence({
         label: SELECTION_VARIANT_LABELS[vc.variant] || vc.variant || selection.chosen_variant,
-        ok: !!(vc.ok && vc.n_resolved), nResolved: vc.n_resolved || 0, accuracy: vc.accuracy,
-        brier: vc.brier, baseline: vc.naive_baseline_brier,
-        calibrated: null,
+        error: vErr, nResolved: vc.n_resolved, accuracy: vc.accuracy,
+        brier: vc.brier, baseline: vc.naive_baseline_brier, beats: vc.beats_naive_baseline,
+        upRate: null, calibrated: null,
       });
     } else {
-      const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall)).json();
+      const cr = await fetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall);
+      const c = await cr.json().catch(() => ({ ok: false, error: 'unreadable response' }));
       if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
-      document.getElementById('calibNote').textContent = c.note || '';
+      const cErr = (!cr.ok || c.ok === false) ? (c.error || ('HTTP ' + cr.status)) : null;
+      document.getElementById('calibNote').textContent = cErr ? '' : (c.note || '');
       const bestBaseline = (c.brier_baseline_5050 != null && c.brier_baseline_up_rate != null) ? Math.min(c.brier_baseline_5050, c.brier_baseline_up_rate) : null;
       document.getElementById('evidenceBody').innerHTML = renderEvidence({
-        label: 'Original k-NN', ok: !!(c.ok !== false && c.n_resolved), nResolved: c.n_resolved || 0,
-        accuracy: c.accuracy, brier: c.brier_score, baseline: bestBaseline,
+        label: 'Original k-NN', error: cErr, nResolved: c.n_resolved,
+        accuracy: c.accuracy, brier: c.brier_score, baseline: bestBaseline, beats: c.beats_naive_baseline,
+        upRate: c.historical_up_rate,
         calibrated: (d.calibrated_p_up != null) ? { raw: d.p_up, cal: d.calibrated_p_up } : null,
       });
     }
@@ -993,7 +1006,10 @@ function renderSignalFooter(pUp){
 // baseline the backend returned, never one invented here.
 const EVIDENCE_MIN_RESOLVED = 50;
 function renderEvidence(e){
-  if(!e.ok){
+  if(e.error){
+    return `<p class="mb-1">${chip('UNAVAILABLE','neutral')}</p><p class="text-[#BAC9CD]">The ${esc(e.label)} track record could not be read (${esc(e.error)}). Nothing is shown rather than a guessed or empty result.</p>`;
+  }
+  if(!e.nResolved){
     return `<p class="mb-1">${chip('NO RESOLVED DATA','neutral')}</p><p class="text-[#BAC9CD]">${esc(e.label)} has no resolved predictions for this coin/horizon yet, so there is no track record to show.</p>`;
   }
   const pct = e.accuracy != null ? Math.round(e.accuracy * 100) : null;
@@ -1006,20 +1022,31 @@ function renderEvidence(e){
       <span class="absolute text-[10px] font-mono-data">${pct != null ? pct + '%' : '—'}</span>
     </div>`;
   const sufficient = e.nResolved >= EVIDENCE_MIN_RESOLVED;
-  const sampleChip = sufficient ? chip('n=' + e.nResolved, 'info') : chip('INSUFFICIENT SAMPLE', 'warn');
+  const sampleChip = sufficient ? chip('n=' + e.nResolved, 'neutral') : chip('INSUFFICIENT SAMPLE', 'warn');
+  // Accuracy reference: the share of the same resolved calls whose price
+  // went up. Always calling "up" would have scored exactly that, so it is
+  // the number the accuracy figure has to be read against. Only shown when
+  // the backend reports it; never derived from another field.
+  const accRef = e.upRate != null
+    ? `<p class="mt-2 text-[#BAC9CD]">Price went up on <span class="font-mono-data text-[#E1E2E7]">${(Number(e.upRate)*100).toFixed(1)}%</span> of these ${e.nResolved} calls, so always calling "up" would have scored that accuracy.</p>`
+    : `<p class="mt-2 text-[#BAC9CD]">Up-rate for this set not reported, so the accuracy figure has no reference here.</p>`;
   let brierLine = '<span class="text-[#BAC9CD]">Brier score not reported.</span>';
   if(e.brier != null && e.baseline != null){
-    const beats = Number(e.brier) < Number(e.baseline);
-    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> vs best constant guess <span class="font-mono-data">${Number(e.baseline).toFixed(3)}</span> — ${beats ? chip('BEATS BASELINE','good') : chip('DOES NOT BEAT BASELINE','bad')}`;
+    const beats = typeof e.beats === 'boolean' ? e.beats : Number(e.brier) < Number(e.baseline);
+    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better)</span> vs best constant guess <span class="font-mono-data">${Number(e.baseline).toFixed(3)}</span> — ${beats ? chip('BEATS BASELINE','good') : chip('DOES NOT BEAT BASELINE','bad')}
+      <span class="block text-[10px] text-[#BAC9CD] mt-1">Constant guess = the better of always 50% (0.250) and always the realized up-rate of these same ${e.nResolved} calls. That up-rate is only known in hindsight. Beating it is a minimum bar, not proof of skill.</span>`;
   } else if(e.brier != null){
-    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(no baseline reported)</span>`;
+    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better; no baseline reported)</span>`;
   }
+  // The headline shows the raw read when Original k-NN is headlined; the
+  // calibrated read is a separate number beside it, not applied to it, and
+  // its own track record is the "k-NN Calibrated" bar in the Lab.
   let calibLine = '';
   if(e.calibrated){
     const diff = Math.round(e.calibrated.cal * 100) - Math.round(e.calibrated.raw * 100);
     calibLine = Math.abs(diff) >= 1
-      ? `<p class="mt-2">Calibration ${chip('APPLIED','info')} <span class="text-[#BAC9CD]">recalibrated read ${Math.round(e.calibrated.cal*100)}% vs raw ${Math.round(e.calibrated.raw*100)}%</span></p>`
-      : `<p class="mt-2">Calibration ${chip('NO ADJUSTMENT','neutral')} <span class="text-[#BAC9CD]">recalibrated read equals the raw read (curve absent or neutral)</span></p>`;
+      ? `<p class="mt-2">Calibration ${chip('SEPARATE READ','neutral')} <span class="text-[#BAC9CD]">calibrated ${Math.round(e.calibrated.cal*100)}% vs headline (raw) ${Math.round(e.calibrated.raw*100)}%. It is not applied to the headline, and the figures above are for the raw read. Its own record is in the Lab.</span></p>`
+      : `<p class="mt-2">Calibration ${chip('NO ADJUSTMENT','neutral')} <span class="text-[#BAC9CD]">calibrated read equals the raw read</span></p>`;
   } else if(e.calibrated === null && e.label !== 'Original k-NN'){
     calibLine = `<p class="mt-2">Calibration ${chip('NOT REPORTED','neutral')} <span class="text-[#BAC9CD]">for this variant's live read</span></p>`;
   }
@@ -1027,11 +1054,12 @@ function renderEvidence(e){
     <div class="flex items-center gap-3">
       ${ring}
       <div>
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Resolved accuracy · ${esc(e.label)}</p>
-        <p class="mt-0.5">${sampleChip} <span class="text-[#BAC9CD]">${e.nResolved} resolved${sufficient ? '' : ` (selection needs ${EVIDENCE_MIN_RESOLVED})`}</span></p>
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Resolved direction accuracy · ${esc(e.label)}</p>
+        <p class="mt-0.5">${sampleChip} <span class="text-[#BAC9CD]">${e.nResolved} resolved, this coin/horizon${sufficient ? '' : ` (selection needs ${EVIDENCE_MIN_RESOLVED})`}</span></p>
       </div>
     </div>
-    <p class="mt-3">${brierLine}</p>
+    ${accRef}
+    <p class="mt-2">${brierLine}</p>
     ${calibLine}`;
 }
 
@@ -1051,8 +1079,8 @@ function renderChart(){
     return p.p_up >= 0.5 ? `rgba(74,225,118,${a})` : `rgba(255,180,171,${a})`;
   });
   const border = preds.map(p =>
-    p.realized_up === null || p.realized_up === undefined ? '#4B5563' :
-    p.realized_up === 1 ? '#4AE176' : '#FFB4AB'
+    callCorrect(p) === null ? '#4B5563' :
+    callCorrect(p) ? '#4AE176' : '#FFB4AB'
   );
 
   const nResolved = preds.filter(p => p.realized_up !== null && p.realized_up !== undefined).length;
@@ -1120,6 +1148,7 @@ function renderChart(){
           bodyFont: { family: 'monospace' },
           padding: 10,
           callbacks: {
+            title: (items) => items.length ? fmtUtc(items[0].parsed.x) : '',
             label: (item) => {
               if(item.dataset.label !== 'Predictions') return cfg.label + ' $' + item.parsed.y.toLocaleString();
               const p = item.dataset._preds[item.dataIndex];
@@ -1129,7 +1158,7 @@ function renderChart(){
               ];
               lines.push(
                 p.realized_up === null || p.realized_up === undefined ? 'Outcome: pending' :
-                `Outcome: ${p.realized_up ? 'correct' : 'wrong'} (${p.realized_return>0?'+':''}${p.realized_return?.toFixed(2)}%)`
+                `Outcome: ${callCorrect(p) ? 'correct' : 'wrong'} — price went ${p.realized_up === 1 ? 'up' : 'down'}${p.realized_return != null ? ` (${p.realized_return>0?'+':''}${p.realized_return.toFixed(2)}%)` : ''}`
               );
               return lines;
             },
@@ -1155,10 +1184,10 @@ function recapRowHtml(p, withTarget){
     realityCell = `<span class="text-[#BAC9CD]">Pending${hoursLeft != null ? ` (~${hoursLeft}h)` : ''}</span>`;
     deviationCell = `<span class="text-[#BAC9CD]">—</span>`;
   }else if(p.realized_return == null){
-    realityCell = `<span class="text-[#BAC9CD]">${p.realized_up === 1 ? '✓' : '✗'} (return not reported)</span>`;
+    realityCell = `<span class="text-[#BAC9CD]">${p.realized_up === 1 ? 'up' : 'down'} <span aria-label="${callCorrect(p) ? 'correct' : 'wrong'}">${callCorrect(p) ? '✓' : '✗'}</span> (return not reported)</span>`;
     deviationCell = `<span class="text-[#BAC9CD]">—</span>`;
   }else{
-    const correct = p.realized_up === 1;
+    const correct = callCorrect(p);
     const realColor = p.realized_return >= 0 ? 'text-[#4AE176]' : 'text-[#FFB4AB]';
     realityCell = `<span class="${realColor}">${p.realized_return>0?'+':''}${p.realized_return.toFixed(2)}%</span> <span aria-label="${correct ? 'correct' : 'wrong'}">${correct ? '✓' : '✗'}</span>`;
     if(med == null){
@@ -1304,6 +1333,10 @@ function completenessChip(cron24, expected){
   return cron24 >= expected ? chip(`${cron24}/${expected}`, 'good') : chip(`${cron24}/${expected}`, 'warn');
 }
 
+const FRESHNESS_REPORT_MAX_AGE_MS = 3 * 60 * 60 * 1000; // one 3h cron tick
+// Re-render once a minute so ages and the outdated-report rule track the
+// clock while the page stays open. No request is made.
+setInterval(() => { if (activeView === 'dashboard') renderDataQuality(); }, 60000);
 function renderDataQuality(){
   const host = document.getElementById('dqBody');
   if(!host) return;
@@ -1316,6 +1349,10 @@ function renderDataQuality(){
     rows.push(`<p>${chip('UNKNOWN','neutral')} <span class="text-[#BAC9CD]">Freshness monitor unavailable (${esc(_freshness.error)}), so series health cannot be confirmed.</span></p>`);
   }else{
     const fr = _freshness.data;
+    // FRESH/STALE are the backend's verdict at generated_ts. An old report
+    // cannot vouch for now, so past one cron tick its chips go neutral.
+    const reportAgeMs = fr.generated_ts ? Date.now() - fr.generated_ts : Infinity;
+    const reportOutdated = !(reportAgeMs <= FRESHNESS_REPORT_MAX_AGE_MS);
     const coinFr = fr.coins && fr.coins[coin];
     const hz = coinFr && coinFr.horizons && coinFr.horizons[h];
     const expected = fr.expected_cron_ticks_24h;
@@ -1323,7 +1360,7 @@ function renderDataQuality(){
       ? `<div class="flex items-center justify-between gap-2"><span class="text-[#BAC9CD]">${name}</span>${chip('UNKNOWN','neutral')}</div>`
       : `<div class="flex items-center justify-between gap-2 flex-wrap">
            <span class="text-[#BAC9CD]">${name} <span class="font-mono-data text-[10px]">newest ${fmtUtc(s.latest_ts)}${s.latest_ts ? ' · ' + ageStr(s.latest_ts) : ''}</span></span>
-           <span class="flex items-center gap-1">${freshnessChip(s.status)}<span title="Rows the scheduled cron wrote in the last 24 h vs. expected">${completenessChip(s.cron_rows_24h, expected)}</span></span>
+           <span class="flex items-center gap-1">${reportOutdated ? chip('UNKNOWN','neutral') : freshnessChip(s.status)}<span title="Rows the scheduled cron wrote in the last 24 h vs. expected">${reportOutdated ? '' : completenessChip(s.cron_rows_24h, expected)}</span></span>
          </div>`;
     rows.push(`<p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Logged prediction series · ${coin} ${h}h <span class="normal-case tracking-normal font-normal">(freshness · scheduled writes in 24 h)</span></p>`);
     rows.push(line('Core model', hz && hz.core));
@@ -1346,10 +1383,14 @@ function renderDataQuality(){
         }
       }
     }
-    rows.push(`<p class="pt-2 mt-1 border-t border-[#3B494C] text-[#BAC9CD]">All series: ${gaps.length
+    rows.push(`<p class="pt-2 mt-1 border-t border-[#3B494C] text-[#BAC9CD]">All series: ${
+      reportOutdated ? chip('UNKNOWN','neutral')
+      : total === 0 ? `${chip('UNKNOWN','neutral')} <span class="text-[10px]">no series in the report</span>`
+      : gaps.length
       ? `${chip(gaps.length + ' of ' + total + ' with gaps','warn')} <span class="font-mono-data text-[10px]">${esc(gaps.join(' · '))}</span>`
-      : `${chip(total + ' of ' + total + ' fresh & complete','good')}`}</p>`);
-    rows.push(`<p class="text-[10px] text-[#4B5563]">Monitor generated ${fmtUtc(fr.generated_ts)}</p>`);
+      : `${chip(total + ' of ' + total + ' on schedule','good')}`}</p>`);
+    rows.push(`<p class="text-[10px] ${reportOutdated ? 'text-[#FFB020]' : 'text-[#4B5563]'}">Monitor generated ${fmtUtc(fr.generated_ts)}${reportOutdated ? ' — report outdated, use refresh' : ''}</p>`);
+    rows.push(`<p class="text-[10px] text-[#4B5563] leading-relaxed">FRESH = newest logged row under 6 h old (backend rule). Write counts show the scheduled job saved its rows. They do not validate the market data behind them, and price-feed gaps are not reported.</p>`);
   }
   // 2) Outcomes: resolved vs pending, from the predictions loaded for the chart.
   if(chartRaw.loadedFor === coin + '-' + h && !chartRaw.error){
@@ -2062,7 +2103,7 @@ async function loadLabCombinedHistoryChart(){
             tooltip: {
               backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
               titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
-              callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
+              callbacks: { title: (items) => items.length ? fmtUtc(items[0].parsed.x) : '', label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
             },
           },
         },
@@ -2999,6 +3040,7 @@ var _registry = null;          // { ok, data } | { ok:false, error }
 var _eventsHealth = null;      // { ok, data } | { ok:false, error }
 var _eventsRecent = null;      // { ok, count } | { ok:false, error }
 var registryFilter = 'ALL';
+var EVENTS_LIMIT = 200;
 
 async function fetchJson(path){
   try{
@@ -3016,11 +3058,11 @@ async function loadExperiments(){
   const [reg, health, events] = await Promise.all([
     fetchJson('/api/research-lab/registry'),
     fetchJson('/api/events/health'),
-    fetchJson('/api/events?limit=200'),
+    fetchJson('/api/events?limit=' + EVENTS_LIMIT),
   ]);
   _registry = reg;
   _eventsHealth = health;
-  _eventsRecent = events.ok ? { ok: true, count: events.data.count, since: events.data.since_ts } : events;
+  _eventsRecent = events.ok && typeof events.data.count === 'number' ? { ok: true, count: events.data.count, since: events.data.since_ts } : (events.ok ? { ok: false, error: 'count not reported' } : events);
   document.getElementById('expLoadedAt').textContent = fmtUtc(Date.now());
   renderGoalA();
   renderGoalB();
@@ -3040,6 +3082,8 @@ function sampleText(e){
   const cs = e.current_sample_size;
   if(cs == null) return 'not reported';
   if(typeof cs === 'number') return String(cs);
+  if(typeof cs === 'object' && Array.isArray(cs.by_horizon) && cs.by_horizon.length)
+    return cs.by_horizon.map(b => `${b.horizon_hours}h ${b.resolved ?? '?'} resolved of ${b.total ?? '?'}`).join(' · ');
   if(typeof cs === 'object' && cs.total_resolved != null) return `${cs.total_resolved} resolved of ${cs.total_forecasts ?? '?'} forecasts`;
   return esc(JSON.stringify(cs)).slice(0, 120);
 }
@@ -3050,7 +3094,7 @@ function progressBar(e){
   const pct = Math.max(0, Math.min(100, Math.round(cur / req * 100)));
   return `<div class="mt-1.5" role="img" aria-label="Sample ${cur} of ${req} required">
     <div class="h-1.5 rounded-full bg-[#3B494C] overflow-hidden"><div class="h-full rounded-full" style="width:${pct}%;background:${cur >= req ? '#00E0FF' : '#FFB020'}"></div></div>
-    <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">${cur} / ${req} required${cur >= req ? ' — minimum reached (not a result)' : ''}</p>
+    <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">registry progress ${cur} / ${req} required${cur >= req ? ' — minimum reached (not a result)' : ''}</p>
   </div>`;
 }
 function etaText(e){
@@ -3075,13 +3119,17 @@ function renderGoalA(){
     return;
   }
   const d = h.data;
+  if(d.available === false){
+    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Event Detection reports itself unavailable${d.reason ? ' (' + esc(d.reason) + ')' : ''}.</span></p>`;
+    return;
+  }
   const lr = d.last_run;
   const dets = (d.detectors || []).map(x => `<li class="flex items-start justify-between gap-2 py-1 border-t border-[#3B494C]/60">
-      <span class="text-[#BAC9CD] text-[11px]">${esc(x.label || x.id)}${x.stale ? ' <span class="text-[#FFB4AB]">(stale)</span>' : ''}</span>
+      <span class="text-[#BAC9CD] text-[11px]">${esc(x.label || x.id)}${x.stale ? ' <span class="text-[#FFB4AB]">(stale)</span>' : ''}${x.coverage ? `<span class="block text-[10px] text-[#4B5563]">coverage: ${esc(x.coverage)}</span>` : ''}</span>
       ${chip(String(x.status || 'UNKNOWN').replace(/_/g,' '), DETECTOR_TONE[x.status] || 'neutral')}
     </li>`).join('');
   const ev = _eventsRecent && _eventsRecent.ok
-    ? `<span class="font-mono-data text-[#E1E2E7]">${_eventsRecent.count}</span> derived event${_eventsRecent.count === 1 ? '' : 's'} since ${fmtUtc(_eventsRecent.since)}`
+    ? `<span class="font-mono-data text-[#E1E2E7]">${_eventsRecent.count >= EVENTS_LIMIT ? 'at least ' : ''}${_eventsRecent.count}</span> derived event${_eventsRecent.count === 1 ? '' : 's'} since ${fmtUtc(_eventsRecent.since)}`
     : `${chip('UNKNOWN','neutral')} event list unavailable`;
   host.innerHTML = `
     <dl>
@@ -3114,14 +3162,16 @@ function renderGoalB(){
   }
   host.innerHTML = `
     <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(e.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(e.confidence_evidence_maturity)}</p>
-    <p class="mt-2 text-[#BAC9CD]">Evaluable events: <span class="font-mono-data text-[#E1E2E7]">${sampleText(e)}</span> · required <span class="font-mono-data text-[#E1E2E7]">${e.required_sample ?? 'not defined'}</span></p>
+    <p class="mt-2 text-[#BAC9CD]">Registry sample: <span class="font-mono-data text-[#E1E2E7]">${sampleText(e)}</span> · required <span class="font-mono-data text-[#E1E2E7]">${e.required_sample ?? 'not defined'}</span></p>
     ${progressBar(e)}
     <dl>
       ${field('Projected checkpoint', etaText(e))}
       ${field('Data last updated', e.data_last_updated ? fmtUtc(e.data_last_updated) + ' (' + ageStr(e.data_last_updated) + ')' : null)}
-      ${field('Next review criterion', e.success_criterion)}
+      ${field('Success criterion', e.success_criterion)}
       ${field('Next action', e.next_action)}
-    </dl>`;
+      <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
+    </dl>
+    <p class="text-[10px] text-[#4B5563] mt-2">Status and sample are the registry's own. Holdout outcomes are not shown here.</p>`;
 }
 
 function renderRegistry(){
@@ -3149,7 +3199,7 @@ function renderRegistry(){
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <p class="text-xs font-semibold text-[#E1E2E7]"><span class="font-mono-data text-[#00E0FF]">${esc(e.experiment_id)}</span> ${esc(e.title || '')}${FEATURED[e.experiment_id] ? ` <span class="text-[10px] text-[#DDB7FF] font-semibold">· ${FEATURED[e.experiment_id]}</span>` : ''}</p>
-            <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">sample ${sampleText(e)}${typeof e.required_sample === 'number' ? ' / ' + e.required_sample + ' required' : ''} · updated ${e.data_last_updated ? fmtUtc(e.data_last_updated) : (e.last_updated ? fmtUtc(e.last_updated) : 'not reported')}</p>
+            <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">sample ${sampleText(e)}${typeof e.required_sample === 'number' ? ' · required ' + e.required_sample : ''} · updated ${e.data_last_updated ? fmtUtc(e.data_last_updated) : (e.last_updated ? fmtUtc(e.last_updated) : 'not reported')}</p>
           </div>
           <div class="flex flex-col items-end gap-1 shrink-0">${statusChipFor(e.status)}${e.confidence_evidence_maturity && e.confidence_evidence_maturity !== e.status ? statusChipFor(e.confidence_evidence_maturity) : ''}</div>
         </div>
@@ -3161,7 +3211,9 @@ function renderRegistry(){
         ${field('Baseline', e.baseline)}
         ${field('Current measured result', e.current_measured_result)}
         ${field('Conclusion', e.conclusion)}
-        ${field('Next action / known blocker', e.next_action)}
+        ${field('Next action', e.next_action)}
+        <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
+        ${field('Target date', e.target_date)}
         ${field('Projected checkpoint', etaText(e))}
         ${e.suggested_status ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Backend suggests</dt><dd class="text-[11px] text-[#BAC9CD]">${statusChipFor(e.suggested_status)} — an automatic prompt for review, not a validation.</dd></div>` : ''}
         ${field('Started', e.start_date)}

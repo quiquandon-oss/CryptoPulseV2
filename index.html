@@ -28,10 +28,16 @@
   @keyframes spin-once { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .spinning { animation: spin-once 0.6s linear infinite; }
   .pulsing { animation: pulse-dot 1.6s ease-in-out infinite; }
+  /* Keyboard focus must stay visible on every interactive element. */
+  button:focus-visible, summary:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid #00E0FF; outline-offset: 2px; border-radius: 6px; }
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  details[open] > summary .chev { transform: rotate(180deg); }
+  .chev { display: inline-block; transition: transform .15s ease; }
 </style>
 </head>
-<body class="bg-[#0B0E11] text-[#E1E2E7] min-h-screen pb-20 md:pb-8">
-<div class="max-w-3xl mx-auto px-5 py-8 sm:py-12">
+<body class="bg-[#0B0E11] text-[#E1E2E7] min-h-screen pb-24 md:pb-8">
+<div class="max-w-5xl mx-auto px-4 sm:px-5 py-6 sm:py-10">
 
   <header class="mb-6">
     <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
@@ -49,10 +55,17 @@
     </div>
   </header>
 
-  <nav class="hidden md:flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-4 w-fit">
+  <!-- Four sections, each answering one question: Dashboard (what does the
+       model predict, is the data behind it fresh, what does the resolved
+       evidence say), Lab (how do the models compare), Experiments (where
+       does each research question stand), History (the detailed records).
+       Desktop uses this pill nav; phones use the fixed bottom nav below —
+       both are the same .nav-tab buttons driven by renderNav(). -->
+  <nav aria-label="Sections" class="hidden md:flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-4 w-fit">
     <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="learning" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="experiments" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="history" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
 
   <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
@@ -60,152 +73,146 @@
        score, younger and rougher calibration. Switching re-fetches and
        re-renders the prediction/chart/analysis for whichever coin is active. -->
   <div id="coinHorizonToggle" class="flex items-center gap-2 mb-6 flex-wrap">
-    <div id="coinTabs" class="flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 w-fit"></div>
-    <div id="horizonTabs" class="flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 w-fit"></div>
+    <div id="coinTabs" role="group" aria-label="Coin" class="flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 w-fit"></div>
+    <div id="horizonTabs" role="group" aria-label="Prediction horizon" class="flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 w-fit"></div>
   </div>
+  <!-- Lab and History are scoped to the coin/horizon chosen on the
+       Dashboard (the selector stays Dashboard-only, as before); this chip
+       just makes the active scope explicit instead of implicit. -->
+  <p id="scopeChip" class="hidden text-[11px] text-[#BAC9CD] mb-4">Showing <span id="scopeChipValue" class="font-mono-data text-[#E1E2E7]"></span> · change coin/horizon on the <button type="button" class="underline hover:text-[#00E0FF]" onclick="activeView='dashboard'; history.replaceState(null,'','#dashboard'); renderNav();">Dashboard</button></p>
 
   <div id="view-dashboard">
 
-    <section id="predictionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6 hidden transition-all duration-200 hover:border-[#00E0FF]/30 glow">
-      <div class="flex items-center justify-between mb-1">
-        <p id="predictionTitle" class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">BTC · Next 24h</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'predictionNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what BTC actually did over the prediction horizon after each of them. The range is the 25th-75th percentile of those outcomes — read it as a spread of what similar setups did, not a guarantee. "Trend strength" is a separate MA-slope guardrail signal (-1 to +1), not part of the k-NN match itself. A "calibrated" badge appears next to the headline % once enough resolved predictions exist to empirically recalibrate it — before that, it's identical to the raw read and stays hidden. The ring at the bottom is this coin/horizon's real resolved-prediction accuracy (— until any have resolved); the signal pill and bars reflect how far today's p_up sits from a coin flip, not a separate forecast.</p>
-      <div class="flex items-baseline gap-3 mb-2 flex-wrap">
-        <span id="predPUp" class="text-3xl font-bold font-mono-data text-[#BAF2FF] glow-text">—</span>
-        <span class="text-sm text-[#BAC9CD]" id="predChanceLabel">chance of a positive 24h return</span>
-        <span id="predCalibBadge"></span>
-      </div>
-      <p id="predVariantLabel" class="hidden text-[10px] text-[#00E0FF] font-semibold mb-2"></p>
-      <p id="predDetail" class="text-xs text-[#BAC9CD] mb-3 font-mono-data"></p>
-      <div id="predTrend"></div>
-      <div id="predAnalogs" class="text-xs text-[#BAC9CD] space-y-1.5 mb-3 mt-3"></div>
-      <p id="predNote" class="text-[11px] text-[#00E0FF]/80 italic mb-2"></p>
-      <p id="calibNote" class="text-[11px] text-[#BAC9CD] mt-3 pt-3 border-t border-[#3B494C]"></p>
-      <div id="predSignalFooter" class="mt-3 pt-3 border-t border-[#3B494C]"></div>
-    </section>
+    <!-- Three questions, three panels, never blended: Forecast (what the
+         model predicts right now), Data quality (is the data behind it
+         fresh and complete, per /prediction-freshness and the logged
+         predictions), Evidence (what the resolved track record shows).
+         Probability, calibration and data quality stay visually separate. -->
+    <div class="grid grid-cols-1 md:grid-cols-5 md:items-start gap-4 mb-6">
 
-    <section id="predictionEmpty" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6 space-y-3">
-      <div class="h-3 bg-[#3B494C] rounded-full w-1/4 animate-pulse"></div>
-      <div class="h-8 bg-[#3B494C] rounded-xl w-1/2 animate-pulse"></div>
-      <div class="h-3 bg-[#3B494C] rounded-full w-3/4 animate-pulse"></div>
-    </section>
+      <section id="predictionCard" aria-labelledby="predictionTitle" class="md:col-span-3 rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 hidden glow">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">Forecast</p>
+          <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'predictionNote')" aria-controls="predictionNote">ⓘ Info</button>
+        </div>
+        <h2 id="predictionTitle" class="text-sm font-semibold text-[#E1E2E7] mb-1">BTC · Next 24h</h2>
+        <p id="predAsOf" class="text-[10px] text-[#BAC9CD] font-mono-data mb-3"></p>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="predictionNote">A k-NN historical analog model: today's sentiment/technical/regime/bottom-score readout is compared (z-score normalized) against every complete day of history, the most similar days are found, and this is what the coin actually did over the prediction horizon after each of them. The range is the 25th–75th percentile of those outcomes — a spread of what similar setups did, not a guarantee. When the selection layer currently prefers a different variant, the headline shows that variant's probability and says so. The direction pill and bars only describe how far the probability sits from a coin flip; they are not a separate forecast. The model's track record is in the Evidence panel, not here.</p>
+        <div class="flex items-baseline gap-3 mb-1 flex-wrap">
+          <span id="predPUp" class="text-4xl font-bold font-mono-data text-[#BAF2FF] glow-text">—</span>
+          <span class="text-sm text-[#BAC9CD]" id="predChanceLabel">chance of a positive 24h return</span>
+          <span id="predCalibBadge"></span>
+        </div>
+        <p id="predVariantLabel" class="hidden text-[11px] text-[#00E0FF] font-semibold mb-2"></p>
+        <div id="predSignalFooter" class="mt-3"></div>
+        <div class="mt-4 pt-3 border-t border-[#3B494C]">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-1">Similar days' returns <span class="normal-case tracking-normal font-normal">(middle 50%: 25th–75th percentile)</span></p>
+          <p id="predDetail" class="text-xs text-[#E1E2E7] font-mono-data"></p>
+        </div>
+        <div id="predTrend"></div>
+        <details class="mt-4 pt-3 border-t border-[#3B494C]">
+          <summary class="flex items-center justify-between cursor-pointer select-none text-xs font-semibold text-[#BAC9CD] hover:text-[#E1E2E7]">
+            <span>Why this forecast — most similar historical days</span><span class="chev text-[#00E0FF]" aria-hidden="true">▾</span>
+          </summary>
+          <div id="predAnalogs" class="text-xs text-[#BAC9CD] space-y-1.5 mb-3 mt-3"></div>
+          <p id="predNote" class="text-[11px] text-[#00E0FF]/80 italic"></p>
+        </details>
+      </section>
 
-    <section id="chartSection" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6 transition-all duration-200 hover:border-[#3B494C]/80">
+      <section id="predictionEmpty" class="md:col-span-3 rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 space-y-3" aria-live="polite">
+        <div class="h-3 bg-[#3B494C] rounded-full w-1/4 animate-pulse"></div>
+        <div class="h-8 bg-[#3B494C] rounded-xl w-1/2 animate-pulse"></div>
+        <div class="h-3 bg-[#3B494C] rounded-full w-3/4 animate-pulse"></div>
+      </section>
+
+      <div class="md:col-span-2 flex flex-col gap-4">
+        <section id="dqCard" aria-labelledby="dqTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 id="dqTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#BAC9CD] font-bold">Data quality</h2>
+            <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'dqNote')" aria-controls="dqNote">ⓘ Info</button>
+          </div>
+          <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="dqNote">From the backend's read-only <span class="font-mono-data">/prediction-freshness</span> monitor and the logged predictions already loaded for the chart. FRESH/STALE is the backend's own rule (newest row younger than 6 h). "Scheduled writes" counts rows the 3-hourly cron wrote in the last 24 h against the 8 expected — fewer means some runs wrote nothing for this series. A successful page load is never treated as proof of healthy data: anything the monitor did not report is shown as UNKNOWN.</p>
+          <div id="dqBody" class="space-y-2 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
+        </section>
+
+        <section id="evidenceCard" aria-labelledby="evidenceTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 id="evidenceTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#BAC9CD] font-bold">Evidence</h2>
+            <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'evidenceNote')" aria-controls="evidenceNote">ⓘ Info</button>
+          </div>
+          <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="evidenceNote">Resolved predictions only — every logged call for this coin/horizon whose horizon has passed. Accuracy is the share of correct direction calls; Brier score measures probability quality (lower is better) and is compared with the best constant guess. 50 resolved predictions is the backend's minimum before a variant is even considered for model selection; below that the sample is marked insufficient. Past resolved accuracy is not a guarantee of future accuracy, and no figure here is a test of statistical significance.</p>
+          <div id="evidenceBody" class="text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
+          <p id="calibNote" class="text-[10px] text-[#BAC9CD] mt-3 pt-3 border-t border-[#3B494C] leading-relaxed"></p>
+          <button type="button" onclick="activeView='lab'; history.replaceState(null,'','#lab'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
+        </section>
+      </div>
+    </div>
+
+    <section id="chartSection" aria-labelledby="chartTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 id="chartTitle" class="text-sm font-semibold">BTC Price vs. Predictions</h2>
         <div class="flex items-center gap-2">
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'chartNote')">ⓘ Info</button>
-          <div id="rangeTabs" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
-          <button id="fullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'chartNote')" aria-controls="chartNote">ⓘ Info</button>
+          <div id="rangeTabs" role="group" aria-label="Chart range" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
+          <button type="button" id="fullscreenBtn" aria-label="Toggle full-screen chart" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
           </button>
         </div>
       </div>
       <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="chartNote">Every triangle is a logged prediction placed on the price line. Shape: ▲ bullish call, ▼ bearish. Fill saturation: confidence level. Ring border: green = correct, red = wrong, grey = pending.</p>
-      <div id="chartContainer" class="relative" style="height:280px;">
-        <canvas id="priceChart"></canvas>
+      <div id="chartContainer" class="relative" style="height:300px;">
+        <canvas id="priceChart" role="img" aria-label="Price line with logged predictions and their outcomes"></canvas>
       </div>
-      <p class="text-[10px] text-[#BAC9CD] mt-2">▲ bullish · ▼ bearish · saturation = confidence · ring: <span class="text-[#4AE176]">green</span> correct · <span class="text-[#FFB4AB]">red</span> wrong · grey pending</p>
+      <p class="text-[10px] text-[#BAC9CD] mt-2">▲ bullish · ▼ bearish · saturation = confidence · ring: <span class="text-[#4AE176]">green</span> call was right · <span class="text-[#FFB4AB]">red</span> call was wrong · grey pending · axis in your local time, tooltips in UTC</p>
       <p id="chartCountNote" class="text-[11px] text-[#BAC9CD] mt-1 font-mono-data"></p>
     </section>
 
-    <!-- Recap table: prediction / reality / deviation, one row per logged
-         call. Reuses chartRaw.predictions (already fetched for the chart) —
-         no new backend endpoint needed, same data just shown as a table
-         instead of markers. Deviation = realized return minus the median
-         return the model expected, not just right/wrong — magnitude matters
-         as much as direction here. Collapsible (same <details> pattern as
-         the roadmap) so it doesn't take permanent space; body scrolls
-         internally with a fixed max-height instead of hard-capping to N
-         rows, so nothing gets silently dropped as more predictions log in
-         over time — only how far you have to scroll changes, not what's
-         actually there. -->
-    <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+    <!-- Recent recap: the newest 10 logged calls only, from the same
+         chartRaw.predictions the chart already fetched (no extra request).
+         The complete, filterable record lives in the History section. -->
+    <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-4">
       <summary class="flex items-center justify-between cursor-pointer select-none">
-        <span class="text-sm font-semibold">Prediction Recap <span id="recapCountBadge" class="text-[#BAC9CD] font-normal"></span></span>
-        <span class="flex items-center gap-2">
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="event.preventDefault(); event.stopPropagation(); toggleNote(this,'recapNote')">ⓘ Info</button>
-          <span class="text-xs text-[#00E0FF] font-mono-data">▼</span>
-        </span>
+        <span class="text-sm font-semibold">Recent predictions <span id="recapCountBadge" class="text-[#BAC9CD] font-normal"></span></span>
+        <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
       </summary>
-      <p class="hidden text-xs text-[#BAC9CD] mt-3 mb-3 leading-relaxed" id="recapNote">Every prediction targets a fixed horizon (12h or 24h, whichever tab is selected). "Predicted" is the model's called direction/confidence and expected median move; "Reality" is what actually happened once the horizon passed; "Deviation" is the gap between the expected move and the real one — a small deviation means the model's magnitude sense was good even if the direction call is what gets graded for accuracy. Pending rows haven't reached their horizon mark yet. Scroll within the table to see older predictions — nothing is dropped.</p>
-      <div class="overflow-x-auto overflow-y-auto mt-3" style="max-height:420px;">
+      <p class="text-[11px] text-[#BAC9CD] mt-3 mb-2 leading-relaxed">Newest 10 calls. "Deviation" = realized return minus the median move the model expected. Times are UTC.</p>
+      <div class="overflow-x-auto mt-2">
         <table class="w-full text-xs">
-          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C] sticky top-0 bg-[#191C1F]"><tr>
-            <th class="text-left font-medium px-2 py-2">Date</th>
-            <th class="text-right font-medium px-2 py-2">Predicted</th>
-            <th class="text-right font-medium px-2 py-2">Reality</th>
-            <th class="text-right font-medium px-2 py-2">Deviation</th>
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Reality</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Deviation</th>
           </tr></thead>
           <tbody id="recapTbody"><tr><td colspan="4" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
         </table>
       </div>
+      <button type="button" onclick="activeView='history'; history.replaceState(null,'','#history'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Full prediction history →</button>
     </details>
 
-    <!-- Calibration Over Time removed from Dashboard — consolidated into
-         the Lab tab's "All models, same graph" chart, which now covers
-         Original k-NN, Experimental, k-NN Calibrated, Challenger Flat,
-         Challenger Tilted, and Challenger Calibrated together on one
-         shared timeline, rather than this Dashboard chart's narrower
-         Original/Experimental-only view sitting alongside two other
-         partial charts in the Lab tab. One canonical benchmark chart
-         instead of three overlapping ones. -->
-    <div class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6 flex items-center justify-between gap-3">
-      <p class="text-xs text-[#BAC9CD]">Model accuracy over time now lives in the <span class="text-[#00E0FF] font-semibold">Lab</span> tab — one chart covering every model variant, not just this one.</p>
-      <button onclick="activeView='lab'; renderNav();" class="shrink-0 text-xs font-semibold text-[#0B0E11] bg-[#00E0FF] rounded-lg px-3 py-1.5">Open Lab</button>
-    </div>
-
-    <!-- Offline backtest results: technical_score-only (multi-year Yahoo
-         data), regime_mag/sentiment-only (D1's own shorter history), and
-         all-4-combined — a genuinely different test than the live
-         calibration loop above, run manually via /backtest-* endpoints
-         rather than on a cron. Logged to backtest_results every run so
-         this comparison stays available to re-check as samples grow,
-         instead of needing to re-derive it from raw D1 queries each time. -->
+    <!-- Offline backtests: manually triggered runs logged to
+         backtest_results, a different test from the live calibration loop.
+         Dashboard shows the latest run per test; History shows every run.
+         Both render from the single /backtest-history response. -->
     <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <summary class="flex items-center justify-between cursor-pointer select-none">
-        <span class="text-sm font-semibold">Offline Backtest History</span>
-        <span class="text-xs text-[#00E0FF] font-mono-data">▼</span>
+        <span class="text-sm font-semibold">Offline backtest history <span class="text-[#BAC9CD] font-normal text-xs">(latest run per test)</span></span>
+        <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
       </summary>
-      <p class="text-xs text-[#BAC9CD] mt-3 mb-3 leading-relaxed">Each row is a single manually-triggered backtest run (technical_score alone over years of Yahoo price data; regime_mag/sentiment alone over D1's shorter own history; or all 4 combined) — not part of the live cron. Small samples for anything but technical_score — treat as directional until they've been re-run with more history.</p>
+      <p class="text-[11px] text-[#BAC9CD] mt-3 mb-2 leading-relaxed">Manually triggered walk-forward backtests, not part of the live cron. Small samples for anything but technical_score — directional only.</p>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
-            <th class="text-left font-medium px-2 py-2">Test</th>
-            <th class="text-right font-medium px-2 py-2">n</th>
-            <th class="text-right font-medium px-2 py-2">Accuracy</th>
-            <th class="text-right font-medium px-2 py-2">Brier</th>
-            <th class="text-right font-medium px-2 py-2">vs Baseline</th>
+            <th scope="col" class="text-left font-medium px-2 py-2">Test</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
           </tr></thead>
           <tbody id="backtestTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
         </table>
       </div>
-    </details>
-
-    <!-- Regime-conditional test: does technical_score's own accuracy differ
-         when that day's sentiment was above vs below median — a sharper
-         hypothesis than "reweight the features," from a paper finding
-         technical indicators work better during "greed" than "fear." -->
-    <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <summary class="flex items-center justify-between cursor-pointer select-none">
-        <span class="text-sm font-semibold">Technical Score by Sentiment Regime</span>
-        <span class="text-xs text-[#00E0FF] font-mono-data">▼</span>
-      </summary>
-      <p class="text-xs text-[#BAC9CD] mt-3 mb-3 leading-relaxed">Same technical_score-only walk-forward test as the backtest above, but every prediction is tagged with that day's actual sentiment reading, then split by whether it was above or below the median. If technical_score performs meaningfully differently between the two halves, that's evidence the right fix isn't a fixed weight — it's switching which feature leads depending on current sentiment regime.</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs">
-          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
-            <th class="text-left font-medium px-2 py-2">Regime</th>
-            <th class="text-right font-medium px-2 py-2">n</th>
-            <th class="text-right font-medium px-2 py-2">Accuracy</th>
-            <th class="text-right font-medium px-2 py-2">Brier</th>
-            <th class="text-right font-medium px-2 py-2">vs Baseline</th>
-          </tr></thead>
-          <tbody id="regimeSplitTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <button type="button" onclick="activeView='history'; history.replaceState(null,'','#history'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Every backtest run →</button>
     </details>
 
   </div>
@@ -219,6 +226,18 @@
        experimental section that follows, not just another undecided
        design choice), then the pre-existing Lab experiments unchanged. ═══ -->
   <div id="view-lab" class="hidden">
+    <!-- Read-me-first for every comparison below: sample sizes and
+         observation windows differ between variants, so a higher bar is not
+         by itself a conclusive ranking. The only significance test in the
+         system is the selection gate shown in "Selected Model". -->
+    <section id="labReadFirst" class="rounded-2xl border border-[#00E0FF]/30 bg-[#00E0FF]/5 p-4 mb-6">
+      <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold mb-1">How to read these comparisons</p>
+      <ul class="text-xs text-[#BAC9CD] leading-relaxed list-disc pl-4 space-y-0.5">
+        <li>Every figure is computed on <span class="text-[#E1E2E7]">resolved</span> predictions only; each chart prints its own <span class="font-mono-data text-[#E1E2E7]">n</span>.</li>
+        <li>Variants started at different times and need different minimum histories, so they are <span class="text-[#E1E2E7]">not measured on the same sample or period</span>.</li>
+        <li>A higher accuracy bar is not a statistically conclusive ranking. Only the selection gate (Selected Model) applies a significance bar, and falling back to Original k-NN is the normal outcome when nothing clears it.</li>
+      </ul>
+    </section>
     <!-- ---- Challenger — a real, stable, currently-deployed model, NOT
          an undecided experiment. Deliberately kept visually distinct from
          the "Experimental" section below via the colored label, so
@@ -249,31 +268,7 @@
       <div id="challengerRecapBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
 
-    <!-- ---- Pre-existing Lab experiments, unchanged. A testing space for
-         undecided design choices, not a settled feature -- same "don't
-         trust one number, compare it" ethos as Challenger vs. k-NN,
-         applied to presentation decisions instead of model logic.
-         Nothing here is final; whichever option gets picked is what a
-         future pass would hardcode into the real Dashboard. ---- -->
-    <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-bold mb-2 mt-8">Experimental — undecided design choices</p>
-    <section id="labWeightingCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Combined Accuracy — which formula?</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labWeightingNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labWeightingNote">Simple average treats all 4 coin/horizon combos equally regardless of how many resolved predictions back each one. Pooled (n-weighted) is mathematically the same as Σcorrect/Σresolved — a combo with 150 resolved predictions gets proportionally more say than one with 20. They're the only two meaningfully different formulas; a third "weighted by n" option would just be pooled again.</p>
-      <div id="labWeightingBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
-    <section id="labHeroCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Hero label — which name?</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labHeroNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labHeroNote">"Sentiment" isn't used here on purpose — V1 already has an actual Sentiment Engine (Fear & Greed, ETF flows, etc.); reusing the word for "which way these two k-NN models lean" would blur the two apps together. Both cards use the pooled accuracy from the section above and live, identical numbers — only the label text differs.</p>
-      <div id="labHeroBody" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-    </section>
-
+    <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-bold mb-2 mt-8">Model comparison — every variant, resolved outcomes only</p>
     <section id="labCompareCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger vs. every other model — <span id="labCompareCoinLabel"></span></p>
@@ -337,6 +332,35 @@
       <div style="height:240px" id="labModelHealthChartContainer"><canvas id="labModelHealthChart"></canvas></div>
       <div id="labModelHealthBody" class="text-sm text-[#BAC9CD] mt-4">Loading…</div>
     </section>
+    <!-- Pre-existing Lab presentation experiments (which accuracy formula,
+         which hero label), unchanged in content. Undecided UI design
+         choices, not model results, so they sit collapsed at the end. -->
+    <details id="labDesignExperiments" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <summary class="flex items-center justify-between cursor-pointer select-none">
+        <span class="text-sm font-semibold">UI design experiments <span class="text-[#BAC9CD] font-normal text-xs">(undecided presentation choices, not model results)</span></span>
+        <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
+      </summary>
+      <div class="mt-4">
+    <section id="labWeightingCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Combined Accuracy — which formula?</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labWeightingNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labWeightingNote">Simple average treats all 4 coin/horizon combos equally regardless of how many resolved predictions back each one. Pooled (n-weighted) is mathematically the same as Σcorrect/Σresolved — a combo with 150 resolved predictions gets proportionally more say than one with 20. They're the only two meaningfully different formulas; a third "weighted by n" option would just be pooled again.</p>
+      <div id="labWeightingBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <section id="labHeroCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Hero label — which name?</p>
+        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labHeroNote')">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labHeroNote">"Sentiment" isn't used here on purpose — V1 already has an actual Sentiment Engine (Fear & Greed, ETF flows, etc.); reusing the word for "which way these two k-NN models lean" would blur the two apps together. Both cards use the pooled accuracy from the section above and live, identical numbers — only the label text differs.</p>
+      <div id="labHeroBody" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    </section>
+
+      </div>
+    </details>
   </div>
 
   <!-- ═══ AI LEARNING TAB ═══ Exposes CryptoPulseV2's continuous-learning
@@ -351,125 +375,244 @@
        stages), and per-variant eligibility for variants that never reached
        50 resolved predictions have NO backend endpoint at all yet — those
        sections say so plainly instead of inventing data. ═══ -->
-  <div id="view-learning" class="hidden">
+  <!-- ═══ EXPERIMENTS ═══ Evidence and experiment status. Everything here
+       is read from existing backend endpoints and shown as the backend
+       reports it: /api/research-lab/registry (per-experiment status,
+       evidence maturity, sample, ETA, next action), /api/events/health and
+       /api/events (Goal A, Event Detection). Nothing is assigned a status
+       the backend did not report, and nothing here is a performance claim:
+       a successful collection run is evidence that data is arriving, not
+       that a model works. ═══ -->
+  <div id="view-experiments" class="hidden">
 
-    <!-- Section 1 — Status -->
-    <section id="learnStatusCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
-        <div>
-          <h2 class="text-base font-bold">AI Learning</h2>
-          <p class="text-xs text-[#BAC9CD] mt-0.5">How CryptoPulse learns from predictions, outcomes and experiments.</p>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <h2 class="text-base font-bold">Experiments &amp; evidence</h2>
+      <p class="text-xs text-[#BAC9CD] mt-1 leading-relaxed">Where each research question stands, as reported by the backend. Collecting data is not evidence of predictive performance: a status only changes when the pre-registered sample and evaluation criteria are met.</p>
+      <p class="text-[10px] text-[#BAC9CD] mt-2">Updated <span id="expLoadedAt" class="font-mono-data">—</span> · <button type="button" id="expRefreshBtn" class="underline hover:text-[#00E0FF]">Reload</button></p>
+    </section>
+
+    <!-- Goal A and Goal B are different questions and are never combined. -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <section id="goalACard" aria-labelledby="goalATitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
+        <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">Goal A</p>
+        <h3 id="goalATitle" class="text-sm font-semibold mt-0.5">Early detection of significant market moves</h3>
+        <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">Event Detection: can liquidation, options and macro detectors flag a significant move early? Derived events only — not an input to any prediction.</p>
+        <div id="goalABody" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
+      </section>
+      <section id="goalBCard" aria-labelledby="goalBTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
+        <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">Goal B</p>
+        <h3 id="goalBTitle" class="text-sm font-semibold mt-0.5">Prediction of significant moves before they start</h3>
+        <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">EXP-023: can price, open interest and funding warn of a &gt;3% BTC move 12–36 h before onset, better than chance? Evaluated on a sealed, pre-registered holdout.</p>
+        <div id="goalBBody" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
+      </section>
+    </div>
+
+    <section id="registryCard" aria-labelledby="registryTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-1">
+        <h3 id="registryTitle" class="text-sm font-semibold">Experiment register</h3>
+        <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'registryNote')" aria-controls="registryNote">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="registryNote">Each row is one entry of the backend registry (<span class="font-mono-data">/api/research-lab/registry</span>). "Status" is the registry's own lifecycle state and "Evidence" its evidence-maturity assessment, shown verbatim. A "backend suggests" note is the registry's automatic suggestion (for example once a minimum sample is reached) — it is a prompt for review, not a validation. Sample counts, required samples, ETAs and timestamps all come from the same response; anything the registry does not define is shown as "not defined" rather than guessed.</p>
+      <div id="registryFilters" role="group" aria-label="Filter by status" class="flex gap-1 flex-wrap mb-3"></div>
+      <div id="registryBody" class="space-y-2" aria-live="polite"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+
+    <!-- The former "AI Learning" view, unchanged in content: learning loop,
+         model selection, learning events, analyst relay, audit trail. It is
+         coin/horizon scoped and fetch-heavy, so it loads only when opened. -->
+    <details id="learningDetails" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <summary class="flex items-center justify-between cursor-pointer select-none">
+        <span class="text-sm font-semibold">Learning loop &amp; model selection <span class="text-[#BAC9CD] font-normal text-xs">(formerly "AI Learning")</span></span>
+        <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
+      </summary>
+      <div id="view-learning" class="mt-4">
+
+      <!-- Section 1 — Status -->
+      <section id="learnStatusCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+          <div>
+            <h2 class="text-base font-bold">AI Learning</h2>
+            <p class="text-xs text-[#BAC9CD] mt-0.5">How CryptoPulse learns from predictions, outcomes and experiments.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnStatusNote')">ⓘ Info</button>
+            <button id="learnRefreshBtn" class="text-[10px] text-[#BAC9CD] hover:text-[#00E0FF] border border-[#3B494C] hover:border-[#00E0FF]/40 rounded-md px-2 py-1 transition-colors flex items-center gap-1">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>Refresh
+            </button>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnStatusNote')">ⓘ Info</button>
-          <button id="learnRefreshBtn" class="text-[10px] text-[#BAC9CD] hover:text-[#00E0FF] border border-[#3B494C] hover:border-[#00E0FF]/40 rounded-md px-2 py-1 transition-colors flex items-center gap-1">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>Refresh
-          </button>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 mt-2 leading-relaxed" id="learnStatusNote">Each item below reflects a real signal from the backend — a status only shows "Healthy"/"Active" when a call actually succeeded, never a placeholder. "Unavailable" means no endpoint exists yet or the current deploy doesn't include it, not that something is broken.</p>
+        <div id="learnStatusGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
+      </section>
+
+      <!-- Section 2 — Learning Loop -->
+      <section id="learnLoopCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Loop</p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnLoopNote')">ⓘ Info</button>
         </div>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnLoopNote">Each stage is a real step in the architecture, not a promise of automatic flow between them — a "connected" badge means this build actually calls a live endpoint for that stage; "not yet wired" means the stage is designed (see .ai/ in the CryptoPulseV2 repo) but has no queryable API today. No stage ever auto-advances to the next.</p>
+        <div id="learnLoop" class="flex flex-col md:flex-row md:items-stretch gap-1.5 mt-3"></div>
+      </section>
+
+      <!-- Section 3 — KPI Snapshot -->
+      <section id="learnKpiCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Learning Snapshot</p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnKpiNote')">ⓘ Info</button>
+        </div>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnKpiNote">Sourced entirely from GET /api/learning/daily — accuracy/Brier/calibration shown here are the BTC (all horizons combined) figures from that endpoint, never recomputed in this browser. The four "awaiting" experiment counts aren't broken out by stage in the current backend response — they show "Not available" rather than a guess.</p>
+        <div id="learnKpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
+      </section>
+
+      <!-- Section 4 — Model Selection (live, per current coin/horizon) -->
+      <section id="learnSelectionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Selection — <span id="learnSelectionCoinLabel"></span></p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnSelectionNote')">ⓘ Info</button>
+        </div>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnSelectionNote">Live from GET /select-variant — runs the real Dynamic Classifier Selection logic on request, the same call the backend cron uses. A variant needs 50+ of its own resolved predictions before it's even compared (SELECTION_MIN_HISTORY) — variants below that bar aren't in the "eligible variants compared" list at all, since the backend doesn't return them. ELIGIBLE (compared, cleared the history bar) is not the same as SELECTED (the one actually chosen this round) — both are shown separately below.</p>
+        <div id="learnSelectionBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      </section>
+
+      <!-- Section 5 — Recent Learning Events -->
+      <section id="learnEventsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <h2 class="text-sm font-semibold mb-1">Recent Learning Events — <span id="learnEventsCoinLabel" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
+        <p class="text-xs text-[#BAC9CD] mb-3">Real selection decisions from GET /selection-history for the coin/horizon selected above — not a fabricated cross-pipeline feed.</p>
+        <div id="learnEventsBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      </section>
+
+      <!-- Section 6 — Experiment Pipeline -->
+      <section id="learnExperimentsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Experiment Pipeline</p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnExperimentsNote')">ⓘ Info</button>
+        </div>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnExperimentsNote">candidate_experiments from GET /api/learning/daily is the only backend-populated source for this section today, and nothing currently writes to it — an empty list here is an accurate reflection of the backend, not a loading failure. Full experiment lifecycle tracking (EXP-NNN, stages, backtest/OOS results) exists as markdown files in PulseWorkerV2's /learning/ directory, not yet as a queryable API.</p>
+        <div id="learnExperimentsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      </section>
+
+      <!-- Section 6.5 — Analyst Relay: the investigation mechanism. Was
+           originally built as a fallback for when the paid grounded API path
+           was rate-limited; that automated path has since been removed
+           entirely (Google Search grounding requires a funded, billing-
+           enabled Cloud project -- a recurring cost this project stopped
+           paying). This is now the only investigation mechanism, not a
+           fallback for anything -- see relayContent's own note. -->
+      <section id="learnRelayCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Analyst Relay</p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
+        </div>
+        <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
+        <div id="relayContent"><button class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold text-[#E1E2E7]" onclick="loadAnalystRelayPrompt()">Check for a candidate</button></div>
+      </section>
+
+      <!-- Section 7 — AI Responsibility Cards -->
+      <section id="learnRolesCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-3">AI Responsibility Model</p>
+        <div id="learnRolesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+      </section>
+
+      <!-- Section 8 — Learning by Regime -->
+      <section id="learnRegimeCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning by Regime</p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnRegimeNote')">ⓘ Info</button>
+        </div>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnRegimeNote">Regime taxonomy is whatever the backend's regime_analysis actually returns (trend/volatility/anomaly buckets built from each prediction's own stored volatility_percentile and trend_strength) — nothing here is a frontend-invented category.</p>
+        <div id="learnRegimeBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      </section>
+
+      <!-- Section 9 — Model Variant Comparison -->
+      <section id="learnVariantsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Variant Comparison — <span id="learnVariantsCoinLabel"></span></p>
+          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnVariantsNote')">ⓘ Info</button>
+        </div>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnVariantsNote">Same live /select-variant response as the Current Selection section above, reused (not a second fetch). Only shows variants that cleared the 50-resolved-prediction eligibility bar — the backend doesn't return variants below it, so this list can't show "active but not yet eligible" variants even though some may exist.</p>
+        <div id="learnVariantsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      </section>
+
+      <!-- Section 10 — Audit Trail -->
+      <section id="learnAuditCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+        <button id="learnAuditToggleBtn" class="w-full flex items-center justify-between text-left" onclick="toggleLearnAudit()" aria-expanded="false" aria-controls="learnAuditBody">
+          <span class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Audit Trail</span>
+          <span id="learnAuditChevron" class="material-symbols-outlined text-[16px] text-[#BAC9CD] transition-transform">expand_more</span>
+        </button>
+        <p class="text-xs text-[#BAC9CD] mt-1">Every selection decision, traceable — same underlying data as Recent Learning Events, in raw audit form.</p>
+        <div id="learnAuditBody" class="hidden mt-3"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+      </section>
+
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 mt-2 leading-relaxed" id="learnStatusNote">Each item below reflects a real signal from the backend — a status only shows "Healthy"/"Active" when a call actually succeeded, never a placeholder. "Unavailable" means no endpoint exists yet or the current deploy doesn't include it, not that something is broken.</p>
-      <div id="learnStatusGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
-    </section>
+    </details>
 
-    <!-- Section 2 — Learning Loop -->
-    <section id="learnLoopCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Loop</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnLoopNote')">ⓘ Info</button>
+  </div>
+
+  <!-- ═══ HISTORY ═══ The detailed records: every logged prediction with
+       its realized outcome and deviation, and every offline backtest run.
+       Reuses the chart's /chart-data response and the single
+       /backtest-history and /backtest-regime-split-history responses —
+       no new requests just to show the same data again. ═══ -->
+  <div id="view-history" class="hidden">
+
+    <section id="historyRecapCard" aria-labelledby="historyRecapTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <h2 id="historyRecapTitle" class="text-sm font-semibold">Prediction history <span id="historyRecapScope" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
+        <div id="historyFilter" role="group" aria-label="Filter predictions" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnLoopNote">Each stage is a real step in the architecture, not a promise of automatic flow between them — a "connected" badge means this build actually calls a live endpoint for that stage; "not yet wired" means the stage is designed (see .ai/ in the CryptoPulseV2 repo) but has no queryable API today. No stage ever auto-advances to the next.</p>
-      <div id="learnLoop" class="flex flex-col md:flex-row md:items-stretch gap-1.5 mt-3"></div>
-    </section>
-
-    <!-- Section 3 — KPI Snapshot -->
-    <section id="learnKpiCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Learning Snapshot</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnKpiNote')">ⓘ Info</button>
+      <p id="historySummary" class="text-[11px] text-[#BAC9CD] mb-2 font-mono-data"></p>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every logged call for this coin/horizon, newest first. "Predicted" is the called direction, probability and expected median move; "Reality" is the realized return once the horizon passed; "Deviation" is realized minus expected. Pending rows have not reached their target time. All times UTC.</p>
+      <div class="overflow-x-auto overflow-y-auto" style="max-height:560px;">
+        <table class="w-full text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C] sticky top-0 bg-[#191C1F]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
+            <th scope="col" class="text-left font-medium px-2 py-2">Target (UTC)</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Reality</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Deviation</th>
+          </tr></thead>
+          <tbody id="historyRecapTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnKpiNote">Sourced entirely from GET /api/learning/daily — accuracy/Brier/calibration shown here are the BTC (all horizons combined) figures from that endpoint, never recomputed in this browser. The four "awaiting" experiment counts aren't broken out by stage in the current backend response — they show "Not available" rather than a guess.</p>
-      <div id="learnKpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
     </section>
 
-    <!-- Section 4 — Model Selection (live, per current coin/horizon) -->
-    <section id="learnSelectionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Selection — <span id="learnSelectionCoinLabel"></span></p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnSelectionNote')">ⓘ Info</button>
+    <section aria-labelledby="historyBacktestTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <h2 id="historyBacktestTitle" class="text-sm font-semibold mb-1">Offline backtest runs</h2>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every manually triggered backtest run logged by the backend (technical_score alone over years of price data; regime_mag/sentiment alone over the shorter own history; or all combined). Not part of the live cron; small samples outside technical_score are directional only.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Run (UTC)</th>
+            <th scope="col" class="text-left font-medium px-2 py-2">Test</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
+          </tr></thead>
+          <tbody id="historyBacktestTbody"><tr><td colspan="6" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnSelectionNote">Live from GET /select-variant — runs the real Dynamic Classifier Selection logic on request, the same call the backend cron uses. A variant needs 50+ of its own resolved predictions before it's even compared (SELECTION_MIN_HISTORY) — variants below that bar aren't in the "eligible variants compared" list at all, since the backend doesn't return them. ELIGIBLE (compared, cleared the history bar) is not the same as SELECTED (the one actually chosen this round) — both are shown separately below.</p>
-      <div id="learnSelectionBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
 
-    <!-- Section 5 — Recent Learning Events -->
-    <section id="learnEventsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <h2 class="text-sm font-semibold mb-1">Recent Learning Events — <span id="learnEventsCoinLabel" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
-      <p class="text-xs text-[#BAC9CD] mb-3">Real selection decisions from GET /selection-history for the coin/horizon selected above — not a fabricated cross-pipeline feed.</p>
-      <div id="learnEventsBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
-    <!-- Section 6 — Experiment Pipeline -->
-    <section id="learnExperimentsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Experiment Pipeline</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnExperimentsNote')">ⓘ Info</button>
+    <section aria-labelledby="regimeSplitTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <h2 id="regimeSplitTitle" class="text-sm font-semibold mb-1">Technical score by sentiment regime <span class="text-[#BAC9CD] font-normal text-xs">(latest run)</span></h2>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">The technical_score-only walk-forward test, with each prediction tagged by that day's sentiment and split at the median. A meaningful difference between halves would suggest switching which feature leads by sentiment regime, rather than a fixed weight.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Regime</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
+          </tr></thead>
+          <tbody id="regimeSplitTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnExperimentsNote">candidate_experiments from GET /api/learning/daily is the only backend-populated source for this section today, and nothing currently writes to it — an empty list here is an accurate reflection of the backend, not a loading failure. Full experiment lifecycle tracking (EXP-NNN, stages, backtest/OOS results) exists as markdown files in PulseWorkerV2's /learning/ directory, not yet as a queryable API.</p>
-      <div id="learnExperimentsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
 
-    <!-- Section 6.5 — Analyst Relay: the investigation mechanism. Was
-         originally built as a fallback for when the paid grounded API path
-         was rate-limited; that automated path has since been removed
-         entirely (Google Search grounding requires a funded, billing-
-         enabled Cloud project -- a recurring cost this project stopped
-         paying). This is now the only investigation mechanism, not a
-         fallback for anything -- see relayContent's own note. -->
-    <section id="learnRelayCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Analyst Relay</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
-      </div>
-      <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
-      <div id="relayContent"><button class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold text-[#E1E2E7]" onclick="loadAnalystRelayPrompt()">Check for a candidate</button></div>
-    </section>
-
-    <!-- Section 7 — AI Responsibility Cards -->
-    <section id="learnRolesCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-3">AI Responsibility Model</p>
-      <div id="learnRolesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-    </section>
-
-    <!-- Section 8 — Learning by Regime -->
-    <section id="learnRegimeCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning by Regime</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnRegimeNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnRegimeNote">Regime taxonomy is whatever the backend's regime_analysis actually returns (trend/volatility/anomaly buckets built from each prediction's own stored volatility_percentile and trend_strength) — nothing here is a frontend-invented category.</p>
-      <div id="learnRegimeBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
-    <!-- Section 9 — Model Variant Comparison -->
-    <section id="learnVariantsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Variant Comparison — <span id="learnVariantsCoinLabel"></span></p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnVariantsNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnVariantsNote">Same live /select-variant response as the Current Selection section above, reused (not a second fetch). Only shows variants that cleared the 50-resolved-prediction eligibility bar — the backend doesn't return variants below it, so this list can't show "active but not yet eligible" variants even though some may exist.</p>
-      <div id="learnVariantsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
-    <!-- Section 10 — Audit Trail -->
-    <section id="learnAuditCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <button id="learnAuditToggleBtn" class="w-full flex items-center justify-between text-left" onclick="toggleLearnAudit()" aria-expanded="false" aria-controls="learnAuditBody">
-        <span class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Audit Trail</span>
-        <span id="learnAuditChevron" class="material-symbols-outlined text-[16px] text-[#BAC9CD] transition-transform">expand_more</span>
-      </button>
-      <p class="text-xs text-[#BAC9CD] mt-1">Every selection decision, traceable — same underlying data as Recent Learning Events, in raw audit form.</p>
-      <div id="learnAuditBody" class="hidden mt-3"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
+    <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are under Experiments → Learning loop &amp; model selection. Challenger's own recent calls are in the Lab.</p>
   </div>
 
   <footer class="mt-10 text-[11px] text-[#4B5563]">
@@ -478,27 +621,25 @@
 
 </div>
 
-<!-- Bottom mobile nav — same pattern as the top pill nav (desktop), just
-     the mobile-friendly icon pattern from the design review. Wired to the
-     exact same activeView state and renderNav()/click logic below, via the
-     shared .nav-tab class — no new navigation logic, only a second surface
-     for it. 5 items now (dashboard/analysis/challenger/lab/learning) --
-     px-4 per button was sized for fewer items and clipped the 5th tab off
-     narrow phone widths with no way to reach it; px-2 + overflow-x-auto
-     fits all 5 on typical widths and scrolls instead of silently clipping
-     on anything narrower. -->
-<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center py-2 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50 overflow-x-auto">
-  <button data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
-    <span class="material-symbols-outlined text-[20px]">monitoring</span>
+<!-- Bottom mobile nav: the same four sections as the desktop pill nav, as
+     always-visible icon buttons (no hidden desktop-only menu). Same
+     .nav-tab buttons and renderNav() state, just a second surface. -->
+<nav aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-4 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50">
+  <button type="button" data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">monitoring</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Dashboard</span>
   </button>
-  <button data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
-    <span class="material-symbols-outlined text-[20px]">science</span>
+  <button type="button" data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">science</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Lab</span>
   </button>
-  <button data-view="learning" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0">
-    <span class="material-symbols-outlined text-[20px]">school</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Learning</span>
+  <button type="button" data-view="experiments" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">fact_check</span>
+    <span class="text-[10px] font-semibold uppercase tracking-wide">Experiments</span>
+  </button>
+  <button type="button" data-view="history" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">history</span>
+    <span class="text-[10px] font-semibold uppercase tracking-wide">History</span>
   </button>
 </nav>
 
@@ -508,6 +649,53 @@ function toggleNote(btn, noteId){
   if(!el) return;
   const nowHidden = el.classList.toggle('hidden');
   btn.textContent = nowHidden ? 'ⓘ Info' : 'ⓘ Hide';
+  btn.setAttribute('aria-expanded', String(!nowHidden));
+}
+
+// ---- Shared presentation helpers (no data logic) ----
+// Backend text is escaped before it goes into innerHTML.
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+// Every timestamp is shown in UTC with the zone written out, never in the
+// viewer's local time without saying so.
+function fmtUtc(ts, withTime = true){
+  if(ts == null || ts === '') return '—';
+  const d = new Date(ts);
+  if(isNaN(d.getTime())) return '—';
+  const iso = d.toISOString();
+  return withTime ? iso.slice(0,10) + ' ' + iso.slice(11,16) + ' UTC' : iso.slice(0,10);
+}
+// A logged call is "correct" when its called direction matches the realized
+// direction. realized_up is the price direction only (1 = went up), so it is
+// never read as correctness on its own. Same rule as the backend's accuracy
+// figure: (p_up >= 0.5) === (realized_up === 1). null while pending.
+function callCorrect(p){
+  if(p.realized_up === null || p.realized_up === undefined) return null;
+  return (p.p_up >= 0.5) === (p.realized_up === 1);
+}
+function ageStr(ts){
+  if(ts == null) return '';
+  const ms = Date.now() - new Date(ts).getTime();
+  if(!isFinite(ms)) return '';
+  if(ms < 0) return 'in the future';
+  const h = ms / 3600000;
+  if(h < 1) return Math.max(1, Math.round(ms / 60000)) + ' min ago';
+  if(h < 48) return (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h ago';
+  return Math.round(h / 24) + ' d ago';
+}
+// Status chips: tone is chosen from what the backend reported. "good" is
+// only used for an explicit healthy/fresh/complete report — never for a
+// mere successful request — and unknowns stay neutral grey.
+const CHIP_TONES = {
+  good:    'background:rgba(74,225,118,0.12);color:#4AE176;border-color:rgba(74,225,118,0.35)',
+  info:    'background:rgba(0,224,255,0.10);color:#00E0FF;border-color:rgba(0,224,255,0.35)',
+  warn:    'background:rgba(255,176,32,0.12);color:#FFB020;border-color:rgba(255,176,32,0.35)',
+  bad:     'background:rgba(255,180,171,0.12);color:#FFB4AB;border-color:rgba(255,180,171,0.35)',
+  neutral: 'background:rgba(75,85,99,0.15);color:#BAC9CD;border-color:#3B494C',
+};
+function chip(text, tone){
+  return `<span class="inline-block text-[10px] font-semibold font-mono-data px-1.5 py-0.5 rounded border whitespace-nowrap" style="${CHIP_TONES[tone] || CHIP_TONES.neutral}">${esc(text)}</span>`;
 }
 
 const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
@@ -586,7 +774,9 @@ function refreshAll(){
   // second network round of loads fired from here too.
   if (activeView === 'dashboard') loadDashboardIfNeeded();
   if (activeView === 'lab') loadLabIfNeeded();
-  if (activeView === 'learning' && _learningLoaded) loadLearningSelection();
+  if (activeView === 'history') loadHistoryIfNeeded();
+  if (activeView === 'experiments' && _learningLoaded) loadLearningSelection();
+  renderScopeChip();
 }
 
 let _predictionRequestSeq = 0;
@@ -610,6 +800,8 @@ async function loadPrediction(){
   card.classList.add('hidden');
   empty.classList.remove('hidden');
   empty.innerHTML = `<div class="h-3 bg-[#3B494C] rounded-full w-1/4 animate-pulse"></div><div class="h-8 bg-[#3B494C] rounded-xl w-1/2 animate-pulse mt-3"></div><div class="h-3 bg-[#3B494C] rounded-full w-3/4 animate-pulse mt-3"></div>`;
+  document.getElementById('evidenceBody').innerHTML = '<p class="text-[#BAC9CD]">Loading…</p>';
+  document.getElementById('calibNote').textContent = '';
   try{
     const r = await fetch(WORKER_URL + cfg.predict + '?horizon=' + horizonAtCall);
     const d = await r.json();
@@ -629,6 +821,7 @@ async function loadPrediction(){
         d.status === 'insufficient_resolved_analogs' ? `Too few resolved ${horizonAtCall}h outcomes (${d.n_resolved}/${d.min_required}).` :
         'Model unavailable right now.'
       }</p>`;
+      document.getElementById('evidenceBody').innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">No forecast for ${cfg.label} · ${horizonAtCall}h, so its track record was not loaded.</span></p>`;
       return;
     }
     card.classList.remove('hidden');
@@ -647,6 +840,7 @@ async function loadPrediction(){
     const headlinePUp = usingNonOriginal ? selection.chosen_p_up : d.p_up;
 
     document.getElementById('predPUp').textContent = Math.round(headlinePUp * 100) + '%';
+    document.getElementById('predAsOf').textContent = d.ts ? `Live read computed ${fmtUtc(d.ts)} (on request, not a logged prediction)` : 'Computation time not reported';
     document.getElementById('predChanceLabel').textContent = `chance of a positive ${horizonAtCall}h return`;
     const variantLabelEl = document.getElementById('predVariantLabel');
     if (usingNonOriginal) {
@@ -660,8 +854,11 @@ async function loadPrediction(){
 
     document.getElementById('predTrend').innerHTML = renderTrendBar(d.trend_strength);
     const priceNow = d[cfg.priceNowField];
-    document.getElementById('predDetail').textContent =
-      `${cfg.label} $${priceNow.toLocaleString()} now · range ${d.return_range_pct[0]>0?'+':''}${d.return_range_pct[0]}% to ${d.return_range_pct[1]>0?'+':''}${d.return_range_pct[1]}% (median ${d.median_analog_return_pct>0?'+':''}${d.median_analog_return_pct}%) · ${d.n_analogs} similar days`;
+    const rr = Array.isArray(d.return_range_pct) && d.return_range_pct.length === 2 ? d.return_range_pct : null;
+    const sgn = v => (v > 0 ? '+' : '') + v;
+    document.getElementById('predDetail').textContent = rr
+      ? `${sgn(rr[0])}% to ${sgn(rr[1])}% over ${horizonAtCall}h (median ${d.median_analog_return_pct != null ? sgn(d.median_analog_return_pct) + '%' : 'not reported'}) · across ${d.n_analogs ?? '?'} resolved similar days, not a forecast interval · ${cfg.label} $${priceNow != null ? priceNow.toLocaleString() : '—'} now`
+      : `Not supplied by the backend for this read · ${cfg.label} $${priceNow != null ? priceNow.toLocaleString() : '—'} now`;
 
     // "Most similar days" is always the original k-NN's own reasoning --
     // Challenger doesn't have an analog-based explanation to substitute,
@@ -681,27 +878,37 @@ async function loadPrediction(){
     // showing the original model's 48%-accuracy-fails-to-beat-baseline
     // track record underneath a DIFFERENT variant's number would imply
     // that history belongs to the number being shown, when it doesn't.
-    let accuracyForFooter = 0, nResolvedForFooter = 0;
     if (usingNonOriginal) {
-      const vc = await (await fetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant)).json();
+      const vr = await fetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant);
+      const vc = await vr.json().catch(() => ({ ok: false, error: 'unreadable response' }));
       if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
-      document.getElementById('calibNote').textContent = (!vc.ok || !vc.n_resolved)
-        ? (vc.note || vc.error || 'No calibration data yet for this variant.')
-        : `Calibration (${SELECTION_VARIANT_LABELS[vc.variant] || vc.variant}): ${vc.n_resolved} resolved · ${Math.round(vc.accuracy*100)}% accuracy · Brier ${vc.brier} (baseline ${vc.naive_baseline_brier}) — ${vc.note}`;
-      accuracyForFooter = vc.accuracy || 0;
-      nResolvedForFooter = vc.n_resolved || 0;
+      const vErr = (!vr.ok || vc.ok === false) ? (vc.error || ('HTTP ' + vr.status)) : null;
+      document.getElementById('calibNote').textContent = vErr ? '' : (vc.note || '');
+      document.getElementById('evidenceBody').innerHTML = renderEvidence({
+        label: SELECTION_VARIANT_LABELS[vc.variant] || vc.variant || selection.chosen_variant,
+        error: vErr, nResolved: vc.n_resolved, accuracy: vc.accuracy,
+        brier: vc.brier, baseline: vc.naive_baseline_brier, beats: vc.beats_naive_baseline,
+        upRate: null, calibrated: null,
+      });
     } else {
-      const c = await (await fetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall)).json();
+      const cr = await fetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall);
+      const c = await cr.json().catch(() => ({ ok: false, error: 'unreadable response' }));
       if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
-      document.getElementById('calibNote').textContent = c.n_resolved === 0
-        ? c.note
-        : `Calibration: ${c.n_resolved} resolved · ${Math.round(c.accuracy*100)}% accuracy · Brier ${c.brier_score} (baseline ${Math.min(c.brier_baseline_5050,c.brier_baseline_up_rate)}) — ${c.note}`;
-      accuracyForFooter = c.accuracy;
-      nResolvedForFooter = c.n_resolved || 0;
+      const cErr = (!cr.ok || c.ok === false) ? (c.error || ('HTTP ' + cr.status)) : null;
+      document.getElementById('calibNote').textContent = cErr ? '' : (c.note || '');
+      const bestBaseline = (c.brier_baseline_5050 != null && c.brier_baseline_up_rate != null) ? Math.min(c.brier_baseline_5050, c.brier_baseline_up_rate) : null;
+      document.getElementById('evidenceBody').innerHTML = renderEvidence({
+        label: 'Original k-NN', error: cErr, nResolved: c.n_resolved,
+        accuracy: c.accuracy, brier: c.brier_score, baseline: bestBaseline, beats: c.beats_naive_baseline,
+        upRate: c.historical_up_rate,
+        calibrated: (d.calibrated_p_up != null) ? { raw: d.p_up, cal: d.calibrated_p_up } : null,
+      });
     }
-    document.getElementById('predSignalFooter').innerHTML = renderSignalFooter(headlinePUp, accuracyForFooter, nResolvedForFooter);
+    document.getElementById('predSignalFooter').innerHTML = renderSignalFooter(headlinePUp);
   }catch(e){
-    empty.innerHTML = `<p class="text-sm text-[#BAC9CD]">Could not reach the model.</p>`;
+    if (mySeq !== _predictionRequestSeq) return;
+    empty.innerHTML = `<p class="text-sm text-[#BAC9CD]">${chip('ERROR','bad')} Could not reach the model — the forecast request failed. Use refresh to retry.</p>`;
+    document.getElementById('evidenceBody').innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Track record not loaded (request failed).</span></p>`;
   }
 }
 
@@ -715,7 +922,7 @@ const RANGES = [
   { key: '1M', label: '1M', ms: 30*24*60*60*1000 },
   { key: 'ALL', label: 'ALL', ms: Infinity },
 ];
-let chartRaw = { prices: [], predictions: [] };
+let chartRaw = { prices: [], predictions: [], loadedFor: null, error: null };
 let chartInstance = null;
 let activeRange = '1M';
 
@@ -771,10 +978,11 @@ function calibBadge(rawPUp, calibratedPUp){
   return `<span class="text-xs text-[#DDB7FF] font-mono-data ml-2" title="Empirically recalibrated from resolved prediction history">calibrated ${Math.round(calibratedPUp*100)}%</span>`; /* secondary/purple: distinct from primary cyan brand reads, meta-info tone */
 }
 
-// Precision ring + direction pill + confidence segments — presentation
-// only, built from p_up and calibration accuracy the app already fetches
-// in loadPrediction(). No new data source, no new logic.
-function renderSignalFooter(pUp, accuracy, nResolved){
+// Direction pill + confidence segments for the Forecast panel. Presentation
+// only: both describe how far p_up sits from a coin flip, nothing more.
+// (The precision ring that used to sit here moved to the Evidence panel —
+// a track record is evidence, not part of the forecast.)
+function renderSignalFooter(pUp){
   const bullish = pUp >= 0.5;
   const dirColor = bullish ? '#4AE176' : '#FFB4AB';
   const dirLabel = bullish ? 'BULLISH SIGNAL' : 'BEARISH SIGNAL';
@@ -783,30 +991,76 @@ function renderSignalFooter(pUp, accuracy, nResolved){
   const segments = [0,1,2,3].map(i =>
     `<div class="w-4 h-full rounded-full ${i < filledSegments ? '' : 'bg-[#3B494C]'}" ${i < filledSegments ? `style="background:${dirColor}"` : ''}></div>`
   ).join('');
+  return `
+    <div class="flex items-center gap-3" aria-label="${dirLabel.toLowerCase()}, distance from a coin flip ${filledSegments} of 4">
+      <span class="px-2 py-1 font-mono-data text-[10px] rounded border" style="background:${dirColor}1A; color:${dirColor}; border-color:${dirColor}4D">${dirLabel}</span>
+      <div class="flex gap-1 h-1 w-16" aria-hidden="true">${segments}</div>
+      <span class="text-[10px] text-[#BAC9CD]">distance from 50/50</span>
+    </div>`;
+}
 
-  const hasAccuracy = nResolved > 0;
-  const pct = hasAccuracy ? Math.round(accuracy * 100) : null;
-  const ringDash = hasAccuracy ? `${pct}, 100` : '0, 100';
+// Evidence panel: resolved track record for whichever variant is headlined.
+// 50 resolved = the backend's SELECTION_MIN_HISTORY, the minimum before a
+// variant is even considered for selection; below it the sample is
+// explicitly flagged as insufficient. Brier is compared against the
+// baseline the backend returned, never one invented here.
+const EVIDENCE_MIN_RESOLVED = 50;
+function renderEvidence(e){
+  if(e.error){
+    return `<p class="mb-1">${chip('UNAVAILABLE','neutral')}</p><p class="text-[#BAC9CD]">The ${esc(e.label)} track record could not be read (${esc(e.error)}). Nothing is shown rather than a guessed or empty result.</p>`;
+  }
+  if(!e.nResolved){
+    return `<p class="mb-1">${chip('NO RESOLVED DATA','neutral')}</p><p class="text-[#BAC9CD]">${esc(e.label)} has no resolved predictions for this coin/horizon yet, so there is no track record to show.</p>`;
+  }
+  const pct = e.accuracy != null ? Math.round(e.accuracy * 100) : null;
   const ring = `
-    <div class="relative w-10 h-10 flex items-center justify-center shrink-0">
+    <div class="relative w-12 h-12 flex items-center justify-center shrink-0" aria-hidden="true">
       <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
         <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3B494C" stroke-width="3"/>
-        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#00E0FF" stroke-width="3" stroke-dasharray="${ringDash}" stroke-linecap="round"/>
+        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#00E0FF" stroke-width="3" stroke-dasharray="${pct != null ? pct : 0}, 100" stroke-linecap="round"/>
       </svg>
-      <span class="absolute text-[10px] font-mono-data">${hasAccuracy ? pct + '%' : '—'}</span>
+      <span class="absolute text-[10px] font-mono-data">${pct != null ? pct + '%' : '—'}</span>
     </div>`;
-
+  const sufficient = e.nResolved >= EVIDENCE_MIN_RESOLVED;
+  const sampleChip = sufficient ? chip('n=' + e.nResolved, 'neutral') : chip('INSUFFICIENT SAMPLE', 'warn');
+  // Accuracy reference: the share of the same resolved calls whose price
+  // went up. Always calling "up" would have scored exactly that, so it is
+  // the number the accuracy figure has to be read against. Only shown when
+  // the backend reports it; never derived from another field.
+  const accRef = e.upRate != null
+    ? `<p class="mt-2 text-[#BAC9CD]">Price went up on <span class="font-mono-data text-[#E1E2E7]">${(Number(e.upRate)*100).toFixed(1)}%</span> of these ${e.nResolved} calls, so always calling "up" would have scored that accuracy.</p>`
+    : `<p class="mt-2 text-[#BAC9CD]">Up-rate for this set not reported, so the accuracy figure has no reference here.</p>`;
+  let brierLine = '<span class="text-[#BAC9CD]">Brier score not reported.</span>';
+  if(e.brier != null && e.baseline != null){
+    const beats = typeof e.beats === 'boolean' ? e.beats : Number(e.brier) < Number(e.baseline);
+    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better)</span> vs best constant guess <span class="font-mono-data">${Number(e.baseline).toFixed(3)}</span> — ${beats ? chip('BEATS BASELINE','good') : chip('DOES NOT BEAT BASELINE','bad')}
+      <span class="block text-[10px] text-[#BAC9CD] mt-1">Constant guess = the better of always 50% (0.250) and always the realized up-rate of these same ${e.nResolved} calls. That up-rate is only known in hindsight. Beating it is a minimum bar, not proof of skill.</span>`;
+  } else if(e.brier != null){
+    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better; no baseline reported)</span>`;
+  }
+  // The headline shows the raw read when Original k-NN is headlined; the
+  // calibrated read is a separate number beside it, not applied to it, and
+  // its own track record is the "k-NN Calibrated" bar in the Lab.
+  let calibLine = '';
+  if(e.calibrated){
+    const diff = Math.round(e.calibrated.cal * 100) - Math.round(e.calibrated.raw * 100);
+    calibLine = Math.abs(diff) >= 1
+      ? `<p class="mt-2">Calibration ${chip('SEPARATE READ','neutral')} <span class="text-[#BAC9CD]">calibrated ${Math.round(e.calibrated.cal*100)}% vs headline (raw) ${Math.round(e.calibrated.raw*100)}%. It is not applied to the headline, and the figures above are for the raw read. Its own record is in the Lab.</span></p>`
+      : `<p class="mt-2">Calibration ${chip('NO ADJUSTMENT','neutral')} <span class="text-[#BAC9CD]">calibrated read equals the raw read</span></p>`;
+  } else if(e.calibrated === null && e.label !== 'Original k-NN'){
+    calibLine = `<p class="mt-2">Calibration ${chip('NOT REPORTED','neutral')} <span class="text-[#BAC9CD]">for this variant's live read</span></p>`;
+  }
   return `
-    <div class="flex justify-between items-center">
-      <div class="flex items-center gap-3">
-        ${ring}
-        <div class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold leading-tight">Model<br>Precision</div>
+    <div class="flex items-center gap-3">
+      ${ring}
+      <div>
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Resolved direction accuracy · ${esc(e.label)}</p>
+        <p class="mt-0.5">${sampleChip} <span class="text-[#BAC9CD]">${e.nResolved} resolved, this coin/horizon${sufficient ? '' : ` (selection needs ${EVIDENCE_MIN_RESOLVED})`}</span></p>
       </div>
-      <div class="flex flex-col items-end gap-1.5">
-        <span class="px-2 py-1 font-mono-data text-[10px] rounded border" style="background:${dirColor}1A; color:${dirColor}; border-color:${dirColor}4D">${dirLabel}</span>
-        <div class="flex gap-1 h-1 w-16">${segments}</div>
-      </div>
-    </div>`;
+    </div>
+    ${accRef}
+    <p class="mt-2">${brierLine}</p>
+    ${calibLine}`;
 }
 
 function renderChart(){
@@ -825,8 +1079,8 @@ function renderChart(){
     return p.p_up >= 0.5 ? `rgba(74,225,118,${a})` : `rgba(255,180,171,${a})`;
   });
   const border = preds.map(p =>
-    p.realized_up === null || p.realized_up === undefined ? '#4B5563' :
-    p.realized_up === 1 ? '#4AE176' : '#FFB4AB'
+    callCorrect(p) === null ? '#4B5563' :
+    callCorrect(p) ? '#4AE176' : '#FFB4AB'
   );
 
   const nResolved = preds.filter(p => p.realized_up !== null && p.realized_up !== undefined).length;
@@ -894,6 +1148,7 @@ function renderChart(){
           bodyFont: { family: 'monospace' },
           padding: 10,
           callbacks: {
+            title: (items) => items.length ? fmtUtc(items[0].parsed.x) : '',
             label: (item) => {
               if(item.dataset.label !== 'Predictions') return cfg.label + ' $' + item.parsed.y.toLocaleString();
               const p = item.dataset._preds[item.dataIndex];
@@ -903,7 +1158,7 @@ function renderChart(){
               ];
               lines.push(
                 p.realized_up === null || p.realized_up === undefined ? 'Outcome: pending' :
-                `Outcome: ${p.realized_up ? 'correct' : 'wrong'} (${p.realized_return>0?'+':''}${p.realized_return?.toFixed(2)}%)`
+                `Outcome: ${callCorrect(p) ? 'correct' : 'wrong'} — price went ${p.realized_up === 1 ? 'up' : 'down'}${p.realized_return != null ? ` (${p.realized_return>0?'+':''}${p.realized_return.toFixed(2)}%)` : ''}`
               );
               return lines;
             },
@@ -914,64 +1169,237 @@ function renderChart(){
   });
 }
 
-function renderRecapTable(){
-  const cfg = COIN_CONFIG[currentCoin];
-  const tbody = document.getElementById('recapTbody');
-  const preds = [...chartRaw.predictions].sort((a,b) => b.ts - a.ts); // newest first, all of them — the scrollable container (not a slice) handles length now
-
-  document.getElementById('recapCountBadge').textContent = preds.length ? `(${preds.length})` : '';
-
-  if(!preds.length){
-    tbody.innerHTML = '<tr><td colspan="4" class="px-2 py-6 text-center text-[#BAC9CD]">No predictions logged yet.</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = preds.map(p => {
-    const date = new Date(p.ts).toUTCString().slice(0,16);
-    const dirArrow = p.p_up >= 0.5 ? '▲' : '▼';
-    const dirColor = p.p_up >= 0.5 ? 'text-[#4AE176]' : 'text-[#FFB4AB]';
-    const predictedCell = `<span class="${dirColor}">${dirArrow} ${Math.round(p.p_up*100)}%</span> <span class="text-[#BAC9CD]">(${p.median_analog_return>0?'+':''}${p.median_analog_return?.toFixed(2)}%)</span>`;
-
-    const resolved = p.realized_up !== null && p.realized_up !== undefined;
-    let realityCell, deviationCell;
-    if(!resolved){
-      const hoursLeft = Math.max(0, Math.round((p.target_ts - Date.now()) / (60*60*1000)));
-      realityCell = `<span class="text-[#BAC9CD]">Pending (~${hoursLeft}h)</span>`;
+// One row renderer for both recap tables (Dashboard: newest 10; History:
+// all, filterable). Rows come from chartRaw.predictions — the same
+// /chart-data response the chart already uses, never a second request.
+function recapRowHtml(p, withTarget){
+  const dirArrow = p.p_up >= 0.5 ? '▲' : '▼';
+  const dirColor = p.p_up >= 0.5 ? 'text-[#4AE176]' : 'text-[#FFB4AB]';
+  const med = p.median_analog_return;
+  const predictedCell = `<span class="${dirColor}">${dirArrow} ${Math.round(p.p_up*100)}%</span> <span class="text-[#BAC9CD]">(${med == null ? '—' : (med>0?'+':'') + med.toFixed(2) + '%'})</span>`;
+  const resolved = p.realized_up !== null && p.realized_up !== undefined;
+  let realityCell, deviationCell;
+  if(!resolved){
+    const hoursLeft = p.target_ts != null ? Math.max(0, Math.round((p.target_ts - Date.now()) / (60*60*1000))) : null;
+    realityCell = `<span class="text-[#BAC9CD]">Pending${hoursLeft != null ? ` (~${hoursLeft}h)` : ''}</span>`;
+    deviationCell = `<span class="text-[#BAC9CD]">—</span>`;
+  }else if(p.realized_return == null){
+    realityCell = `<span class="text-[#BAC9CD]">${p.realized_up === 1 ? 'up' : 'down'} <span aria-label="${callCorrect(p) ? 'correct' : 'wrong'}">${callCorrect(p) ? '✓' : '✗'}</span> (return not reported)</span>`;
+    deviationCell = `<span class="text-[#BAC9CD]">—</span>`;
+  }else{
+    const correct = callCorrect(p);
+    const realColor = p.realized_return >= 0 ? 'text-[#4AE176]' : 'text-[#FFB4AB]';
+    realityCell = `<span class="${realColor}">${p.realized_return>0?'+':''}${p.realized_return.toFixed(2)}%</span> <span aria-label="${correct ? 'correct' : 'wrong'}">${correct ? '✓' : '✗'}</span>`;
+    if(med == null){
       deviationCell = `<span class="text-[#BAC9CD]">—</span>`;
     }else{
-      const correct = p.realized_up === 1;
-      const realColor = p.realized_return >= 0 ? 'text-[#4AE176]' : 'text-[#FFB4AB]';
-      realityCell = `<span class="${realColor}">${p.realized_return>0?'+':''}${p.realized_return?.toFixed(2)}%</span> ${correct ? '✓' : '✗'}`;
-      const deviation = p.realized_return - p.median_analog_return;
+      const deviation = p.realized_return - med;
       const devAbs = Math.abs(deviation);
       const devColor = devAbs < 1 ? 'text-[#4AE176]' : devAbs < 3 ? 'text-[#FFB020]' : 'text-[#FFB4AB]'; /* KEEP-WARNING-AMBER: 3-tier severity, not brand accent */
       deviationCell = `<span class="${devColor}">${deviation>0?'+':''}${deviation.toFixed(2)}%</span>`;
     }
-
-    return `<tr class="border-b border-[#3B494C]/50 font-mono-data">
-      <td class="px-2 py-2 text-[#BAC9CD]">${date}</td>
-      <td class="px-2 py-2 text-right">${predictedCell}</td>
-      <td class="px-2 py-2 text-right">${realityCell}</td>
-      <td class="px-2 py-2 text-right">${deviationCell}</td>
-    </tr>`;
-  }).join('');
+  }
+  return `<tr class="border-b border-[#3B494C]/50 font-mono-data">
+    <td class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(p.ts)}</td>
+    ${withTarget ? `<td class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(p.target_ts)}</td>` : ''}
+    <td class="px-2 py-2 text-right whitespace-nowrap">${predictedCell}</td>
+    <td class="px-2 py-2 text-right whitespace-nowrap">${realityCell}</td>
+    <td class="px-2 py-2 text-right whitespace-nowrap">${deviationCell}</td>
+  </tr>`;
 }
 
+function predictionCounts(preds){
+  const resolved = preds.filter(p => p.realized_up !== null && p.realized_up !== undefined).length;
+  return { total: preds.length, resolved, pending: preds.length - resolved };
+}
+
+function renderRecapTable(){
+  const tbody = document.getElementById('recapTbody');
+  const preds = [...chartRaw.predictions].sort((a,b) => b.ts - a.ts);
+  document.getElementById('recapCountBadge').textContent = preds.length ? `(newest ${Math.min(10, preds.length)} of ${preds.length})` : '';
+  if(chartRaw.error){
+    tbody.innerHTML = `<tr><td colspan="4" class="px-2 py-6 text-center text-[#FFB4AB]">Could not load predictions (${esc(chartRaw.error)}).</td></tr>`;
+  }else if(!preds.length){
+    tbody.innerHTML = '<tr><td colspan="4" class="px-2 py-6 text-center text-[#BAC9CD]">No predictions logged yet.</td></tr>';
+  }else{
+    tbody.innerHTML = preds.slice(0, 10).map(p => recapRowHtml(p, false)).join('');
+  }
+  renderHistoryRecap();
+}
+
+// ---- History: full, filterable prediction record ----
+const HISTORY_FILTERS = [ { key: 'all', label: 'All' }, { key: 'resolved', label: 'Resolved' }, { key: 'pending', label: 'Pending' } ];
+let historyFilter = 'all';
+function renderHistoryRecap(){
+  const host = document.getElementById('historyFilter');
+  if(!host) return;
+  host.innerHTML = HISTORY_FILTERS.map(f =>
+    `<button type="button" data-filter="${f.key}" aria-pressed="${f.key===historyFilter}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${f.key===historyFilter ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${f.label}</button>`
+  ).join('');
+  host.querySelectorAll('button').forEach(b => { b.onclick = () => { historyFilter = b.dataset.filter; renderHistoryRecap(); }; });
+  const scope = chartRaw.loadedFor ? chartRaw.loadedFor.replace('-', ' · ') + 'h' : '';
+  document.getElementById('historyRecapScope').textContent = scope ? '— ' + scope : '';
+  const tbody = document.getElementById('historyRecapTbody');
+  const summary = document.getElementById('historySummary');
+  if(chartRaw.error){
+    summary.textContent = '';
+    tbody.innerHTML = `<tr><td colspan="5" class="px-2 py-6 text-center text-[#FFB4AB]">Could not load predictions (${esc(chartRaw.error)}).</td></tr>`;
+    return;
+  }
+  if(!chartRaw.loadedFor){
+    summary.textContent = '';
+    tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr>';
+    return;
+  }
+  const all = [...chartRaw.predictions].sort((a,b) => b.ts - a.ts);
+  const c = predictionCounts(all);
+  summary.textContent = `${c.total} logged · ${c.resolved} resolved · ${c.pending} pending`;
+  const rows = all.filter(p => {
+    const resolved = p.realized_up !== null && p.realized_up !== undefined;
+    return historyFilter === 'all' || (historyFilter === 'resolved' ? resolved : !resolved);
+  });
+  tbody.innerHTML = rows.length
+    ? rows.map(p => recapRowHtml(p, true)).join('')
+    : `<tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">${all.length ? 'No ' + historyFilter + ' predictions.' : 'No predictions logged yet.'}</td></tr>`;
+}
+
+// /chart-data for the current combo, loaded at most once per combo and
+// shared by the Dashboard chart, both recap tables and the data-quality
+// counts. Guarded like loadPrediction so a slower, older response can
+// never overwrite a newer combo's data.
+let _chartRequestSeq = 0;
 async function loadChart(){
-  const cfg = COIN_CONFIG[currentCoin];
+  const mySeq = ++_chartRequestSeq;
+  const coinAtCall = currentCoin, horizonAtCall = currentHorizon;
+  const cfg = COIN_CONFIG[coinAtCall];
+  const key = coinAtCall + '-' + horizonAtCall;
+  chartRaw = { prices: [], predictions: [], loadedFor: null, error: null };
+  renderHistoryRecap();
   try{
-    const r = await fetch(WORKER_URL + cfg.chart + '?horizon=' + currentHorizon);
+    const r = await fetch(WORKER_URL + cfg.chart + '?horizon=' + horizonAtCall);
     const d = await r.json();
+    if (mySeq !== _chartRequestSeq) return;
     if(d.ok){
-      chartRaw.prices = d.prices;
-      chartRaw.predictions = d.predictions;
+      chartRaw = { prices: d.prices || [], predictions: d.predictions || [], loadedFor: key, error: null };
+    }else{
+      chartRaw = { prices: [], predictions: [], loadedFor: key, error: d.error || 'backend returned ok:false' };
     }
   }catch(e){
-    document.getElementById('chartCountNote').textContent = 'Could not load chart data.';
+    if (mySeq !== _chartRequestSeq) return;
+    chartRaw = { prices: [], predictions: [], loadedFor: key, error: 'request failed' };
   }
+  _chartLoadedFor = key;
   buildRangeTabs();
   renderChart();
+  if(chartRaw.error) document.getElementById('chartCountNote').textContent = 'Could not load chart data (' + chartRaw.error + ').';
   renderRecapTable();
+  renderDataQuality();
+}
+let _chartLoadedFor = null;
+function loadChartIfNeeded(){
+  if (_chartLoadedFor === comboKey() && chartRaw.loadedFor === comboKey()) { renderRecapTable(); renderDataQuality(); return; }
+  loadChart();
+}
+
+// ---- Data quality (Dashboard) ----
+// /prediction-freshness covers every coin/horizon in one small read-only
+// response; fetched once per page load (and on explicit refresh), then
+// rendered for whichever combo is selected.
+let _freshness = null; // { ok, data } | { ok:false, error }
+let _freshnessPromise = null;
+function loadFreshness(force){
+  if(force){ _freshness = null; _freshnessPromise = null; }
+  if(_freshnessPromise) return _freshnessPromise;
+  _freshnessPromise = (async () => {
+    try{
+      const r = await fetch(WORKER_URL + '/prediction-freshness');
+      const d = await r.json();
+      _freshness = d && d.ok && d.coins ? { ok: true, data: d } : { ok: false, error: (d && d.error) || 'no freshness report' };
+    }catch(e){ _freshness = { ok: false, error: 'request failed' }; }
+    renderDataQuality();
+    return _freshness;
+  })();
+  return _freshnessPromise;
+}
+
+function freshnessChip(status){
+  if(status === 'FRESH') return chip('FRESH', 'good');
+  if(status === 'STALE') return chip('STALE', 'bad');
+  if(status === 'NONE') return chip('NO ROWS', 'bad');
+  return chip('UNKNOWN', 'neutral');
+}
+function completenessChip(cron24, expected){
+  if(cron24 == null || expected == null) return chip('UNKNOWN', 'neutral');
+  return cron24 >= expected ? chip(`${cron24}/${expected}`, 'good') : chip(`${cron24}/${expected}`, 'warn');
+}
+
+const FRESHNESS_REPORT_MAX_AGE_MS = 3 * 60 * 60 * 1000; // one 3h cron tick
+// Re-render once a minute so ages and the outdated-report rule track the
+// clock while the page stays open. No request is made.
+setInterval(() => { if (activeView === 'dashboard') renderDataQuality(); }, 60000);
+function renderDataQuality(){
+  const host = document.getElementById('dqBody');
+  if(!host) return;
+  const coin = currentCoin, h = String(currentHorizon);
+  const rows = [];
+  // 1) Prediction series written by the scheduled 3h cron.
+  if(!_freshness){
+    rows.push(`<p class="text-[#BAC9CD]">Checking prediction series…</p>`);
+  }else if(!_freshness.ok){
+    rows.push(`<p>${chip('UNKNOWN','neutral')} <span class="text-[#BAC9CD]">Freshness monitor unavailable (${esc(_freshness.error)}), so series health cannot be confirmed.</span></p>`);
+  }else{
+    const fr = _freshness.data;
+    // FRESH/STALE are the backend's verdict at generated_ts. An old report
+    // cannot vouch for now, so past one cron tick its chips go neutral.
+    const reportAgeMs = fr.generated_ts ? Date.now() - fr.generated_ts : Infinity;
+    const reportOutdated = !(reportAgeMs <= FRESHNESS_REPORT_MAX_AGE_MS);
+    const coinFr = fr.coins && fr.coins[coin];
+    const hz = coinFr && coinFr.horizons && coinFr.horizons[h];
+    const expected = fr.expected_cron_ticks_24h;
+    const line = (name, s) => !s
+      ? `<div class="flex items-center justify-between gap-2"><span class="text-[#BAC9CD]">${name}</span>${chip('UNKNOWN','neutral')}</div>`
+      : `<div class="flex items-center justify-between gap-2 flex-wrap">
+           <span class="text-[#BAC9CD]">${name} <span class="font-mono-data text-[10px]">newest ${fmtUtc(s.latest_ts)}${s.latest_ts ? ' · ' + ageStr(s.latest_ts) : ''}</span></span>
+           <span class="flex items-center gap-1">${reportOutdated ? chip('UNKNOWN','neutral') : freshnessChip(s.status)}<span title="Rows the scheduled cron wrote in the last 24 h vs. expected">${reportOutdated ? '' : completenessChip(s.cron_rows_24h, expected)}</span></span>
+         </div>`;
+    rows.push(`<p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Logged prediction series · ${coin} ${h}h <span class="normal-case tracking-normal font-normal">(freshness · scheduled writes in 24 h)</span></p>`);
+    rows.push(line('Core model', hz && hz.core));
+    rows.push(line('Challenger', hz && hz.challenger));
+    const pd = coinFr && coinFr.price_data;
+    rows.push(pd && pd.latest_ts
+      ? `<div class="flex items-center justify-between gap-2"><span class="text-[#BAC9CD]">Price data <span class="font-mono-data text-[10px]">newest ${fmtUtc(pd.latest_ts)} · ${ageStr(pd.latest_ts)}</span></span></div>`
+      : `<div class="flex items-center justify-between gap-2"><span class="text-[#BAC9CD]">Price data</span>${chip('UNKNOWN','neutral')}</div>`);
+    // All 12 series at a glance, so a gap elsewhere is not hidden by the
+    // selected combo looking fine.
+    const gaps = [];
+    let total = 0;
+    for(const c of Object.keys(fr.coins || {})){
+      for(const hh of Object.keys(fr.coins[c].horizons || {})){
+        for(const m of ['core','challenger']){
+          const s = fr.coins[c].horizons[hh][m];
+          if(!s) continue;
+          total++;
+          if(s.status !== 'FRESH' || (expected != null && s.cron_rows_24h < expected)) gaps.push(`${c} ${hh}h ${m}${s.status !== 'FRESH' ? ' (' + s.status + ')' : ' (' + s.cron_rows_24h + '/' + expected + ')'}`);
+        }
+      }
+    }
+    rows.push(`<p class="pt-2 mt-1 border-t border-[#3B494C] text-[#BAC9CD]">All series: ${
+      reportOutdated ? chip('UNKNOWN','neutral')
+      : total === 0 ? `${chip('UNKNOWN','neutral')} <span class="text-[10px]">no series in the report</span>`
+      : gaps.length
+      ? `${chip(gaps.length + ' of ' + total + ' with gaps','warn')} <span class="font-mono-data text-[10px]">${esc(gaps.join(' · '))}</span>`
+      : `${chip(total + ' of ' + total + ' on schedule','good')}`}</p>`);
+    rows.push(`<p class="text-[10px] ${reportOutdated ? 'text-[#FFB020]' : 'text-[#4B5563]'}">Monitor generated ${fmtUtc(fr.generated_ts)}${reportOutdated ? ' — report outdated, use refresh' : ''}</p>`);
+    rows.push(`<p class="text-[10px] text-[#4B5563] leading-relaxed">FRESH = newest logged row under 6 h old (backend rule). Write counts show the scheduled job saved its rows. They do not validate the market data behind them, and price-feed gaps are not reported.</p>`);
+  }
+  // 2) Outcomes: resolved vs pending, from the predictions loaded for the chart.
+  if(chartRaw.loadedFor === coin + '-' + h && !chartRaw.error){
+    const c = predictionCounts(chartRaw.predictions);
+    rows.push(`<p class="pt-2 mt-1 border-t border-[#3B494C] text-[#BAC9CD]">Outcomes: <span class="font-mono-data text-[#E1E2E7]">${c.resolved}</span> resolved · <span class="font-mono-data text-[#E1E2E7]">${c.pending}</span> pending of ${c.total} logged</p>`);
+  }else if(chartRaw.loadedFor === coin + '-' + h && chartRaw.error){
+    rows.push(`<p class="pt-2 mt-1 border-t border-[#3B494C]">${chip('UNKNOWN','neutral')} <span class="text-[#BAC9CD]">Outcome counts unavailable (prediction log failed to load).</span></p>`);
+  }
+  host.innerHTML = rows.join('');
 }
 
 buildCoinTabs();
@@ -982,9 +1410,13 @@ buildHorizonTabs();
 const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'lab', label: 'Lab' },
-  { key: 'learning', label: 'AI Learning' },
+  { key: 'experiments', label: 'Experiments' },
+  { key: 'history', label: 'History' },
 ];
 let activeView = (location.hash || '').replace('#', '') || 'dashboard';
+// Old #learning links land on Experiments with the learning block open.
+let _openLearningOnLoad = false;
+if (activeView === 'learning') { activeView = 'experiments'; _openLearningOnLoad = true; }
 if (!NAV.some(n => n.key === activeView)) activeView = 'dashboard';
 
 // ---- Lazy, per-view, per-coin/horizon loading. Previously every one of
@@ -1002,11 +1434,33 @@ let _dashboardLoadedFor = null;
 let _labLoadedFor = null;
 
 function loadDashboardIfNeeded(){
+  loadFreshness();
   const key = comboKey();
   if (_dashboardLoadedFor === key) return;
   _dashboardLoadedFor = key;
   loadPrediction();
-  loadChart();
+  loadChartIfNeeded();
+  renderDataQuality();
+}
+
+// History reuses the chart's /chart-data for the same combo (no refetch
+// when the Dashboard already loaded it) and the backtest responses that
+// are fetched once at page load.
+function loadHistoryIfNeeded(){
+  loadChartIfNeeded();
+}
+
+let _experimentsLoaded = false;
+function loadExperimentsIfNeeded(){
+  if (_experimentsLoaded) return;
+  _experimentsLoaded = true;
+  loadExperiments();
+}
+
+function renderScopeChip(){
+  const show = activeView === 'lab' || activeView === 'history';
+  document.getElementById('scopeChip').classList.toggle('hidden', !show);
+  document.getElementById('scopeChipValue').textContent = currentCoin + ' · ' + currentHorizon + 'H';
 }
 
 function loadLabIfNeeded(){
@@ -1029,24 +1483,30 @@ function renderNav(){
       btn.textContent = item.label;
       btn.className = 'nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ' + (on ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]');
     }
+    if (on) btn.setAttribute('aria-current', 'page'); else btn.removeAttribute('aria-current');
   });
-  document.getElementById('view-dashboard').classList.toggle('hidden', activeView !== 'dashboard');
-  document.getElementById('view-lab').classList.toggle('hidden', activeView !== 'lab');
-  document.getElementById('view-learning').classList.toggle('hidden', activeView !== 'learning');
+  for (const n of NAV) document.getElementById('view-' + n.key).classList.toggle('hidden', activeView !== n.key);
   // Coin/horizon toggle: Dashboard-only now, per explicit request. Lab's
   // content (Challenger, experiments) is still coin/horizon-scoped and
   // keeps using whatever combo was last set on Dashboard -- there's just
   // no way to change it from within Lab itself anymore.
   document.getElementById('coinHorizonToggle').classList.toggle('hidden', activeView !== 'dashboard');
+  renderScopeChip();
   if (activeView === 'dashboard') loadDashboardIfNeeded();
   if (activeView === 'lab') loadLabIfNeeded();
-  if (activeView === 'learning' && !_learningLoaded) loadLearningOverview();
+  if (activeView === 'history') loadHistoryIfNeeded();
+  if (activeView === 'experiments') loadExperimentsIfNeeded();
 }
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
   btn.onclick = () => { activeView = btn.dataset.view; history.replaceState(null, '', '#' + activeView); renderNav(); };
 });
 renderNav();
+// Chart.js can't size a canvas while its view is hidden; when the
+// Dashboard is shown again after a combo change made elsewhere, resize.
+document.querySelectorAll('.nav-tab').forEach(btn => btn.addEventListener('click', () => {
+  requestAnimationFrame(() => { if (activeView === 'dashboard' && chartInstance) chartInstance.resize(); });
+}));
 
 // Narrative Analysis (analysisList, BIAS_COLOR, renderAnalysis,
 // loadAnalysis) removed entirely along with its Lab section -- the
@@ -1109,29 +1569,42 @@ const glowLinePlugin = {
 // ---- Offline backtest history table (BTC-only, coin-agnostic UI here
 // since these are always BTC — regime_mag/sentiment/combined tests aren't
 // coin-selectable the way live predictions are) ----
+function backtestRowHtml(run, withRunTs){
+  const beats = run.beats_naive_baseline === 1;
+  const beatsCell = run.brier_score == null ? '—' :
+    `<span class="${beats ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${beats ? 'Beats' : 'Loses'} (${run.naive_baseline_brier?.toFixed(3) ?? '—'})</span>`;
+  return `<tr class="border-b border-[#3B494C]/50 font-mono-data">
+    ${withRunTs ? `<td class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(run.run_ts)}</td>` : ''}
+    <td class="px-2 py-2 text-[#E1E2E7]">${esc(run.coin)}</td>
+    <td class="px-2 py-2 text-right text-[#BAC9CD]">${run.n_predictions ?? '—'}</td>
+    <td class="px-2 py-2 text-right text-[#BAC9CD]">${run.accuracy != null ? (run.accuracy*100).toFixed(1)+'%' : '—'}</td>
+    <td class="px-2 py-2 text-right text-[#BAC9CD]">${run.brier_score != null ? run.brier_score.toFixed(3) : '—'}</td>
+    <td class="px-2 py-2 text-right">${beatsCell}</td>
+  </tr>`;
+}
+// One /backtest-history request at page load feeds both tables: the
+// Dashboard shows the latest run per test, History shows every run.
 async function loadBacktestHistory(){
-  const tbody = document.getElementById('backtestTbody');
+  const dash = document.getElementById('backtestTbody');
+  const hist = document.getElementById('historyBacktestTbody');
+  const msg = (cols, text, cls) => `<tr><td colspan="${cols}" class="px-2 py-6 text-center ${cls || 'text-[#BAC9CD]'}">${text}</td></tr>`;
   try{
     const r = await fetch(WORKER_URL + '/backtest-history');
     const d = await r.json();
     if(!d.ok || !d.runs || !d.runs.length){
-      tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">No backtests run yet.</td></tr>';
+      dash.innerHTML = msg(5, 'No backtests run yet.');
+      hist.innerHTML = msg(6, 'No backtests run yet.');
       return;
     }
-    tbody.innerHTML = d.runs.map(run => {
-      const beats = run.beats_naive_baseline === 1;
-      const beatsCell = run.brier_score == null ? '—' :
-        `<span class="${beats ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${beats ? 'Beats' : 'Loses'} (${run.naive_baseline_brier?.toFixed(3) ?? '—'})</span>`;
-      return `<tr class="border-b border-[#3B494C]/50 font-mono-data">
-        <td class="px-2 py-2 text-[#E1E2E7]">${run.coin}</td>
-        <td class="px-2 py-2 text-right text-[#BAC9CD]">${run.n_predictions}</td>
-        <td class="px-2 py-2 text-right text-[#BAC9CD]">${run.accuracy != null ? (run.accuracy*100).toFixed(1)+'%' : '—'}</td>
-        <td class="px-2 py-2 text-right text-[#BAC9CD]">${run.brier_score != null ? run.brier_score.toFixed(3) : '—'}</td>
-        <td class="px-2 py-2 text-right">${beatsCell}</td>
-      </tr>`;
-    }).join('');
+    const runs = [...d.runs].sort((a,b) => (b.run_ts || 0) - (a.run_ts || 0));
+    const latestPerTest = [];
+    const seen = new Set();
+    for(const run of runs){ if(!seen.has(run.coin)){ seen.add(run.coin); latestPerTest.push(run); } }
+    dash.innerHTML = latestPerTest.map(run => backtestRowHtml(run, false)).join('');
+    hist.innerHTML = runs.map(run => backtestRowHtml(run, true)).join('');
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Could not load backtest history.</td></tr>';
+    dash.innerHTML = msg(5, 'Could not load backtest history.', 'text-[#FFB4AB]');
+    hist.innerHTML = msg(6, 'Could not load backtest history.', 'text-[#FFB4AB]');
   }
 }
 loadBacktestHistory();
@@ -1209,7 +1682,7 @@ async function loadChallengerLive(){
       <p class="text-xs text-[#BAC9CD] mt-3 font-mono-data">Trailing ${p.horizon_hours}h return: ${trailingStr}</p>
       ${driverLine}
       ${renderTrendBar(p.trend_strength)}
-      <p class="text-[10px] text-[#4B5563] mt-2">As of ${new Date(p.ts).toUTCString().slice(0,22)}</p>
+      <p class="text-[10px] text-[#4B5563] mt-2">As of ${fmtUtc(p.ts)}</p>
     `;
   }catch(e){
     host.innerHTML = '<p class="text-xs text-[#FFB4AB]">Could not load — '+e.message+'</p>';
@@ -1262,7 +1735,7 @@ async function loadChallengerRecap(){
     host.innerHTML = rows.map(p => {
       const resolved = p.resolved_ts != null;
       const correct = resolved ? ((p.p_up_flat > 0.5) === (p.realized_up === 1)) : null;
-      const dateStr = new Date(p.ts).toUTCString().slice(0,16);
+      const dateStr = fmtUtc(p.ts);
       const statusBadge = !resolved
         ? '<span class="text-[10px] text-[#BAC9CD]">pending</span>'
         : correct
@@ -1293,6 +1766,9 @@ document.getElementById('refreshBtn').onclick = async () => {
     // forces that.
     _dashboardLoadedFor = null;
     _labLoadedFor = null;
+    _chartLoadedFor = null;
+    loadFreshness(true);
+    if (activeView === 'experiments') { _experimentsLoaded = false; loadExperimentsIfNeeded(); }
     await refreshAll();
   } finally {
     icon.classList.remove('spinning');
@@ -1627,7 +2103,7 @@ async function loadLabCombinedHistoryChart(){
             tooltip: {
               backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1,
               titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' },
-              callbacks: { label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
+              callbacks: { title: (items) => items.length ? fmtUtc(items[0].parsed.x) : '', label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` },
             },
           },
         },
@@ -2002,7 +2478,7 @@ const STATUS_COLORS = {
 };
 function statusChip(label, status, text, ts, tooltip){
   const c = STATUS_COLORS[status] || STATUS_COLORS.Unknown;
-  const tsHtml = ts ? `<p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${new Date(ts).toLocaleString()}</p>` : '';
+  const tsHtml = ts ? `<p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${fmtUtc(ts)}</p>` : '';
   return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5"${tooltip ? ` title="${String(tooltip).replace(/"/g,'&quot;')}"` : ''}>
     <p class="text-[9px] text-[#4B5563] uppercase tracking-wide mb-1">${label}</p>
     <div class="flex items-center gap-1.5 mb-1">
@@ -2234,7 +2710,7 @@ function renderCurrentSelection(selection, history){
         <div class="mt-2 max-h-40 overflow-y-auto">
           <table class="w-full text-[10px]">
             <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">#</th><th class="pb-1 pr-3">Timestamp</th><th class="pb-1">Distance</th></tr></thead>
-            <tbody>${neighbors.map((n,i) => `<tr class="border-t border-[#3B494C]/50"><td class="py-1 pr-3 font-mono-data">${i+1}</td><td class="py-1 pr-3 font-mono-data">${new Date(n.ts).toLocaleString()}</td><td class="py-1 font-mono-data">${n.dist}</td></tr>`).join('')}</tbody>
+            <tbody>${neighbors.map((n,i) => `<tr class="border-t border-[#3B494C]/50"><td class="py-1 pr-3 font-mono-data">${i+1}</td><td class="py-1 pr-3 font-mono-data">${fmtUtc(n.ts)}</td><td class="py-1 font-mono-data">${n.dist}</td></tr>`).join('')}</tbody>
           </table>
         </div>
         <details class="mt-2"><summary class="text-[10px] text-[#4B5563] cursor-pointer select-none">Raw JSON</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(neighbors, null, 2)}</pre></details>
@@ -2277,7 +2753,7 @@ function renderLearningEvents(history){
   el.innerHTML = decisions.map(d => `
     <div class="border-b border-[#3B494C]/50 last:border-0 py-2">
       <div class="flex items-center justify-between gap-2">
-        <p class="text-[10px] font-mono-data text-[#4B5563]">${new Date(d.ts).toLocaleString()}</p>
+        <p class="text-[10px] font-mono-data text-[#4B5563]">${fmtUtc(d.ts)}</p>
         <span class="text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${d.cleared_gate ? 'bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20' : 'bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]'}">${d.cleared_gate ? 'gate cleared' : 'gate not cleared'}</span>
       </div>
       <p class="text-xs font-semibold mt-0.5">Selection decision — <span class="text-[#00E0FF]">${SELECTION_VARIANT_LABELS[d.chosen_variant] || d.chosen_variant}</span></p>
@@ -2423,7 +2899,7 @@ function renderAiResponsibilities(daily, chatgpt){
     <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#00E0A0"></span><span class="text-[#BAC9CD]">Active, via Analyst Relay</span></p>`;
 
   const chatgptBody = (chatgpt && chatgpt.ok)
-    ? `<p class="text-[11px] text-[#BAC9CD]">Audit-ready data package generated ${new Date(chatgpt.data.generated_at).toLocaleString()}, status <span class="font-semibold">${chatgpt.data.status}</span>.</p>
+    ? `<p class="text-[11px] text-[#BAC9CD]">Audit-ready data package generated ${fmtUtc(chatgpt.data.generated_at)}, status <span class="font-semibold">${chatgpt.data.status}</span>.</p>
        <p class="text-[10px] text-[#4B5563] mt-1">This is data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced — no API exposes ChatGPT's actual assessment.</p>`
     : `<p class="text-[11px] text-[#BAC9CD]">Independent audit, challenges conclusions.</p>
        <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable — GET /api/learning/chatgpt did not respond</span></p>`;
@@ -2540,7 +3016,7 @@ function renderLearningAudit(history){
   el.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-[10px]">
     <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Timestamp</th><th class="pb-1 pr-3">Event</th><th class="pb-1 pr-3">Entity</th><th class="pb-1 pr-3">Actor</th><th class="pb-1 pr-3">New State</th><th class="pb-1">Reason</th></tr></thead>
     <tbody>${decisions.map(d => `<tr class="border-t border-[#3B494C]/50 align-top">
-      <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${new Date(d.ts).toLocaleString()}</td>
+      <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${fmtUtc(d.ts)}</td>
       <td class="py-1.5 pr-3 whitespace-nowrap">Model selection</td>
       <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${d.coin} · ${d.horizon_hours}H</td>
       <td class="py-1.5 pr-3"><span class="text-[9px] px-1.5 py-0.5 rounded bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]">SYSTEM</span></td>
@@ -2552,6 +3028,207 @@ function renderLearningAudit(history){
 }
 
 document.getElementById('learnRefreshBtn').onclick = () => { _learningGlobalCache = null; loadLearningOverview(); };
+
+// ═══ EXPERIMENTS ═══
+// Everything below is read from existing endpoints and displayed as the
+// backend reports it. Statuses are never inferred here: the registry's own
+// lifecycle status and evidence-maturity fields are shown verbatim, and a
+// missing field is shown as missing. `var` (not let) because the page can
+// open directly on #experiments, which calls these before later
+// declarations in this script would otherwise be initialised.
+var _registry = null;          // { ok, data } | { ok:false, error }
+var _eventsHealth = null;      // { ok, data } | { ok:false, error }
+var _eventsRecent = null;      // { ok, count } | { ok:false, error }
+var registryFilter = 'ALL';
+var EVENTS_LIMIT = 200;
+
+async function fetchJson(path){
+  try{
+    const r = await fetch(WORKER_URL + path);
+    const d = await r.json();
+    if(!r.ok || d.ok === false) return { ok: false, error: d.error || ('HTTP ' + r.status) };
+    return { ok: true, data: d };
+  }catch(e){ return { ok: false, error: 'request failed' }; }
+}
+
+async function loadExperiments(){
+  document.getElementById('goalABody').innerHTML = '<p class="text-[#BAC9CD]">Loading…</p>';
+  document.getElementById('goalBBody').innerHTML = '<p class="text-[#BAC9CD]">Loading…</p>';
+  document.getElementById('registryBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+  const [reg, health, events] = await Promise.all([
+    fetchJson('/api/research-lab/registry'),
+    fetchJson('/api/events/health'),
+    fetchJson('/api/events?limit=' + EVENTS_LIMIT),
+  ]);
+  _registry = reg;
+  _eventsHealth = health;
+  _eventsRecent = events.ok && typeof events.data.count === 'number' ? { ok: true, count: events.data.count, since: events.data.since_ts } : (events.ok ? { ok: false, error: 'count not reported' } : events);
+  document.getElementById('expLoadedAt').textContent = fmtUtc(Date.now());
+  renderGoalA();
+  renderGoalB();
+  renderRegistry();
+}
+
+const REGISTRY_STATUS_TONE = {
+  VALIDATED: 'good', EVALUABLE: 'info', READY_FOR_ANALYSIS: 'info',
+  ACCUMULATING: 'neutral', COLLECTING: 'neutral', PROPOSED: 'neutral', ON_DEMAND_AUDIT: 'neutral', STAGING_ONLY: 'neutral',
+  INSUFFICIENT_SAMPLE: 'warn', BLOCKED: 'bad', FAILED: 'bad', REJECTED: 'bad', RETIRED: 'neutral',
+};
+function statusChipFor(v){ return v ? chip(String(v).replace(/_/g, ' '), REGISTRY_STATUS_TONE[v] || 'neutral') : chip('NOT REPORTED', 'neutral'); }
+
+const DETECTOR_TONE = { OK: 'good', INSUFFICIENT_BASELINE: 'warn', STALE: 'bad', PROVIDER_ERROR: 'bad', BLOCKED: 'bad', RATE_LIMITED: 'bad', BUDGET_EXHAUSTED: 'bad', DISABLED: 'neutral', NOT_CONFIGURED: 'neutral', NEVER_RUN: 'neutral' };
+
+function sampleText(e){
+  const cs = e.current_sample_size;
+  if(cs == null) return 'not reported';
+  if(typeof cs === 'number') return String(cs);
+  if(typeof cs === 'object' && Array.isArray(cs.by_horizon) && cs.by_horizon.length)
+    return cs.by_horizon.map(b => `${b.horizon_hours}h ${b.resolved ?? '?'} resolved of ${b.total ?? '?'}`).join(' · ');
+  if(typeof cs === 'object' && cs.total_resolved != null) return `${cs.total_resolved} resolved of ${cs.total_forecasts ?? '?'} forecasts`;
+  return esc(JSON.stringify(cs)).slice(0, 120);
+}
+function progressBar(e){
+  const cur = typeof e.progress_count === 'number' ? e.progress_count : (typeof e.current_sample_size === 'number' ? e.current_sample_size : null);
+  const req = typeof e.required_sample === 'number' ? e.required_sample : null;
+  if(cur == null || req == null || req <= 0) return '';
+  const pct = Math.max(0, Math.min(100, Math.round(cur / req * 100)));
+  return `<div class="mt-1.5" role="img" aria-label="Sample ${cur} of ${req} required">
+    <div class="h-1.5 rounded-full bg-[#3B494C] overflow-hidden"><div class="h-full rounded-full" style="width:${pct}%;background:${cur >= req ? '#00E0FF' : '#FFB020'}"></div></div>
+    <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">registry progress ${cur} / ${req} required${cur >= req ? ' — minimum reached (not a result)' : ''}</p>
+  </div>`;
+}
+function etaText(e){
+  let eta = e.eta;
+  if(typeof eta === 'string'){ try{ eta = JSON.parse(eta); }catch(_){ return esc(eta); } }
+  if(!eta) return 'not reported';
+  if(eta.estimable === false) return esc(eta.reason || 'not estimable');
+  if(eta.reached) return 'required sample reached';
+  return eta.eta_date ? `projected ${esc(eta.eta_date)}${eta.basis ? ' — ' + esc(eta.basis) : ''}` : 'not reported';
+}
+function field(label, value){
+  if(value == null || value === '' || value === 'null') return '';
+  const v = typeof value === 'object' ? esc(JSON.stringify(value)).slice(0, 400) : esc(value);
+  return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">${label}</dt><dd class="text-[11px] text-[#BAC9CD] leading-relaxed">${v}</dd></div>`;
+}
+
+function renderGoalA(){
+  const host = document.getElementById('goalABody');
+  const h = _eventsHealth;
+  if(!h || !h.ok){
+    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Event Detection health could not be read (${esc(h ? h.error : 'not loaded')}).</span></p>`;
+    return;
+  }
+  const d = h.data;
+  if(d.available === false){
+    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Event Detection reports itself unavailable${d.reason ? ' (' + esc(d.reason) + ')' : ''}.</span></p>`;
+    return;
+  }
+  const lr = d.last_run;
+  const dets = (d.detectors || []).map(x => `<li class="flex items-start justify-between gap-2 py-1 border-t border-[#3B494C]/60">
+      <span class="text-[#BAC9CD] text-[11px]">${esc(x.label || x.id)}${x.stale ? ' <span class="text-[#FFB4AB]">(stale)</span>' : ''}${x.coverage ? `<span class="block text-[10px] text-[#4B5563]">coverage: ${esc(x.coverage)}</span>` : ''}</span>
+      ${chip(String(x.status || 'UNKNOWN').replace(/_/g,' '), DETECTOR_TONE[x.status] || 'neutral')}
+    </li>`).join('');
+  const ev = _eventsRecent && _eventsRecent.ok
+    ? `<span class="font-mono-data text-[#E1E2E7]">${_eventsRecent.count >= EVENTS_LIMIT ? 'at least ' : ''}${_eventsRecent.count}</span> derived event${_eventsRecent.count === 1 ? '' : 's'} since ${fmtUtc(_eventsRecent.since)}`
+    : `${chip('UNKNOWN','neutral')} event list unavailable`;
+  host.innerHTML = `
+    <dl>
+      <div class="flex items-center justify-between gap-2"><dt class="text-[#BAC9CD]">Scheduled collection</dt><dd>${d.enabled ? chip('ENABLED','info') : chip('DISABLED','neutral')}</dd></div>
+      <div class="flex items-center justify-between gap-2 mt-1.5"><dt class="text-[#BAC9CD]">Last run</dt><dd class="font-mono-data text-[11px] text-right">${lr ? `${fmtUtc(lr.started_ts)} <span class="text-[#BAC9CD]">(${ageStr(lr.started_ts)}, ${esc(lr.trigger)})</span>` : 'none recorded'}</dd></div>
+      <div class="flex items-center justify-between gap-2 mt-1.5"><dt class="text-[#BAC9CD]">Recent events</dt><dd class="text-[11px] text-right">${ev}</dd></div>
+    </dl>
+    <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mt-3 mb-1">Detectors (as reported)</p>
+    <ul>${dets || '<li class="text-[#BAC9CD]">No detectors reported.</li>'}</ul>
+    <div class="mt-3 pt-3 border-t border-[#3B494C]">
+      <p>Evaluation status ${chip('NOT REPORTED BY API','neutral')}</p>
+      <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">The API does not expose the number of watched market episodes. The predeclared protocol (PulseWorkerV2 EVENT_DETECTION.md §15) requires at least 20 watched episodes, with at least 5 per direction, before its single evaluation. Running detectors and logged events are collection evidence only.</p>
+    </div>`;
+}
+
+function findExperiment(id){
+  return _registry && _registry.ok ? (_registry.data.experiments || []).find(e => e.experiment_id === id) : null;
+}
+
+function renderGoalB(){
+  const host = document.getElementById('goalBBody');
+  if(!_registry || !_registry.ok){
+    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Experiment registry could not be read (${esc(_registry ? _registry.error : 'not loaded')}).</span></p>`;
+    return;
+  }
+  const e = findExperiment('EXP-023');
+  if(!e){
+    host.innerHTML = `<p>${chip('NOT IN REGISTRY','neutral')} <span class="text-[#BAC9CD]">EXP-023 is not listed in the registry response.</span></p>`;
+    return;
+  }
+  host.innerHTML = `
+    <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(e.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(e.confidence_evidence_maturity)}</p>
+    <p class="mt-2 text-[#BAC9CD]">Registry sample: <span class="font-mono-data text-[#E1E2E7]">${sampleText(e)}</span> · required <span class="font-mono-data text-[#E1E2E7]">${e.required_sample ?? 'not defined'}</span></p>
+    ${progressBar(e)}
+    <dl>
+      ${field('Projected checkpoint', etaText(e))}
+      ${field('Data last updated', e.data_last_updated ? fmtUtc(e.data_last_updated) + ' (' + ageStr(e.data_last_updated) + ')' : null)}
+      ${field('Success criterion', e.success_criterion)}
+      ${field('Next action', e.next_action)}
+      <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
+    </dl>
+    <p class="text-[10px] text-[#4B5563] mt-2">Status and sample are the registry's own. Holdout outcomes are not shown here.</p>`;
+}
+
+function renderRegistry(){
+  const body = document.getElementById('registryBody');
+  const filters = document.getElementById('registryFilters');
+  if(!_registry || !_registry.ok){
+    filters.innerHTML = '';
+    body.innerHTML = `<p class="text-xs">${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Registry could not be read (${esc(_registry ? _registry.error : 'not loaded')}). No experiment status is shown rather than a stale or guessed one.</span></p>`;
+    return;
+  }
+  const list = _registry.data.experiments || [];
+  const statuses = ['ALL', ...Array.from(new Set(list.map(e => e.status).filter(Boolean)))];
+  if(!statuses.includes(registryFilter)) registryFilter = 'ALL';
+  filters.innerHTML = statuses.map(st => {
+    const n = st === 'ALL' ? list.length : list.filter(e => e.status === st).length;
+    const on = st === registryFilter;
+    return `<button type="button" data-st="${esc(st)}" aria-pressed="${on}" class="px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors ${on ? 'bg-[#00E0FF] text-[#0B0E11] border-[#00E0FF]' : 'text-[#BAC9CD] border-[#3B494C] hover:text-[#E1E2E7]'}">${esc(st.replace(/_/g,' '))} <span class="font-mono-data">${n}</span></button>`;
+  }).join('');
+  filters.querySelectorAll('button').forEach(b => { b.onclick = () => { registryFilter = b.dataset.st; renderRegistry(); }; });
+  const FEATURED = { 'EXP-004': 'TimesFM', 'EXP-011': 'Experiment 5', 'EXP-023': 'Goal B' };
+  const shown = list.filter(e => registryFilter === 'ALL' || e.status === registryFilter);
+  body.innerHTML = shown.map(e => `
+    <details class="rounded-xl border border-[#3B494C] bg-[#0B0E11] px-3 py-2">
+      <summary class="cursor-pointer select-none">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-[#E1E2E7]"><span class="font-mono-data text-[#00E0FF]">${esc(e.experiment_id)}</span> ${esc(e.title || '')}${FEATURED[e.experiment_id] ? ` <span class="text-[10px] text-[#DDB7FF] font-semibold">· ${FEATURED[e.experiment_id]}</span>` : ''}</p>
+            <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">sample ${sampleText(e)}${typeof e.required_sample === 'number' ? ' · required ' + e.required_sample : ''} · updated ${e.data_last_updated ? fmtUtc(e.data_last_updated) : (e.last_updated ? fmtUtc(e.last_updated) : 'not reported')}</p>
+          </div>
+          <div class="flex flex-col items-end gap-1 shrink-0">${statusChipFor(e.status)}${e.confidence_evidence_maturity && e.confidence_evidence_maturity !== e.status ? statusChipFor(e.confidence_evidence_maturity) : ''}</div>
+        </div>
+        ${progressBar(e)}
+      </summary>
+      <dl class="mt-2 pt-2 border-t border-[#3B494C]">
+        ${field('Objective / hypothesis', e.research_question || e.purpose)}
+        ${field('Success criterion (next review)', e.success_criterion)}
+        ${field('Baseline', e.baseline)}
+        ${field('Current measured result', e.current_measured_result)}
+        ${field('Conclusion', e.conclusion)}
+        ${field('Next action', e.next_action)}
+        <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
+        ${field('Target date', e.target_date)}
+        ${field('Projected checkpoint', etaText(e))}
+        ${e.suggested_status ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Backend suggests</dt><dd class="text-[11px] text-[#BAC9CD]">${statusChipFor(e.suggested_status)} — an automatic prompt for review, not a validation.</dd></div>` : ''}
+        ${field('Started', e.start_date)}
+        ${field('Type', e.experiment_type)}
+      </dl>
+    </details>`).join('') || '<p class="text-xs text-[#BAC9CD]">No experiments with this status.</p>';
+  body.insertAdjacentHTML('beforeend', `<p class="text-[10px] text-[#4B5563] mt-3 leading-relaxed">Registry generated ${fmtUtc(_registry.data.generated_ts)}. Entries use the registry's own EXP-NNN identifiers; TimesFM (EXP-004) and Experiment 5 (EXP-011) are identified from their registry titles. The registry does not define "E1–E6" labels, so none are applied here.</p>`);
+}
+
+document.getElementById('expRefreshBtn').onclick = () => { _experimentsLoaded = false; loadExperimentsIfNeeded(); };
+// The learning block (former AI Learning view) loads only when opened.
+document.getElementById('learningDetails').addEventListener('toggle', (ev) => {
+  if (ev.target.open && !_learningLoaded) loadLearningOverview();
+});
+if (_openLearningOnLoad) document.getElementById('learningDetails').open = true;
 // renderNav() (called above, right after NAV is defined) already triggers
 // loadLearningOverview()/loadDashboardIfNeeded()/loadLabIfNeeded() for
 // whichever view is actually active on page load -- no separate calls

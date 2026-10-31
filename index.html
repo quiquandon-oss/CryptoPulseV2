@@ -1453,9 +1453,12 @@ function loadHistoryIfNeeded(){
 }
 
 let _experimentsLoaded = false;
+var _experimentsLoadedAt = 0;
+var EXPERIMENTS_REFRESH_MS = 10 * 60 * 1000;   // reopening the section refetches only after this; no polling
 function loadExperimentsIfNeeded(){
-  if (_experimentsLoaded) return;
+  if (_experimentsLoaded && Date.now() - _experimentsLoadedAt < EXPERIMENTS_REFRESH_MS) return;
   _experimentsLoaded = true;
+  _experimentsLoadedAt = Date.now();
   loadExperiments();
 }
 
@@ -3163,7 +3166,7 @@ function renderGoalB(){
     return;
   }
   host.innerHTML = `
-    <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(e.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(e.confidence_evidence_maturity)}</p>
+    <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(e.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(e.confidence_evidence_maturity)} <span class="text-[#BAC9CD] ml-1">Decision state</span> ${decisionChip(e)}</p>
     <p class="mt-2 text-[#BAC9CD]">Registry sample: <span class="font-mono-data text-[#E1E2E7]">${sampleText(e)}</span> · required <span class="font-mono-data text-[#E1E2E7]">${e.required_sample ?? 'not defined'}</span></p>
     ${progressBar(e)}
     <dl>
@@ -3174,6 +3177,28 @@ function renderGoalB(){
       <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
     </dl>
     <p class="text-[10px] text-[#4B5563] mt-2">Status and sample are the registry's own. Holdout outcomes are not shown here.</p>`;
+}
+
+// Decision state comes from the registry API (`decision`, decision-state-v1), never derived here.
+// A proposal is shown as a proposal; production use without a recorded owner decision is flagged.
+var DECISION_TONE = { COLLECTING: 'neutral', READY_FOR_EVALUATION: 'info', BLOCKED: 'bad', EVALUATED_DECISION_PENDING: 'warn',
+  REJECTED: 'bad', IMPLEMENTED_RESEARCH_ONLY: 'info', IMPLEMENTED_PRODUCTION: 'good', PROPOSED: 'neutral', STAGING_ONLY: 'neutral', ON_DEMAND: 'neutral' };
+var REGISTRY_STALE_MS = 30 * 60 * 1000;
+function decisionChip(e){
+  const d = e && e.decision;
+  if (!d || !d.state) return chip('DECISION: NOT REPORTED BY API', 'neutral');
+  return chip(String(d.label || d.state).toUpperCase(), DECISION_TONE[d.state] || 'neutral');
+}
+function decisionDetail(e){
+  const d = e && e.decision;
+  if (!d || !d.state) return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Decision state</dt><dd class="text-[11px] text-[#BAC9CD]">Not reported by the API (the registry predates decision-state-v1). Nothing is inferred here.</dd></div>`;
+  const owner = d.owner_decision;
+  const prop = d.proposal;
+  const prod = d.production_use;
+  return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Decision state</dt><dd class="text-[11px] text-[#BAC9CD]">${decisionChip(e)} ${esc(d.basis || '')}</dd></div>
+    <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Owner decision</dt><dd class="text-[11px] text-[#BAC9CD]">${owner ? `${esc(owner.decision)} · ${owner.decided_ts ? fmtUtc(owner.decided_ts) : 'date not recorded'}${owner.decided_by ? ' · ' + esc(owner.decided_by) : ''}${owner.rationale ? ' — ' + esc(owner.rationale) : ''}${owner.evidence_ref ? ' (' + esc(owner.evidence_ref) + ')' : ''}` : (d.owner_decided ? 'Recorded by registry status.' : 'None recorded — the decision is pending with the owner.')}</dd></div>
+    ${prop ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Proposal (not a decision)</dt><dd class="text-[11px] text-[#BAC9CD]">${chip('PROPOSED: ' + String(prop.proposal || ''), 'warn')} ${esc(prop.basis || '')}${prop.proposed_ts ? ' · ' + fmtUtc(prop.proposed_ts) : ''}${prop.evidence_ref ? ' · evidence: ' + esc(prop.evidence_ref) : ''}</dd></div>` : ''}
+    ${prod ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Used in production</dt><dd class="text-[11px] text-[#BAC9CD]">${chip(prod.decision_recorded ? 'PRODUCTION' : 'PRODUCTION · NO DECISION RECORDED', prod.decision_recorded ? 'info' : 'warn')} ${esc(prod.where || '')}${prod.since ? ' since ' + esc(prod.since) : ''}${prod.note ? '. ' + esc(prod.note) : ''}</dd></div>` : `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Research or production</dt><dd class="text-[11px] text-[#BAC9CD]">${d.state === 'IMPLEMENTED_PRODUCTION' ? 'Production (owner decision).' : 'Research only — no production use reported.'}</dd></div>`}`;
 }
 
 function renderRegistry(){
@@ -3203,13 +3228,14 @@ function renderRegistry(){
             <p class="text-xs font-semibold text-[#E1E2E7]"><span class="font-mono-data text-[#00E0FF]">${esc(e.experiment_id)}</span> ${esc(e.title || '')}${FEATURED[e.experiment_id] ? ` <span class="text-[10px] text-[#DDB7FF] font-semibold">· ${FEATURED[e.experiment_id]}</span>` : ''}</p>
             <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">sample ${sampleText(e)}${typeof e.required_sample === 'number' ? ' · required ' + e.required_sample : ''} · updated ${e.data_last_updated ? fmtUtc(e.data_last_updated) : (e.last_updated ? fmtUtc(e.last_updated) : 'not reported')}</p>
           </div>
-          <div class="flex flex-col items-end gap-1 shrink-0">${statusChipFor(e.status)}${e.confidence_evidence_maturity && e.confidence_evidence_maturity !== e.status ? statusChipFor(e.confidence_evidence_maturity) : ''}</div>
+          <div class="flex flex-col items-end gap-1 shrink-0">${decisionChip(e)}${statusChipFor(e.status)}${e.confidence_evidence_maturity && e.confidence_evidence_maturity !== e.status ? statusChipFor(e.confidence_evidence_maturity) : ''}${e.decision && e.decision.proposal ? chip('PROPOSAL: ' + String(e.decision.proposal.proposal || ''), 'warn') : ''}</div>
         </div>
         ${progressBar(e)}
       </summary>
       <dl class="mt-2 pt-2 border-t border-[#3B494C]">
+        ${decisionDetail(e)}
         ${field('Objective / hypothesis', e.research_question || e.purpose)}
-        ${field('Success criterion (next review)', e.success_criterion)}
+        ${field('Success criterion', e.success_criterion)}
         ${field('Baseline', e.baseline)}
         ${field('Current measured result', e.current_measured_result)}
         ${field('Conclusion', e.conclusion)}
@@ -3222,6 +3248,10 @@ function renderRegistry(){
         ${field('Type', e.experiment_type)}
       </dl>
     </details>`).join('') || '<p class="text-xs text-[#BAC9CD]">No experiments with this status.</p>';
+  const gen = _registry.data.generated_ts;
+  const stale = !gen || Date.now() - gen > REGISTRY_STALE_MS;
+  const model = _registry.data.decision_model;
+  body.insertAdjacentHTML('afterbegin', `<p class="text-[10px] mb-2 ${stale ? 'text-[#FFB020]' : 'text-[#BAC9CD]'}">${stale ? chip('STALE', 'warn') + ' ' : ''}Registry data generated ${fmtUtc(gen)}${gen ? ' (' + ageStr(gen) + ')' : ''} · decision model ${model && model.version ? esc(model.version) : 'not reported by API'}. Decision states are pending until the owner records a decision; a proposal is never shown as approved.</p>`);
   body.insertAdjacentHTML('beforeend', `<p class="text-[10px] text-[#4B5563] mt-3 leading-relaxed">Registry generated ${fmtUtc(_registry.data.generated_ts)}. Entries use the registry's own EXP-NNN identifiers; TimesFM (EXP-004) and Experiment 5 (EXP-011) are identified from their registry titles. The registry does not define "E1–E6" labels, so none are applied here.</p>`);
 }
 

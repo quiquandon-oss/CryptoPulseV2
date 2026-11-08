@@ -36,6 +36,15 @@
   summary::-webkit-details-marker { display: none; }
   details[open] > summary .chev { transform: rotate(180deg); }
   .chev { display: inline-block; transition: transform .15s ease; }
+  @media (max-width: 767px) {
+    #historyRecapCard table thead { display: none; }
+    #historyRecapCard table, #historyRecapCard tbody, #historyRecapCard tr, #historyRecapCard td { display: block; width: 100%; }
+    #historyRecapCard tbody tr { border: 1px solid #3B494C; border-radius: 0.75rem; padding: .35rem .6rem; margin-bottom: .5rem; }
+    #historyRecapCard tbody td { display: flex; justify-content: space-between; gap: .75rem; text-align: right; padding: .25rem 0; white-space: normal; }
+    #historyRecapCard tbody td::before { content: attr(data-label); color: #BAC9CD; text-align: left; font-family: Inter, sans-serif; }
+    .mobile-scroll-hint { display: block; }
+  }
+  @media (min-width: 768px) { .mobile-scroll-hint { display: none; } }
 </style>
 </head>
 <body class="bg-[#0B0E11] text-[#E1E2E7] min-h-screen pb-24 md:pb-8">
@@ -51,7 +60,7 @@
            -- it has real independent value (force-refresh the current
            view's data), it's just no longer visually grouped with a
            status readout that no longer exists. -->
-      <button id="refreshBtn" title="Refresh: fetch fresh price/technical data and re-run the prediction now" class="bg-[#191C1F] border border-[#3B494C] rounded-xl p-2.5 text-[#BAC9CD] hover:text-[#00E0FF] hover:border-[#00E0FF]/40 transition-colors shadow-sm">
+      <button id="refreshBtn" aria-label="Refresh data and rerun the prediction" title="Refresh: fetch fresh price/technical data and re-run the prediction now" class="bg-[#191C1F] border border-[#3B494C] rounded-xl p-2.5 text-[#BAC9CD] hover:text-[#00E0FF] hover:border-[#00E0FF]/40 transition-colors shadow-sm">
         <svg id="refreshIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>
       </button>
     </div>
@@ -107,6 +116,8 @@
         </div>
         <p id="predVariantLabel" class="hidden text-[11px] text-[#00E0FF] font-semibold mb-2"></p>
         <div id="predSignalFooter" class="mt-3"></div>
+        <div id="predNoteCallout" class="hidden mt-3 rounded-lg border border-[#FFB020]/40 bg-[#FFB020]/5 px-3 py-2 text-[11px] text-[#FFB020] leading-relaxed"><span class="material-symbols-outlined text-[15px] mr-1" aria-hidden="true">warning</span><span class="font-semibold">Reliability caution:</span> <span id="predNote"></span></div>
+        <p class="text-[11px] text-[#BAC9CD] mt-3">This is the model's current read, not its track record — see <button type="button" class="text-[#00E0FF] underline" onclick="document.getElementById('evidenceCard').scrollIntoView({behavior:'smooth', block:'start'})">Evidence</button> for how its past calls actually scored.</p>
         <div class="mt-4 pt-3 border-t border-[#3B494C]">
           <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-1">Similar days' returns <span class="normal-case tracking-normal font-normal">(middle 50%: 25th–75th percentile)</span></p>
           <p id="predDetail" class="text-xs text-[#E1E2E7] font-mono-data"></p>
@@ -117,7 +128,6 @@
             <span>Why this forecast — most similar historical days</span><span class="chev text-[#00E0FF]" aria-hidden="true">▾</span>
           </summary>
           <div id="predAnalogs" class="text-xs text-[#BAC9CD] space-y-1.5 mb-3 mt-3"></div>
-          <p id="predNote" class="text-[11px] text-[#00E0FF]/80 italic"></p>
         </details>
       </section>
 
@@ -128,6 +138,16 @@
       </section>
 
       <div class="md:col-span-2 flex flex-col gap-4">
+        <section id="evidenceCard" aria-labelledby="evidenceTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 id="evidenceTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">Evidence</h2>
+            <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'evidenceNote')" aria-controls="evidenceNote">ⓘ Info</button>
+          </div>
+          <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="evidenceNote">Resolved predictions only — every logged call for this coin/horizon whose horizon has passed. Accuracy is the share of correct direction calls; Brier score measures probability quality (lower is better) and is compared with the best constant guess. 50 resolved predictions is the backend's minimum before a variant is even considered for model selection; below that the sample is marked insufficient. Past resolved accuracy is not a guarantee of future accuracy, and no figure here is a test of statistical significance.</p>
+          <div id="evidenceBody" class="text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
+          <p id="calibNote" class="text-[10px] text-[#BAC9CD] mt-3 pt-3 border-t border-[#3B494C] leading-relaxed"></p>
+          <button type="button" onclick="activeView='lab'; history.replaceState(null,'','#lab'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
+        </section>
         <section id="dqCard" aria-labelledby="dqTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
           <div class="flex items-center justify-between gap-2 mb-2">
             <h2 id="dqTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#BAC9CD] font-bold">Data quality</h2>
@@ -137,16 +157,6 @@
           <div id="dqBody" class="space-y-2 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
         </section>
 
-        <section id="evidenceCard" aria-labelledby="evidenceTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <h2 id="evidenceTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#BAC9CD] font-bold">Evidence</h2>
-            <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'evidenceNote')" aria-controls="evidenceNote">ⓘ Info</button>
-          </div>
-          <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="evidenceNote">Resolved predictions only — every logged call for this coin/horizon whose horizon has passed. Accuracy is the share of correct direction calls; Brier score measures probability quality (lower is better) and is compared with the best constant guess. 50 resolved predictions is the backend's minimum before a variant is even considered for model selection; below that the sample is marked insufficient. Past resolved accuracy is not a guarantee of future accuracy, and no figure here is a test of statistical significance.</p>
-          <div id="evidenceBody" class="text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
-          <p id="calibNote" class="text-[10px] text-[#BAC9CD] mt-3 pt-3 border-t border-[#3B494C] leading-relaxed"></p>
-          <button type="button" onclick="activeView='lab'; history.replaceState(null,'','#lab'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
-        </section>
       </div>
     </div>
 
@@ -179,7 +189,7 @@
       </summary>
       <p class="text-[11px] text-[#BAC9CD] mt-3 mb-2 leading-relaxed">Newest 10 calls. "Deviation" = realized return minus the median move the model expected. Times are UTC.</p>
       <div class="overflow-x-auto mt-2">
-        <table class="w-full text-xs">
+        <table class="w-full min-w-[560px] text-xs">
           <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
             <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
             <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
@@ -202,10 +212,11 @@
         <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
       </summary>
       <p class="text-[11px] text-[#BAC9CD] mt-3 mb-2 leading-relaxed">Manually triggered walk-forward backtests, not part of the live cron. Small samples for anything but technical_score — directional only.</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs">
+      <div class="overflow-x-auto relative">
+        <p class="mobile-scroll-hint text-[10px] text-[#BAC9CD] text-right">scroll →</p>
+        <table class="w-full min-w-[560px] text-xs">
           <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
-            <th scope="col" class="text-left font-medium px-2 py-2">Test</th>
+            <th scope="col" class="text-left font-medium px-2 py-2 sticky left-0 bg-[#191C1F]">Test</th>
             <th scope="col" class="text-right font-medium px-2 py-2">n</th>
             <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
             <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
@@ -239,6 +250,7 @@
         <li>Variants started at different times and need different minimum histories, so they are <span class="text-[#E1E2E7]">not measured on the same sample or period</span>.</li>
         <li>A higher accuracy bar is not a statistically conclusive ranking. Only the selection gate (Selected Model) applies a significance bar, and falling back to Original k-NN is the normal outcome when nothing clears it.</li>
       </ul>
+      <details class="mt-2 text-xs text-[#BAC9CD]"><summary class="cursor-pointer text-[#00E0FF]">Terms</summary><ul class="list-disc pl-4 mt-1 space-y-0.5"><li><b>Challenger:</b> a separate model logged alongside k-NN for comparison.</li><li><b>Flat:</b> Challenger's unadjusted read; on anomaly days it uses trend persistence, otherwise k-NN p_up.</li><li><b>Tilted:</b> the flat read additionally nudged by a fresh mapped Foufi driver on anomaly days.</li><li><b>Regime anomaly:</b> the backend's tripwire for days whose setup is unusual versus history — the conditions in which the k-NN has been empirically weakest; on those days Challenger switches to trend-persistence mode.</li><li><b>Trend-persistence mode:</b> a simple trend continuation read used on anomaly days.</li><li><b>Calibrated model:</b> a probability adjustment built from that model's own resolved history using decile bucket recalibration, rebuilt daily.</li><li><b>Local edge:</b> How often a variant was right, above a 50% coin flip, at historical moments that looked like today when it made the same directional call (shown as the LCA / selection score).</li><li><b>Significance threshold:</b> The bar a variant's local edge must clear before it is selected; it gets stricter the more variants are compared (shown as Corrected Threshold). If nothing clears it, the system falls back to Original k-NN.</li></ul></details>
     </section>
     <!-- ---- Challenger — a real, stable, currently-deployed model, NOT
          an undecided experiment. Deliberately kept visually distinct from
@@ -276,7 +288,7 @@
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger vs. every other model — <span id="labCompareCoinLabel"></span></p>
         <div class="flex items-center gap-2">
           <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCompareNote')">ⓘ Info</button>
-          <button id="labCompareFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+          <button id="labCompareFullscreenBtn" aria-label="Toggle full-screen chart" title="Full screen chart" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
           </button>
         </div>
@@ -297,7 +309,7 @@
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">All models, same graph — <span id="labCombinedHistoryCoinLabel"></span></p>
         <div class="flex items-center gap-2">
           <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCombinedHistoryNote')">ⓘ Info</button>
-          <button id="labCombinedHistoryFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+          <button id="labCombinedHistoryFullscreenBtn" aria-label="Toggle full-screen chart" title="Full screen chart" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
           </button>
         </div>
@@ -324,7 +336,7 @@
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Health & Recent Trend — is it actually improving?</p>
         <div class="flex items-center gap-2">
           <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labModelHealthNote')">ⓘ Info</button>
-          <button id="labModelHealthFullscreenBtn" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors" title="Full screen">
+          <button id="labModelHealthFullscreenBtn" aria-label="Toggle full-screen chart" title="Full screen chart" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
           </button>
         </div>
@@ -337,7 +349,7 @@
     <!-- Pre-existing Lab presentation experiments (which accuracy formula,
          which hero label), unchanged in content. Undecided UI design
          choices, not model results, so they sit collapsed at the end. -->
-    <details id="labDesignExperiments" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+    <details id="labDesignExperiments" class="hidden rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <summary class="flex items-center justify-between cursor-pointer select-none">
         <span class="text-sm font-semibold">UI design experiments <span class="text-[#BAC9CD] font-normal text-xs">(undecided presentation choices, not model results)</span></span>
         <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
@@ -506,7 +518,7 @@
           <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Analyst Relay</p>
           <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
         </div>
-        <p class="text-[10px] text-[#4B5563] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
+        <p class="text-[10px] text-[#8A9599] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
         <div id="relayContent"><button class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold text-[#E1E2E7]" onclick="loadAnalystRelayPrompt()">Check for a candidate</button></div>
       </section>
 
@@ -580,12 +592,13 @@
     </section>
 
     <section aria-labelledby="historyBacktestTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <h2 id="historyBacktestTitle" class="text-sm font-semibold mb-1">Offline backtest runs</h2>
+      <p class="text-[10px] uppercase tracking-wide text-[#00E0FF] font-bold mb-1">Offline research — not live predictions</p><h2 id="historyBacktestTitle" class="text-sm font-semibold mb-1">Offline backtest runs</h2>
       <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every manually triggered backtest run logged by the backend (technical_score alone over years of price data; regime_mag/sentiment alone over the shorter own history; or all combined). Not part of the live cron; small samples outside technical_score are directional only.</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs">
+      <div class="overflow-x-auto relative">
+        <p class="mobile-scroll-hint text-[10px] text-[#BAC9CD] text-right">scroll →</p>
+        <table class="w-full min-w-[620px] text-xs">
           <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
-            <th scope="col" class="text-left font-medium px-2 py-2">Run (UTC)</th>
+            <th scope="col" class="text-left font-medium px-2 py-2 sticky left-0 bg-[#191C1F]">Run (UTC)</th>
             <th scope="col" class="text-left font-medium px-2 py-2">Test</th>
             <th scope="col" class="text-right font-medium px-2 py-2">n</th>
             <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
@@ -617,8 +630,8 @@
     <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are under Experiments → Learning loop &amp; model selection. Challenger's own recent calls are in the Lab.</p>
   </div>
 
-  <footer class="mt-10 text-[11px] text-[#4B5563]">
-    Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" class="underline hover:text-[#BAC9CD]">PulseWorkerV2</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" class="underline hover:text-[#BAC9CD]">CryptoPulse</a>
+  <footer class="mt-10 text-[11px] text-[#8A9599]">
+    Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">PulseWorkerV2 ↗</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">CryptoPulse ↗</a>
   </footer>
 
 </div>
@@ -874,7 +887,8 @@ async function loadPrediction(){
         return `<div class="flex justify-between items-center py-1 px-2 rounded-lg bg-[#0B0E11] font-mono-data text-xs"><span>${a.date}</span><span class="px-2 py-0.5 rounded-md ${badgeClass}">${a.return_pct > 0 ? '+' : ''}${a.return_pct}%</span></div>`;
       }).join('');
 
-    document.getElementById('predNote').textContent = d.note;
+    document.getElementById('predNote').textContent = d.note || '';
+    document.getElementById('predNoteCallout').classList.toggle('hidden', !d.note);
 
     // Calibration block also switches to whichever variant is headlined --
     // showing the original model's 48%-accuracy-fails-to-beat-baseline
@@ -1035,7 +1049,7 @@ function renderEvidence(e){
   let brierLine = '<span class="text-[#BAC9CD]">Brier score not reported.</span>';
   if(e.brier != null && e.baseline != null){
     const beats = typeof e.beats === 'boolean' ? e.beats : Number(e.brier) < Number(e.baseline);
-    brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better)</span> vs best constant guess <span class="font-mono-data">${Number(e.baseline).toFixed(3)}</span> — ${beats ? chip('BEATS BASELINE','good') : chip('DOES NOT BEAT BASELINE','bad')}
+    brierLine = `Model Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">vs best constant guess</span> <span class="font-mono-data">${Number(e.baseline).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better)</span> — ${beats ? chip('BEATS BASELINE','good') : chip('DOES NOT BEAT BASELINE','bad')}
       <span class="block text-[10px] text-[#BAC9CD] mt-1">Constant guess = the better of always 50% (0.250) and always the realized up-rate of these same ${e.nResolved} calls. That up-rate is only known in hindsight. Beating it is a minimum bar, not proof of skill.</span>`;
   } else if(e.brier != null){
     brierLine = `Brier <span class="font-mono-data text-[#E1E2E7]">${Number(e.brier).toFixed(3)}</span> <span class="text-[#BAC9CD]">(lower is better; no baseline reported)</span>`;
@@ -1183,7 +1197,7 @@ function recapRowHtml(p, withTarget){
   let realityCell, deviationCell;
   if(!resolved){
     const hoursLeft = p.target_ts != null ? Math.max(0, Math.round((p.target_ts - Date.now()) / (60*60*1000))) : null;
-    realityCell = `<span class="text-[#BAC9CD]">Pending${hoursLeft != null ? ` (~${hoursLeft}h)` : ''}</span>`;
+    realityCell = `<span class="text-[#BAC9CD]">pending${hoursLeft != null ? ` (~${hoursLeft}h)` : ''}</span>`;
     deviationCell = `<span class="text-[#BAC9CD]">—</span>`;
   }else if(p.realized_return == null){
     realityCell = `<span class="text-[#BAC9CD]">${p.realized_up === 1 ? 'up' : 'down'} <span aria-label="${callCorrect(p) ? 'correct' : 'wrong'}">${callCorrect(p) ? '✓' : '✗'}</span> (return not reported)</span>`;
@@ -1202,11 +1216,11 @@ function recapRowHtml(p, withTarget){
     }
   }
   return `<tr class="border-b border-[#3B494C]/50 font-mono-data">
-    <td class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(p.ts)}</td>
-    ${withTarget ? `<td class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(p.target_ts)}</td>` : ''}
-    <td class="px-2 py-2 text-right whitespace-nowrap">${predictedCell}</td>
-    <td class="px-2 py-2 text-right whitespace-nowrap">${realityCell}</td>
-    <td class="px-2 py-2 text-right whitespace-nowrap">${deviationCell}</td>
+    <td data-label="Made (UTC)" class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(p.ts)}</td>
+    ${withTarget ? `<td data-label="Target (UTC)" class="px-2 py-2 text-[#BAC9CD] whitespace-nowrap">${fmtUtc(p.target_ts)}</td>` : ''}
+    <td data-label="Predicted" class="px-2 py-2 text-right whitespace-nowrap">${predictedCell}</td>
+    <td data-label="Reality" class="px-2 py-2 text-right whitespace-nowrap">${realityCell}</td>
+    <td data-label="Deviation" class="px-2 py-2 text-right whitespace-nowrap">${deviationCell}</td>
   </tr>`;
 }
 
@@ -1391,8 +1405,8 @@ function renderDataQuality(){
       : gaps.length
       ? `${chip(gaps.length + ' of ' + total + ' with gaps','warn')} <span class="font-mono-data text-[10px]">${esc(gaps.join(' · '))}</span>`
       : `${chip(total + ' of ' + total + ' on schedule','good')}`}</p>`);
-    rows.push(`<p class="text-[10px] ${reportOutdated ? 'text-[#FFB020]' : 'text-[#4B5563]'}">Monitor generated ${fmtUtc(fr.generated_ts)}${reportOutdated ? ' — report outdated, use refresh' : ''}</p>`);
-    rows.push(`<p class="text-[10px] text-[#4B5563] leading-relaxed">FRESH = newest logged row under 6 h old (backend rule). Write counts show the scheduled job saved its rows. They do not validate the market data behind them, and price-feed gaps are not reported.</p>`);
+    rows.push(`<p class="text-[10px] ${reportOutdated ? 'text-[#FFB020]' : 'text-[#8A9599]'}">Monitor generated ${fmtUtc(fr.generated_ts)}${reportOutdated ? ' — report outdated, use refresh' : ''}</p>`);
+    rows.push(`<p class="text-[10px] text-[#8A9599] leading-relaxed">FRESH = newest logged row under 6 h old (backend rule). Write counts show the scheduled job saved its rows. They do not validate the market data behind them, and price-feed gaps are not reported.</p>`);
   }
   // 2) Outcomes: resolved vs pending, from the predictions loaded for the chart.
   if(chartRaw.loadedFor === coin + '-' + h && !chartRaw.error){
@@ -1417,6 +1431,8 @@ const NAV = [
 ];
 let activeView = (location.hash || '').replace('#', '') || 'dashboard';
 // Old #learning links land on Experiments with the learning block open.
+document.getElementById('labDesignExperiments').classList.toggle('hidden', new URLSearchParams(location.search).get('dev') !== '1');
+
 let _openLearningOnLoad = false;
 if (activeView === 'learning') { activeView = 'experiments'; _openLearningOnLoad = true; }
 if (!NAV.some(n => n.key === activeView)) activeView = 'dashboard';
@@ -1682,12 +1698,13 @@ async function loadChallengerLive(){
         <div>
           <p class="text-[10px] uppercase text-[#BAC9CD]">Tilted</p>
           <p class="text-2xl font-bold font-mono-data text-[#00E0FF]">${pctTilted}%</p>
+          <p class="text-[10px] text-[#BAC9CD]">Flat is the unadjusted read; Tilted also applies the mapped Foufi driver lean, only on regime-anomaly days and only when a fresh driver is available.</p>
         </div>
       </div>
       <p class="text-xs text-[#BAC9CD] mt-3 font-mono-data">Trailing ${p.horizon_hours}h return: ${trailingStr}</p>
       ${driverLine}
       ${renderTrendBar(p.trend_strength)}
-      <p class="text-[10px] text-[#4B5563] mt-2">As of ${fmtUtc(p.ts)}</p>
+      <p class="text-[10px] text-[#8A9599] mt-2">As of ${fmtUtc(p.ts)}</p>
     `;
   }catch(e){
     host.innerHTML = '<p class="text-xs text-[#FFB4AB]">Could not load — '+e.message+'</p>';
@@ -1954,7 +1971,7 @@ async function loadLabCompareChart(){
         options: {
           responsive: true, maintainAspectRatio: false,
           scales: {
-            x: { ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 9 } }, grid: { display: false } },
+            x: { ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 8 }, maxRotation: 55, minRotation: 0, autoSkip: true }, grid: { display: false } },
             y: { min: 0, max: 100, ticks: { color: '#BAC9CD', font: { family: 'monospace', size: 10 }, callback: v => v+'%' }, grid: { color: 'rgba(59,73,76,0.4)' } },
           },
           plugins: {
@@ -2320,7 +2337,7 @@ async function loadLabModelHealth(){
       if(r.knnCalibrated){
         const t = trendArrow(r.knnCalibrated.recentAcc, r.knnCalibrated.priorAcc);
         rows.push(`<tr>
-          <td class="py-1 pr-2 text-[#7DD3FC] font-semibold">↳ Calibrated</td>
+          <td class="py-1 pr-2 text-[#7DD3FC] font-semibold">↳ k-NN Calibrated</td>
           <td class="py-1 pr-2 tnum">${r.knnCalibrated.overallAcc.toFixed(1)}% (n=${r.knnCalibrated.overallN})</td>
           <td class="py-1 pr-2 tnum">${r.knnCalibrated.recentAcc.toFixed(1)}% (n=${r.knnCalibrated.recentN})</td>
           <td class="py-1 pr-2 tnum">${r.knnCalibrated.priorAcc!=null?r.knnCalibrated.priorAcc.toFixed(1)+'%':'—'}</td>
@@ -2340,7 +2357,7 @@ async function loadLabModelHealth(){
       if(r.challengerCalibrated){
         const t = trendArrow(r.challengerCalibrated.recentAcc, r.challengerCalibrated.priorAcc);
         rows.push(`<tr>
-          <td class="py-1 pr-2 text-[#C4B5FD] font-semibold">↳ Calibrated</td>
+          <td class="py-1 pr-2 text-[#C4B5FD] font-semibold">↳ Challenger Calibrated</td>
           <td class="py-1 pr-2 tnum">${r.challengerCalibrated.overallAcc.toFixed(1)}% (n=${r.challengerCalibrated.overallN})</td>
           <td class="py-1 pr-2 tnum">${r.challengerCalibrated.recentAcc.toFixed(1)}% (n=${r.challengerCalibrated.recentN})</td>
           <td class="py-1 pr-2 tnum">${r.challengerCalibrated.priorAcc!=null?r.challengerCalibrated.priorAcc.toFixed(1)+'%':'—'}</td>
@@ -2362,6 +2379,7 @@ async function loadLabModelHealth(){
           </tr></thead>
           <tbody>${rows.join('')}</tbody>
         </table>
+        <p class="text-[10px] text-[#BAC9CD] mt-1">Trend: ↑ recent accuracy is more than 3 points above prior; ↓ more than 3 points below; → within 3 points; — prior unavailable.</p>
       </div>`;
     }).join('');
   }catch(e){
@@ -2483,9 +2501,9 @@ const STATUS_COLORS = {
 };
 function statusChip(label, status, text, ts, tooltip){
   const c = STATUS_COLORS[status] || STATUS_COLORS.Unknown;
-  const tsHtml = ts ? `<p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${fmtUtc(ts)}</p>` : '';
+  const tsHtml = ts ? `<p class="text-[9px] text-[#8A9599] mt-1 font-mono-data">${fmtUtc(ts)}</p>` : '';
   return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5"${tooltip ? ` title="${String(tooltip).replace(/"/g,'&quot;')}"` : ''}>
-    <p class="text-[9px] text-[#4B5563] uppercase tracking-wide mb-1">${label}</p>
+    <p class="text-[9px] text-[#8A9599] uppercase tracking-wide mb-1">${label}</p>
     <div class="flex items-center gap-1.5 mb-1">
       <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${c.dot}"></span>
       <span class="text-[10px] font-semibold" style="color:${c.text}">${status}</span>
@@ -2629,7 +2647,7 @@ function renderLearningLoop(daily, chatgpt){
     <div class="flex-1 flex flex-col md:flex-row items-stretch gap-1.5">
       <div class="w-full bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
         <div class="flex items-center justify-between gap-1 mb-1">
-          <span class="text-[9px] font-mono-data text-[#4B5563]">${i+1}</span>
+          <span class="text-[9px] font-mono-data text-[#8A9599]">${i+1}</span>
           ${wiredBadge(s.wired)}
         </div>
         <p class="text-[11px] font-semibold text-[#E1E2E7]">${s.label}</p>
@@ -2643,8 +2661,8 @@ function renderLearningLoop(daily, chatgpt){
 // ---- Section 3: KPI snapshot ----
 function kpiCard(label, value, sub){
   return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
-    <p class="text-[9px] text-[#4B5563] uppercase tracking-wide mb-1">${label}</p>
-    <p class="text-lg font-bold font-mono-data ${value === '—' ? 'text-[#4B5563]' : 'text-[#E1E2E7]'}">${value}</p>
+    <p class="text-[9px] text-[#8A9599] uppercase tracking-wide mb-1">${label}</p>
+    <p class="text-lg font-bold font-mono-data ${value === '—' ? 'text-[#8A9599]' : 'text-[#E1E2E7]'}">${value}</p>
     ${sub ? `<p class="text-[9px] text-[#BAC9CD] mt-0.5">${sub}</p>` : ''}
   </div>`;
 }
@@ -2694,7 +2712,7 @@ function renderCurrentSelection(selection, history){
   const scoresHtml = (s.scores || []).length ? `
     <div class="mt-3 overflow-x-auto">
       <table class="w-full text-[11px]">
-        <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
+        <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
         <tbody>${s.scores.map(sc => `<tr class="border-t border-[#3B494C]/50">
           <td class="py-1 pr-3 font-semibold ${sc.variant === s.chosen_variant ? 'text-[#00E0FF]' : 'text-[#E1E2E7]'}">${SELECTION_VARIANT_LABELS[sc.variant] || sc.variant}${sc.variant === s.chosen_variant ? ' <span class="text-[8px] px-1 py-0.5 rounded bg-[#00E0FF]/10 border border-[#00E0FF]/30">SELECTED</span>' : ''}</td>
           <td class="py-1 pr-3 font-mono-data">${(sc.p_up*100).toFixed(1)}%</td>
@@ -2714,28 +2732,28 @@ function renderCurrentSelection(selection, history){
         <summary class="text-[11px] text-[#00E0FF] cursor-pointer select-none">Matched neighborhood (k=${s.k_sel || '—'}, z-score normalized Euclidean distance)</summary>
         <div class="mt-2 max-h-40 overflow-y-auto">
           <table class="w-full text-[10px]">
-            <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">#</th><th class="pb-1 pr-3">Timestamp</th><th class="pb-1">Distance</th></tr></thead>
+            <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">#</th><th class="pb-1 pr-3">Timestamp</th><th class="pb-1">Distance</th></tr></thead>
             <tbody>${neighbors.map((n,i) => `<tr class="border-t border-[#3B494C]/50"><td class="py-1 pr-3 font-mono-data">${i+1}</td><td class="py-1 pr-3 font-mono-data">${fmtUtc(n.ts)}</td><td class="py-1 font-mono-data">${n.dist}</td></tr>`).join('')}</tbody>
           </table>
         </div>
-        <details class="mt-2"><summary class="text-[10px] text-[#4B5563] cursor-pointer select-none">Raw JSON</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(neighbors, null, 2)}</pre></details>
+        <details class="mt-2"><summary class="text-[10px] text-[#8A9599] cursor-pointer select-none">Raw JSON</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(neighbors, null, 2)}</pre></details>
       </details>`;
     }
   }
 
   el.innerHTML = `
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Asset</p><p class="text-sm font-bold">${s.coin || currentCoin}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Selected Variant</p><p class="text-sm font-bold text-[#00E0FF]">${SELECTION_VARIANT_LABELS[s.chosen_variant] || s.chosen_variant}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Gate</p><p class="text-sm">${gateHtml}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Selection Score</p><p class="text-sm font-mono-data">${bestLca != null ? (bestLca*100).toFixed(1)+'%' : '—'}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Corrected Threshold</p><p class="text-sm font-mono-data">${correctedAlpha != null ? '+' + (correctedAlpha*100).toFixed(1) + 'pts' : '—'}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Comparison Count</p><p class="text-sm font-mono-data">${s.comparison_count ?? '—'}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">Eligible Variants</p><p class="text-sm font-mono-data">${(s.scores || []).length}</p></div>
-      <div><p class="text-[9px] text-[#4B5563] uppercase">k (neighborhood)</p><p class="text-sm font-mono-data">${s.k_sel ?? '—'}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Asset</p><p class="text-sm font-bold">${s.coin || currentCoin}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Selected Variant</p><p class="text-sm font-bold text-[#00E0FF]">${SELECTION_VARIANT_LABELS[s.chosen_variant] || s.chosen_variant}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Gate</p><p class="text-sm">${gateHtml}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Selection Score</p><p class="text-sm font-mono-data">${bestLca != null ? (bestLca*100).toFixed(1)+'%' : '—'}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Corrected Threshold</p><p class="text-sm font-mono-data">${correctedAlpha != null ? '+' + (correctedAlpha*100).toFixed(1) + 'pts' : '—'}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Comparison Count</p><p class="text-sm font-mono-data">${s.comparison_count ?? '—'}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">Eligible Variants</p><p class="text-sm font-mono-data">${(s.scores || []).length}</p></div>
+      <div><p class="text-[9px] text-[#8A9599] uppercase">k (neighborhood)</p><p class="text-sm font-mono-data">${s.k_sel ?? '—'}</p></div>
     </div>
     <div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5 mb-2">
-      <p class="text-[9px] text-[#4B5563] uppercase mb-1">Decision Reason</p>
+      <p class="text-[9px] text-[#8A9599] uppercase mb-1">Decision Reason</p>
       <p class="text-xs text-[#BAC9CD] leading-relaxed">${s.reason || '—'}</p>
     </div>
     ${scoresHtml}
@@ -2758,7 +2776,7 @@ function renderLearningEvents(history){
   el.innerHTML = decisions.map(d => `
     <div class="border-b border-[#3B494C]/50 last:border-0 py-2">
       <div class="flex items-center justify-between gap-2">
-        <p class="text-[10px] font-mono-data text-[#4B5563]">${fmtUtc(d.ts)}</p>
+        <p class="text-[10px] font-mono-data text-[#8A9599]">${fmtUtc(d.ts)}</p>
         <span class="text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${d.cleared_gate ? 'bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20' : 'bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]'}">${d.cleared_gate ? 'gate cleared' : 'gate not cleared'}</span>
       </div>
       <p class="text-xs font-semibold mt-0.5">Selection decision — <span class="text-[#00E0FF]">${SELECTION_VARIANT_LABELS[d.chosen_variant] || d.chosen_variant}</span></p>
@@ -2776,15 +2794,15 @@ function renderExperiments(daily){
   }
   const exps = daily.data.candidate_experiments || [];
   if (!exps.length){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate experiments identified yet. Full lifecycle tracking (EXP-NNN, stages, backtest/OOS results) lives in <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning" target="_blank" rel="noopener" class="text-[#00E0FF] underline">PulseWorkerV2's /learning/ directory</a> once something exists there — not yet exposed as an API.</p>`;
+    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate experiments identified yet. Full lifecycle tracking (EXP-NNN, stages, backtest/OOS results) lives in <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning" target="_blank" rel="noopener noreferrer" class="text-[#00E0FF] underline">PulseWorkerV2's /learning/ directory ↗</a> once something exists there — not yet exposed as an API.</p>`;
     return;
   }
   el.innerHTML = `<div class="space-y-2">${exps.map(e => `
     <div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
       <p class="text-xs font-semibold text-[#E1E2E7]">${e.observation || e.hypothesis || 'Candidate experiment'}</p>
-      ${e.hypothesis ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#4B5563]">Hypothesis:</span> ${e.hypothesis}</p>` : ''}
-      ${e.suggested_experiment ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#4B5563]">Suggested:</span> ${e.suggested_experiment}</p>` : ''}
-      <details class="mt-1"><summary class="text-[9px] text-[#4B5563] cursor-pointer">Raw</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(e, null, 2)}</pre></details>
+      ${e.hypothesis ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#8A9599]">Hypothesis:</span> ${e.hypothesis}</p>` : ''}
+      ${e.suggested_experiment ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#8A9599]">Suggested:</span> ${e.suggested_experiment}</p>` : ''}
+      <details class="mt-1"><summary class="text-[9px] text-[#8A9599] cursor-pointer">Raw</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(e, null, 2)}</pre></details>
     </div>`).join('')}</div>`;
 }
 
@@ -2819,17 +2837,17 @@ async function loadAnalystRelayPrompt(){
     <p class="text-[11px] text-[#BAC9CD] mb-2">Candidate: <span class="font-semibold text-[#E1E2E7]">${data.assets.join(', ')}</span></p>
 
     <p class="text-[9px] uppercase tracking-wide text-[#00E0A0] font-semibold mb-1">Factual Data</p>
-    <p class="text-[9px] text-[#4B5563] mb-1.5">Real observations only — the same evidence Gemini receives, before any interpretation.</p>
+    <p class="text-[9px] text-[#8A9599] mb-1.5">Real observations only — the same evidence Gemini receives, before any interpretation.</p>
     <pre id="relayFactualSummary" class="w-full bg-[#0B0E11] border border-[#00E0A0]/30 rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-3 whitespace-pre-wrap"></pre>
 
-    <p class="text-[9px] uppercase tracking-wide text-[#4B5563] font-semibold mb-1">Prompt to relay</p>
+    <p class="text-[9px] uppercase tracking-wide text-[#8A9599] font-semibold mb-1">Prompt to relay</p>
     <textarea id="relayPromptText" readonly class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-2" onclick="this.select()"></textarea>
     <button id="relayCopyBtn" class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold mb-3 text-[#E1E2E7]">Copy Prompt</button>
-    <p class="text-[10px] text-[#4B5563] mb-2">Paste the Gemini app's response below:</p>
+    <p class="text-[10px] text-[#8A9599] mb-2">Paste the Gemini app's response below:</p>
     <textarea id="relayResponseInput" placeholder="Paste Gemini's response here…" class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7] mb-2"></textarea>
     <button id="relaySubmitBtn" class="w-full bg-[#00E0FF] text-[#0B0E11] rounded-xl py-2 text-xs font-bold">Submit</button>
     <div id="relayResult" class="mt-2"></div>
-    <p class="text-[9px] text-[#4B5563] mt-2 font-mono-data">context ${(data.contextHash || '').slice(0, 12)}…</p>
+    <p class="text-[9px] text-[#8A9599] mt-2 font-mono-data">context ${(data.contextHash || '').slice(0, 12)}…</p>
   `;
   // Set via textContent, not template-string interpolation, so a prompt
   // containing backticks/${...}-looking text can never break out of the
@@ -2877,8 +2895,8 @@ async function submitAnalystRelay(){
     }
     const statusColor = data.validationStatus === 'ok' ? '#00E0A0' : (data.validationStatus === 'no_catalyst_found' ? '#BAC9CD' : '#FFB020');
     resultEl.innerHTML = `<p class="text-[10px]" style="color:${statusColor}">Status: ${data.validationStatus} — ${data.catalystsWritten} catalyst(s) written.</p>
-      <p class="text-[9px] text-[#4B5563] mt-1 font-mono-data">${data.relayId}</p>
-      <p class="text-[9px] text-[#4B5563] mt-0.5">Reported findings, not verified fact — grounding on a relayed response can't be independently confirmed the way a real API response can.</p>`;
+      <p class="text-[9px] text-[#8A9599] mt-1 font-mono-data">${data.relayId}</p>
+      <p class="text-[9px] text-[#8A9599] mt-0.5">Reported findings, not verified fact — grounding on a relayed response can't be independently confirmed the way a real API response can.</p>`;
     if (data.validationStatus === 'ok' || data.validationStatus === 'no_catalyst_found'){
       textarea.value = '';
       setTimeout(loadAnalystRelayPrompt, 2500); // move on to the next candidate, if any
@@ -2895,7 +2913,7 @@ function roleCard(icon, name, question, bodyHtml){
       <span class="material-symbols-outlined text-[16px] text-[#00E0FF]">${icon}</span>
       <p class="text-xs font-bold">${name}</p>
     </div>
-    <p class="text-[10px] text-[#4B5563] italic mb-2">"${question}"</p>
+    <p class="text-[10px] text-[#8A9599] italic mb-2">"${question}"</p>
     ${bodyHtml}
   </div>`;
 }
@@ -2905,14 +2923,14 @@ function renderAiResponsibilities(daily, chatgpt){
 
   const chatgptBody = (chatgpt && chatgpt.ok)
     ? `<p class="text-[11px] text-[#BAC9CD]">Audit-ready data package generated ${fmtUtc(chatgpt.data.generated_at)}, status <span class="font-semibold">${chatgpt.data.status}</span>.</p>
-       <p class="text-[10px] text-[#4B5563] mt-1">This is data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced — no API exposes ChatGPT's actual assessment.</p>`
+       <p class="text-[10px] text-[#8A9599] mt-1">This is data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced — no API exposes ChatGPT's actual assessment.</p>`
     : `<p class="text-[11px] text-[#BAC9CD]">Independent audit, challenges conclusions.</p>
        <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable — GET /api/learning/chatgpt did not respond</span></p>`;
 
   const claudeBody = (daily && daily.ok)
     ? (() => { const n = (daily.data.candidate_experiments || []).length;
         return `<p class="text-[11px] text-[#BAC9CD]">${n > 0 ? n + ' candidate experiment(s) awaiting implementation.' : 'No active experiment implementation right now.'}</p>
-        <p class="text-[10px] text-[#4B5563] mt-1">See <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning/claude_tasks" target="_blank" rel="noopener" class="text-[#00E0FF] underline">claude_tasks/</a> for anything in progress.</p>`; })()
+        <p class="text-[10px] text-[#8A9599] mt-1">See <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning/claude_tasks" target="_blank" rel="noopener noreferrer" class="text-[#00E0FF] underline">claude_tasks/ ↗</a> for anything in progress.</p>`; })()
     : `<p class="text-[11px] text-[#BAC9CD]">Engineering implementation, experiment creation.</p>
        <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable</span></p>`;
 
@@ -2951,7 +2969,7 @@ function renderRegimePerformance(daily){
       <p class="text-[11px] font-semibold text-[#E1E2E7] mb-1">${asset}</p>
       <div class="overflow-x-auto">
         <table class="w-full text-[10px]">
-          <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Regime</th><th class="pb-1 pr-3">n</th><th class="pb-1 pr-3">Accuracy</th><th class="pb-1 pr-3">Brier</th><th class="pb-1">Calibration Err</th></tr></thead>
+          <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Regime</th><th class="pb-1 pr-3">n</th><th class="pb-1 pr-3">Accuracy</th><th class="pb-1 pr-3">Brier</th><th class="pb-1">Calibration Err</th></tr></thead>
           <tbody>${bucketKeys.map(k => {
             const b = buckets[k];
             const ok = b && b.status === 'ok';
@@ -2979,7 +2997,7 @@ function renderVariantComparison(selection){
   const s = selection.data;
   el.innerHTML = `<div class="overflow-x-auto">
     <table class="w-full text-[11px]">
-      <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">Status</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
+      <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">Status</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
       <tbody>${s.scores.map(sc => {
         const isSelected = sc.variant === s.chosen_variant;
         return `<tr class="border-t border-[#3B494C]/50">
@@ -2995,7 +3013,7 @@ function renderVariantComparison(selection){
       }).join('')}</tbody>
     </table>
   </div>
-  <p class="text-[10px] text-[#4B5563] mt-2">Only variants with 50+ resolved predictions appear here — the backend doesn't return variants below that bar, so an "active but not-yet-eligible" variant (if one exists) isn't visible in this table.</p>`;
+  <p class="text-[10px] text-[#8A9599] mt-2">Only variants with 50+ resolved predictions appear here — the backend doesn't return variants below that bar, so an "active but not-yet-eligible" variant (if one exists) isn't visible in this table.</p>`;
 }
 
 // ---- Section 10: Audit trail (reuses the selection-history fetch) ----
@@ -3019,7 +3037,7 @@ function renderLearningAudit(history){
     return;
   }
   el.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-[10px]">
-    <thead><tr class="text-[#4B5563] text-left"><th class="pb-1 pr-3">Timestamp</th><th class="pb-1 pr-3">Event</th><th class="pb-1 pr-3">Entity</th><th class="pb-1 pr-3">Actor</th><th class="pb-1 pr-3">New State</th><th class="pb-1">Reason</th></tr></thead>
+    <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Timestamp</th><th class="pb-1 pr-3">Event</th><th class="pb-1 pr-3">Entity</th><th class="pb-1 pr-3">Actor</th><th class="pb-1 pr-3">New State</th><th class="pb-1">Reason</th></tr></thead>
     <tbody>${decisions.map(d => `<tr class="border-t border-[#3B494C]/50 align-top">
       <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${fmtUtc(d.ts)}</td>
       <td class="py-1.5 pr-3 whitespace-nowrap">Model selection</td>
@@ -3029,7 +3047,7 @@ function renderLearningAudit(history){
       <td class="py-1.5 text-[#BAC9CD]">${d.reason}</td>
     </tr>`).join('')}</tbody>
   </table></div>
-  <p class="text-[10px] text-[#4B5563] mt-2">Actor is always SYSTEM — these are automated selectBestVariant runs. No GEMINI/CHATGPT/CLAUDE/HUMAN-attributed audit entries exist in the backend yet.</p>`;
+  <p class="text-[10px] text-[#8A9599] mt-2">Actor is always SYSTEM — these are automated selectBestVariant runs. No GEMINI/CHATGPT/CLAUDE/HUMAN-attributed audit entries exist in the backend yet.</p>`;
 }
 
 document.getElementById('learnRefreshBtn').onclick = () => { _learningGlobalCache = null; loadLearningOverview(); };
@@ -3076,7 +3094,7 @@ async function loadExperiments(){
 
 const REGISTRY_STATUS_TONE = {
   VALIDATED: 'good', EVALUABLE: 'info', READY_FOR_ANALYSIS: 'info',
-  ACCUMULATING: 'neutral', COLLECTING: 'neutral', PROPOSED: 'neutral', ON_DEMAND_AUDIT: 'neutral', STAGING_ONLY: 'neutral',
+  ACCUMULATING: 'neutral', COLLECTING: 'neutral', PROPOSED: 'neutral', ON_DEMAND_AUDIT: 'neutral', STAGING_ONLY: 'neutral', DISABLED: 'neutral',
   INSUFFICIENT_SAMPLE: 'warn', BLOCKED: 'bad', FAILED: 'bad', REJECTED: 'bad', RETIRED: 'neutral',
 };
 function statusChipFor(v){ return v ? chip(String(v).replace(/_/g, ' '), REGISTRY_STATUS_TONE[v] || 'neutral') : chip('NOT REPORTED', 'neutral'); }
@@ -3113,7 +3131,7 @@ function etaText(e){
 function field(label, value){
   if(value == null || value === '' || value === 'null') return '';
   const v = typeof value === 'object' ? esc(JSON.stringify(value)).slice(0, 400) : esc(value);
-  return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">${label}</dt><dd class="text-[11px] text-[#BAC9CD] leading-relaxed">${v}</dd></div>`;
+  return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">${label}</dt><dd class="text-[11px] text-[#BAC9CD] leading-relaxed">${v}</dd></div>`;
 }
 
 function renderGoalA(){
@@ -3129,10 +3147,19 @@ function renderGoalA(){
     return;
   }
   const lr = d.last_run;
-  const dets = (d.detectors || []).map(x => `<li class="flex items-start justify-between gap-2 py-1 border-t border-[#3B494C]/60">
-      <span class="text-[#BAC9CD] text-[11px]">${esc(x.label || x.id)}${x.stale ? ' <span class="text-[#FFB4AB]">(stale)</span>' : ''}${x.coverage ? `<span class="block text-[10px] text-[#4B5563]">coverage: ${esc(x.coverage)}</span>` : ''}</span>
+  const dets = (d.detectors || []).map(x => {
+    const originalName = String(x.label || x.id || '');
+    const annotation = originalName.match(/\s+\((stale|sampled)\)$/i);
+    const detectorName = annotation ? originalName.slice(0, annotation.index) : originalName;
+    const annotationTag = annotation ? annotation[1].toLowerCase() : '';
+    const annotationColor = annotationTag === 'stale' ? 'text-[#FFB4AB]' : 'text-[#BAC9CD]';
+    const annotationMarkup = annotationTag ? ` <span class="text-[9px] ${annotationColor} ml-1">${esc(annotationTag)}</span>` : '';
+    const staleMarkup = x.stale && annotationTag !== 'stale' ? ' <span class="text-[9px] text-[#FFB4AB] ml-1">stale</span>' : '';
+    return `<li class="flex items-start justify-between gap-2 py-1 border-t border-[#3B494C]/60">
+      <span class="text-[#BAC9CD] text-[11px]" title="${esc(originalName || (x.stale ? ' (stale)' : ''))}">${esc(detectorName)}${annotationMarkup}${staleMarkup}${x.coverage ? `<span class="block text-[10px] text-[#BAC9CD]">coverage: ${esc(x.coverage)}</span>` : ''}</span>
       ${chip(String(x.status || 'UNKNOWN').replace(/_/g,' '), DETECTOR_TONE[x.status] || 'neutral')}
-    </li>`).join('');
+    </li>`;
+  }).join('');
   const ev = _eventsRecent && _eventsRecent.ok
     ? `<span class="font-mono-data text-[#E1E2E7]">${_eventsRecent.count >= EVENTS_LIMIT ? 'at least ' : ''}${_eventsRecent.count}</span> derived event${_eventsRecent.count === 1 ? '' : 's'} since ${fmtUtc(_eventsRecent.since)}`
     : `${chip('UNKNOWN','neutral')} event list unavailable`;
@@ -3174,9 +3201,9 @@ function renderGoalB(){
       ${field('Data last updated', e.data_last_updated ? fmtUtc(e.data_last_updated) + ' (' + ageStr(e.data_last_updated) + ')' : null)}
       ${field('Success criterion', e.success_criterion)}
       ${field('Next action', e.next_action)}
-      <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
+      <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
     </dl>
-    <p class="text-[10px] text-[#4B5563] mt-2">Status and sample are the registry's own. Holdout outcomes are not shown here.</p>`;
+    <p class="text-[10px] text-[#8A9599] mt-2">Status and sample are the registry's own. Holdout outcomes are not shown here.</p>`;
 }
 
 // Decision state comes from the registry API (`decision`, decision-state-v1), never derived here.
@@ -3191,16 +3218,16 @@ function decisionChip(e){
 }
 function decisionDetail(e){
   const d = e && e.decision;
-  if (!d || !d.state) return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Decision state</dt><dd class="text-[11px] text-[#BAC9CD]">Not reported by the API (the registry predates decision-state-v1). Nothing is inferred here.</dd></div>`;
+  if (!d || !d.state) return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Decision state</dt><dd class="text-[11px] text-[#BAC9CD]">Not reported by the API (the registry predates decision-state-v1). Nothing is inferred here.</dd></div>`;
   const owner = d.owner_decision;
   const prop = d.proposal;
   const prod = d.production_use;
-  return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Decision state</dt><dd class="text-[11px] text-[#BAC9CD]">${decisionChip(e)} ${esc(d.basis || '')}</dd></div>
-    <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Owner decision</dt><dd class="text-[11px] text-[#BAC9CD]">${owner ? `${esc(owner.decision)} · ${owner.decided_ts ? fmtUtc(owner.decided_ts) : 'date not recorded'}${owner.decided_by ? ' · ' + esc(owner.decided_by) : ''}${owner.rationale ? ' — ' + esc(owner.rationale) : ''}${owner.evidence_ref ? ' (' + esc(owner.evidence_ref) + ')' : ''}` : (d.owner_decided ? 'Recorded by registry status.' : 'None recorded — the decision is pending with the owner.')}</dd></div>
-    ${prop ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Proposal (not a decision)</dt><dd class="text-[11px] text-[#BAC9CD]">${chip('PROPOSED: ' + String(prop.proposal || ''), 'warn')} ${esc(prop.basis || '')}${prop.proposed_ts ? ' · ' + fmtUtc(prop.proposed_ts) : ''}${prop.evidence_ref ? ' · evidence: ' + esc(prop.evidence_ref) : ''}</dd></div>` : ''}
-    ${prod ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Used in production</dt><dd class="text-[11px] text-[#BAC9CD]">${chip(prod.decision_recorded ? 'PRODUCTION · OWNER DECISION' : 'PRODUCTION · NO DECISION RECORDED', prod.decision_recorded ? 'info' : 'warn')} ${esc(prod.where || '')}${prod.since ? ' since ' + esc(prod.since) : ''}${prod.note ? '. ' + esc(prod.note) : ''}${prod.decision_ref ? ' (' + esc(prod.decision_ref) + ')' : ''}</dd></div>` : `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Research or production</dt><dd class="text-[11px] text-[#BAC9CD]">${d.state === 'IMPLEMENTED_PRODUCTION' ? 'Production (owner decision).' : 'Research only — no production use reported.'}</dd></div>`}
-    ${Array.isArray(d.owner_directives) && d.owner_directives.length ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Owner directives (how it proceeds; not a decided outcome)</dt><dd class="text-[11px] text-[#BAC9CD]">${d.owner_directives.map(o => `<div>${chip(String(o.id || '') + ' · ' + String(o.directive || '').replace(/_/g, ' '), 'info')} ${esc(o.text || '')}${o.decided_ts ? ' · ' + fmtUtc(o.decided_ts) : ''}</div>`).join('')}</dd></div>` : ''}
-    ${Array.isArray(d.conflicts) && d.conflicts.length ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Registry conflicts</dt><dd class="text-[11px] text-[#BAC9CD]">${d.conflicts.map(c => `<div>${chip('CONFLICT', 'warn')} ${esc(typeof c === 'string' ? c : (c.detail || c.field || JSON.stringify(c)))}</div>`).join('')}</dd></div>` : ''}`;
+  return `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Decision state</dt><dd class="text-[11px] text-[#BAC9CD]">${decisionChip(e)} ${esc(d.basis || '')}</dd></div>
+    <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Owner decision</dt><dd class="text-[11px] text-[#BAC9CD]">${owner ? `${esc(owner.decision)} · ${owner.decided_ts ? fmtUtc(owner.decided_ts) : 'date not recorded'}${owner.decided_by ? ' · ' + esc(owner.decided_by) : ''}${owner.rationale ? ' — ' + esc(owner.rationale) : ''}${owner.evidence_ref ? ' (' + esc(owner.evidence_ref) + ')' : ''}` : (d.owner_decided ? 'Recorded by registry status.' : 'None recorded — the decision is pending with the owner.')}</dd></div>
+    ${prop ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Proposal (not a decision)</dt><dd class="text-[11px] text-[#BAC9CD]">${chip('PROPOSED: ' + String(prop.proposal || ''), 'warn')} ${esc(prop.basis || '')}${prop.proposed_ts ? ' · ' + fmtUtc(prop.proposed_ts) : ''}${prop.evidence_ref ? ' · evidence: ' + esc(prop.evidence_ref) : ''}</dd></div>` : ''}
+    ${prod ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Used in production</dt><dd class="text-[11px] text-[#BAC9CD]">${chip(prod.decision_recorded ? 'PRODUCTION · OWNER DECISION' : 'PRODUCTION · NO DECISION RECORDED', prod.decision_recorded ? 'info' : 'warn')} ${esc(prod.where || '')}${prod.since ? ' since ' + esc(prod.since) : ''}${prod.note ? '. ' + esc(prod.note) : ''}${prod.decision_ref ? ' (' + esc(prod.decision_ref) + ')' : ''}</dd></div>` : `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Research or production</dt><dd class="text-[11px] text-[#BAC9CD]">${d.state === 'IMPLEMENTED_PRODUCTION' ? 'Production (owner decision).' : 'Research only — no production use reported.'}</dd></div>`}
+    ${Array.isArray(d.owner_directives) && d.owner_directives.length ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Owner directives (how it proceeds; not a decided outcome)</dt><dd class="text-[11px] text-[#BAC9CD]">${d.owner_directives.map(o => `<div>${chip(String(o.id || '') + ' · ' + String(o.directive || '').replace(/_/g, ' '), 'info')} ${esc(o.text || '')}${o.decided_ts ? ' · ' + fmtUtc(o.decided_ts) : ''}</div>`).join('')}</dd></div>` : ''}
+    ${Array.isArray(d.conflicts) && d.conflicts.length ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Registry conflicts</dt><dd class="text-[11px] text-[#BAC9CD]">${d.conflicts.map(c => `<div>${chip('CONFLICT', 'warn')} ${esc(typeof c === 'string' ? c : (c.detail || c.field || JSON.stringify(c)))}</div>`).join('')}</dd></div>` : ''}`;
 }
 
 function renderRegistry(){
@@ -3222,15 +3249,16 @@ function renderRegistry(){
   filters.querySelectorAll('button').forEach(b => { b.onclick = () => { registryFilter = b.dataset.st; renderRegistry(); }; });
   const FEATURED = { 'EXP-004': 'TimesFM', 'EXP-011': 'Experiment 5', 'EXP-023': 'Goal B' };
   const shown = list.filter(e => registryFilter === 'ALL' || e.status === registryFilter);
+  if(!document.getElementById('registryStatusMeanings')) filters.insertAdjacentHTML('afterend', `<details id="registryStatusMeanings" class="mt-2 mb-3 text-[10px] text-[#BAC9CD]"><summary class="cursor-pointer text-[#00E0FF]">Status meanings</summary><p class="mt-1 leading-relaxed">Accumulating: gathering observations toward the registered sample. Insufficient sample/evidence: the available set has not met the stated minimum. Collecting: data collection is ongoing. Proposed: a suggested action awaiting an owner decision. Staging only: limited to staging use. Disabled: collection or detector is switched off. Blocked: progress has a reported blocker. On-demand audit: run only when requested.</p></details>`);
   body.innerHTML = shown.map(e => `
     <details class="rounded-xl border border-[#3B494C] bg-[#0B0E11] px-3 py-2">
       <summary class="cursor-pointer select-none">
-        <div class="flex items-start justify-between gap-2">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <div class="min-w-0">
             <p class="text-xs font-semibold text-[#E1E2E7]"><span class="font-mono-data text-[#00E0FF]">${esc(e.experiment_id)}</span> ${esc(e.title || '')}${FEATURED[e.experiment_id] ? ` <span class="text-[10px] text-[#DDB7FF] font-semibold">· ${FEATURED[e.experiment_id]}</span>` : ''}</p>
             <p class="text-[10px] text-[#BAC9CD] mt-0.5 font-mono-data">sample ${sampleText(e)}${typeof e.required_sample === 'number' ? ' · required ' + e.required_sample : ''} · updated ${e.data_last_updated ? fmtUtc(e.data_last_updated) : (e.last_updated ? fmtUtc(e.last_updated) : 'not reported')}</p>
           </div>
-          <div class="flex flex-col items-end gap-1 shrink-0">${decisionChip(e)}${statusChipFor(e.status)}${e.confidence_evidence_maturity && e.confidence_evidence_maturity !== e.status ? statusChipFor(e.confidence_evidence_maturity) : ''}${e.decision && e.decision.proposal ? chip('PROPOSAL: ' + String(e.decision.proposal.proposal || ''), 'warn') : ''}</div>
+          <div class="flex flex-row flex-wrap justify-start sm:justify-end items-center gap-1 min-w-0 sm:max-w-[60%]"><span class="inline-flex items-center gap-1 whitespace-nowrap"><span class="text-[9px] text-[#BAC9CD]">Decision</span>${decisionChip(e)}</span><span class="inline-flex items-center gap-1 whitespace-nowrap"><span class="text-[9px] text-[#BAC9CD]">Status</span>${statusChipFor(e.status)}</span>${e.confidence_evidence_maturity && e.confidence_evidence_maturity !== e.status ? `<span class="inline-flex items-center gap-1 whitespace-nowrap"><span class="text-[9px] text-[#BAC9CD]">Evidence</span>${statusChipFor(e.confidence_evidence_maturity)}</span>` : ''}${e.decision && e.decision.proposal ? `<span class="inline-flex items-center gap-1 whitespace-nowrap"><span class="text-[9px] text-[#BAC9CD]">Proposal</span>${chip('PROPOSAL: ' + String(e.decision.proposal.proposal || ''), 'warn')}</span>` : ''}</div>
         </div>
         ${progressBar(e)}
       </summary>
@@ -3242,10 +3270,10 @@ function renderRegistry(){
         ${field('Current measured result', e.current_measured_result)}
         ${field('Conclusion', e.conclusion)}
         ${field('Next action', e.next_action)}
-        <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
+        <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
         ${field('Target date', e.target_date)}
         ${field('Projected checkpoint', etaText(e))}
-        ${e.suggested_status ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#4B5563]">Backend suggests</dt><dd class="text-[11px] text-[#BAC9CD]">${statusChipFor(e.suggested_status)} — an automatic prompt for review, not a validation.</dd></div>` : ''}
+        ${e.suggested_status ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Backend suggests</dt><dd class="text-[11px] text-[#BAC9CD]">${statusChipFor(e.suggested_status)} — an automatic prompt for review, not a validation.</dd></div>` : ''}
         ${field('Started', e.start_date)}
         ${field('Type', e.experiment_type)}
       </dl>
@@ -3254,7 +3282,7 @@ function renderRegistry(){
   const stale = !gen || Date.now() - gen > REGISTRY_STALE_MS;
   const model = _registry.data.decision_model;
   body.insertAdjacentHTML('afterbegin', `<p class="text-[10px] mb-2 ${stale ? 'text-[#FFB020]' : 'text-[#BAC9CD]'}">${stale ? chip('STALE', 'warn') + ' ' : ''}Registry data generated ${fmtUtc(gen)}${gen ? ' (' + ageStr(gen) + ')' : ''} · decision model ${model && model.version ? esc(model.version) : 'not reported by API'}. Decision states are pending until the owner records a decision; a proposal is never shown as approved.</p>${model && Array.isArray(model.global_owner_directives) && model.global_owner_directives.length ? `<p class="text-[10px] mb-2 text-[#BAC9CD]">Owner directives (not tied to one experiment): ${model.global_owner_directives.map(o => chip(String(o.id || '') + ' · ' + String(o.directive || '').replace(/_/g, ' '), 'info') + ' ' + esc(o.text || '')).join(' ')}</p>` : ''}`);
-  body.insertAdjacentHTML('beforeend', `<p class="text-[10px] text-[#4B5563] mt-3 leading-relaxed">Registry generated ${fmtUtc(_registry.data.generated_ts)}. Entries use the registry's own EXP-NNN identifiers; TimesFM (EXP-004) and Experiment 5 (EXP-011) are identified from their registry titles. The registry does not define "E1–E6" labels, so none are applied here.</p>`);
+  body.insertAdjacentHTML('beforeend', `<p class="text-[10px] text-[#8A9599] mt-3 leading-relaxed">Registry generated ${fmtUtc(_registry.data.generated_ts)}. Entries use the registry's own EXP-NNN identifiers; TimesFM (EXP-004) and Experiment 5 (EXP-011) are identified from their registry titles. The registry does not define "E1–E6" labels, so none are applied here.</p>`);
 }
 
 document.getElementById('expRefreshBtn').onclick = () => { _experimentsLoaded = false; loadExperimentsIfNeeded(); };

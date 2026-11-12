@@ -485,7 +485,7 @@
           <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Selection — <span id="learnSelectionCoinLabel"></span></p>
           <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnSelectionNote')">ⓘ Info</button>
         </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnSelectionNote">Live from GET /select-variant — runs the real Dynamic Classifier Selection logic on request, the same call the backend cron uses. A variant needs 50+ of its own resolved predictions before it's even compared (SELECTION_MIN_HISTORY) — variants below that bar aren't in the "eligible variants compared" list at all, since the backend doesn't return them. ELIGIBLE (compared, cleared the history bar) is not the same as SELECTED (the one actually chosen this round) — both are shown separately below.</p>
+        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnSelectionNote">From GET /select-variant — the latest decision the backend's Dynamic Classifier Selection stored, written by the scheduled run (not recomputed on request). A variant needs 50+ of its own resolved predictions before it's even compared (SELECTION_MIN_HISTORY) — variants below that bar aren't in the "eligible variants compared" list at all, since the backend doesn't return them. ELIGIBLE (compared, cleared the history bar) is not the same as SELECTED (the one actually chosen this round) — both are shown separately below.</p>
         <div id="learnSelectionBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
       </section>
 
@@ -842,24 +842,29 @@ async function loadPrediction(){
     card.classList.remove('hidden');
     empty.classList.add('hidden');
 
-    // ---- Best-model wiring: /predict already runs selectBestVariant()
-    // and returns the result as d.selection, including chosen_p_up -- the
-    // correct probability for whichever variant is CURRENTLY winning,
-    // regardless of which one it is. Previously ignored entirely; the
-    // headline always showed d.p_up (the raw original model) no matter
-    // what the selection layer had actually decided. Same idea as the
-    // Current Selection card on AI Learning, applied here to the number
-    // people actually look at day to day. ----
+    // ---- Best-model wiring: /predict returns the selection decision for
+    // this cycle as d.selection. When a variant other than the original is
+    // chosen, the headline shows that variant's probability for THIS cycle
+    // (selection.cycle_p_up, recorded by the backend from the row written
+    // for the cycle). selection.chosen_p_up is the variant's latest
+    // RESOLVED prediction at selection time (backend semantics since the
+    // selection layer was introduced), so it is shown only as a fallback for
+    // older responses, and labelled as such. ----
     const selection = (d.selection && d.selection.ok && d.selection.chosen_variant) ? d.selection : null;
     const usingNonOriginal = selection && selection.chosen_variant !== 'original';
-    const headlinePUp = usingNonOriginal ? selection.chosen_p_up : d.p_up;
+    const hasCycleValue = usingNonOriginal && typeof selection.cycle_p_up === 'number';
+    const headlinePUp = usingNonOriginal ? (hasCycleValue ? selection.cycle_p_up : selection.chosen_p_up) : d.p_up;
 
     document.getElementById('predPUp').textContent = Math.round(headlinePUp * 100) + '%';
-    document.getElementById('predAsOf').textContent = d.ts ? `Live read computed ${fmtUtc(d.ts)} (on request, not a logged prediction)` : 'Computation time not reported';
+    document.getElementById('predAsOf').textContent = !d.ts ? 'Computation time not reported'
+      : d.served_from === 'snapshot' ? `Logged prediction from the ${fmtUtc(d.ts)} scheduled run`
+      : d.persisted === true ? `Logged prediction computed ${fmtUtc(d.ts)} (scheduled run was late, refreshed on request)`
+      : `Live read computed ${fmtUtc(d.ts)} (on request, not a logged prediction)`;
     document.getElementById('predChanceLabel').textContent = `chance of a positive ${horizonAtCall}h return`;
     const variantLabelEl = document.getElementById('predVariantLabel');
     if (usingNonOriginal) {
-      variantLabelEl.textContent = `via ${SELECTION_VARIANT_LABELS[selection.chosen_variant] || selection.chosen_variant} — currently the best-performing model for ${coinAtCall} · ${horizonAtCall}h`;
+      variantLabelEl.textContent = `via ${SELECTION_VARIANT_LABELS[selection.chosen_variant] || selection.chosen_variant} — currently the best-performing model for ${coinAtCall} · ${horizonAtCall}h`
+        + (hasCycleValue ? '' : ' (its most recent resolved call, not this cycle\'s prediction)');
       variantLabelEl.classList.remove('hidden');
       document.getElementById('predCalibBadge').innerHTML = ''; // the raw/calibrated comparison badge is specific to the original model's own two reads -- not meaningful once a different variant is headlined
     } else {

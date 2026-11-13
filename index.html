@@ -87,12 +87,22 @@
     <div id="coinTabs" role="group" aria-label="Coin" class="flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 w-fit"></div>
     <div id="horizonTabs" role="group" aria-label="Prediction horizon" class="flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 w-fit"></div>
   </div>
-  <!-- Lab and History are scoped to the coin/horizon chosen on the
-       Dashboard (the selector stays Dashboard-only, as before); this chip
-       just makes the active scope explicit instead of implicit. -->
+  <!-- Lab is scoped to the coin/horizon chosen on the Dashboard or in
+       History; this chip makes the active scope explicit. -->
   <p id="scopeChip" class="hidden text-[11px] text-[#BAC9CD] mb-4">Showing <span id="scopeChipValue" class="font-mono-data text-[#E1E2E7]"></span> · change coin/horizon on the <button type="button" class="underline hover:text-[#00E0FF]" onclick="activeView='dashboard'; history.replaceState(null,'','#dashboard'); renderNav();">Dashboard</button></p>
 
   <div id="view-dashboard">
+
+    <!-- All forecasts at a glance, then system status. Each tile is the latest logged prediction for one asset and
+         horizon (the same /predict responses the detail card uses); selecting a tile opens its detail below. -->
+    <section id="overviewCard" aria-labelledby="overviewTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 mb-4">
+      <div class="flex items-baseline justify-between gap-2 flex-wrap mb-2">
+        <h2 id="overviewTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">All forecasts</h2>
+        <p class="text-[10px] text-[#BAC9CD]">Chance of a positive return over the horizon · latest logged prediction · times UTC · select one for detail</p>
+      </div>
+      <div id="overviewBody" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2" aria-live="polite"></div>
+    </section>
+
 
     <!-- Three questions, three panels, never blended: Forecast (what the
          model predicts right now), Data quality (is the data behind it
@@ -159,6 +169,15 @@
 
       </div>
     </div>
+
+    <section id="systemStatusCard" aria-labelledby="systemStatusTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 mb-4">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <h2 id="systemStatusTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#BAC9CD] font-bold">System status</h2>
+        <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'systemStatusNote')" aria-controls="systemStatusNote">ⓘ Info</button>
+      </div>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="systemStatusNote">Read-only. Scheduled predictions come from <span class="font-mono-data">/prediction-freshness</span> (all 12 logged series: 3 assets × 2 horizons × core and challenger). Event detection comes from <span class="font-mono-data">/api/events/health</span>. The funding collector line is the public run history of its GitHub Actions workflow. A green status needs an explicit healthy report; UNKNOWN means the report could not be read, not that the system is healthy. These checks cover whether jobs ran and saved rows, not whether the market data behind them is correct.</p>
+      <div id="systemStatusBody" class="grid grid-cols-1 md:grid-cols-3 gap-2" aria-live="polite"></div>
+    </section>
 
     <section id="chartSection" aria-labelledby="chartTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -322,6 +341,11 @@
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCombinedHistoryCountNote"></p>
     </section>
 
+    <section id="variantCycleCard" aria-labelledby="variantCycleTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <p id="variantCycleTitle" class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-2">This cycle — every variant, production vs. shadow — <span id="variantCycleScope"></span></p>
+      <div id="variantCycleBody" class="text-sm text-[#BAC9CD]" aria-live="polite">Loading…</div>
+    </section>
+
     <section id="selectedModelCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1">
         <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Selected Model — <span id="selectedModelCoinLabel"></span></p>
@@ -420,6 +444,13 @@
         <div id="goalBBody" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
       </section>
     </div>
+
+    <section id="exp002Card" aria-labelledby="exp002Title" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
+      <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">EXP-002</p>
+      <h3 id="exp002Title" class="text-sm font-semibold mt-0.5">Anomaly gate: softened selection bar on anomaly days</h3>
+      <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">A logged-only shadow of the selection layer for BTC. It never changes what production serves. A prospective plan is frozen; this card shows where collection stands against it.</p>
+      <div id="exp002Body" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
+    </section>
 
     <section id="registryCard" aria-labelledby="registryTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between gap-2 flex-wrap mb-1">
@@ -713,6 +744,335 @@ function chip(text, tone){
   return `<span class="inline-block text-[10px] font-semibold font-mono-data px-1.5 py-0.5 rounded border whitespace-nowrap" style="${CHIP_TONES[tone] || CHIP_TONES.neutral}">${esc(text)}</span>`;
 }
 
+// ---- BEGIN view-model helpers (pure: no DOM, no network; covered by tests/view-models.test.mjs) ----
+// Which probability is headlined for a /predict payload. When the selection layer chose a variant other than the
+// original, the headline is that variant's value for this cycle (selection.cycle_p_up); selection.chosen_p_up is the
+// variant's latest resolved prediction and is only a labelled fallback for older responses.
+function headlineOf(d){
+  const selection = (d && d.selection && d.selection.ok && d.selection.chosen_variant) ? d.selection : null;
+  const usingNonOriginal = !!selection && selection.chosen_variant !== 'original';
+  const hasCycleValue = usingNonOriginal && typeof selection.cycle_p_up === 'number';
+  const pUp = usingNonOriginal ? (hasCycleValue ? selection.cycle_p_up : selection.chosen_p_up) : (d ? d.p_up : null);
+  return { selection, usingNonOriginal, hasCycleValue, pUp, variant: selection ? selection.chosen_variant : 'original' };
+}
+var FRESH_MAX_AGE_HOURS = 6; // same rule as the backend's FRESH status
+// One overview tile. `res` is { ok, data } | { ok:false, error } | null (still loading); `fresh` is the coin's entry of
+// /prediction-freshness (or null when that report is unavailable). Unknown is never reported as healthy.
+function forecastTileModel(coin, horizon, res, fresh, now){
+  const base = { coin, horizon, state: 'loading', pct: null, direction: null, ts: null, ageHours: null, variant: null, freshness: 'UNKNOWN', tone: 'neutral', note: '' };
+  if(!res) return base;
+  if(!res.ok && !res.data) return { ...base, state: 'error', note: 'request failed' };
+  const d = res.data;
+  if(!d || d.ok === false || d.status !== 'ok'){
+    const why = d && d.status === 'insufficient_data' ? 'not enough history yet'
+      : d && d.status === 'insufficient_resolved_analogs' ? 'too few resolved outcomes' : 'model unavailable';
+    return { ...base, state: 'unavailable', note: why };
+  }
+  const h = headlineOf(d);
+  if(typeof h.pUp !== 'number' || !isFinite(h.pUp)) return { ...base, state: 'unavailable', note: 'no probability reported' };
+  const ts = typeof d.ts === 'number' ? d.ts : null;
+  const ageHours = ts == null ? null : (now - ts) / 3600000;
+  const series = fresh && fresh.horizons && fresh.horizons[String(horizon)] && fresh.horizons[String(horizon)].core;
+  let freshness = series && series.status ? series.status : 'UNKNOWN';
+  if(ageHours != null && ageHours > FRESH_MAX_AGE_HOURS) freshness = 'STALE'; // an old forecast is stale whatever the report says
+  const logged = d.served_from === 'snapshot' || d.persisted === true;
+  return { ...base, state: 'ok', pct: Math.round(h.pUp * 100), direction: h.pUp >= 0.5 ? 'UP' : 'DOWN', ts, ageHours,
+    variant: h.usingNonOriginal ? h.variant : null, freshness,
+    tone: freshness === 'FRESH' ? 'good' : (freshness === 'STALE' || freshness === 'NONE') ? 'bad' : 'neutral',
+    note: logged ? '' : 'live read, not a logged prediction' };
+}
+function nextTickTs(now){ const step = 3 * 3600000; return (Math.floor(now / step) + 1) * step; }
+// Scheduled prediction runs, from /prediction-freshness ({ ok, data } wrapper as kept by loadFreshness()).
+function predictionRunsModel(fr, now){
+  if(!fr || !fr.ok || !fr.data || !fr.data.coins) return { tone: 'neutral', label: 'UNKNOWN', main: 'Freshness report unavailable', sub: fr && fr.error ? String(fr.error) : 'not loaded', versions: [] };
+  const d = fr.data, expected = d.expected_cron_ticks_24h;
+  let total = 0, fresh = 0, onSchedule = 0, lastCron = null; const versions = new Set();
+  for(const coin of Object.keys(d.coins)){
+    const hs = (d.coins[coin] && d.coins[coin].horizons) || {};
+    for(const h of Object.keys(hs)) for(const path of ['core', 'challenger']){
+      const s = hs[h] && hs[h][path]; if(!s) continue;
+      total++;
+      if(s.status === 'FRESH') fresh++;
+      if(expected != null && s.cron_rows_24h != null && s.cron_rows_24h >= expected) onSchedule++;
+      if(typeof s.latest_cron_ts === 'number' && (lastCron == null || s.latest_cron_ts > lastCron)) lastCron = s.latest_cron_ts;
+      if(s.latest_git_commit_sha) versions.add(String(s.latest_git_commit_sha).slice(0, 7));
+    }
+  }
+  if(!total) return { tone: 'neutral', label: 'UNKNOWN', main: 'No series in the freshness report', sub: '', versions: [] };
+  const reportAgeH = typeof d.generated_ts === 'number' ? (now - d.generated_ts) / 3600000 : null;
+  let tone = 'good', label = 'ON SCHEDULE';
+  if(fresh < total){ tone = 'bad'; label = 'STALE'; }
+  else if(onSchedule < total){ tone = 'warn'; label = 'MISSED RUNS'; }
+  if(reportAgeH == null || reportAgeH > 3){ tone = 'neutral'; label = 'REPORT OUTDATED'; }
+  return { tone, label, total, fresh, onSchedule, lastCron, nextDue: nextTickTs(now), versions: [...versions].sort(),
+    main: `${fresh} of ${total} series fresh · ${onSchedule} of ${total} with all ${expected ?? '?'} runs in 24 h`,
+    sub: lastCron == null ? 'no scheduled run recorded' : '' };
+}
+var EVENT_RUN_MAX_AGE_HOURS = 2.5; // hourly outside the 3-hourly prediction runs, so two hours can pass between runs
+// Event Detection collection, from /api/events/health ({ ok, data } wrapper).
+function eventDetectionModel(res, now){
+  if(!res || !res.ok || !res.data) return { tone: 'neutral', label: 'UNKNOWN', main: 'Health report unavailable', sub: res && res.error ? String(res.error) : 'not loaded' };
+  const d = res.data;
+  if(d.available === false) return { tone: 'neutral', label: 'NOT AVAILABLE', main: 'Event Detection tables are not available', sub: '' };
+  if(d.enabled === false) return { tone: 'neutral', label: 'DISABLED', main: 'Scheduled collection is disabled', sub: '' };
+  const dets = Array.isArray(d.detectors) ? d.detectors : [];
+  const active = dets.filter(x => x.enabled && x.status !== 'NOT_CONFIGURED' && x.status !== 'DISABLED');
+  const ok = active.filter(x => x.status === 'OK' && x.stale !== true);
+  const inactive = dets.length - active.length;
+  const last = d.last_run && (d.last_run.finished_ts || d.last_run.started_ts);
+  const ageH = typeof last === 'number' ? (now - last) / 3600000 : null;
+  let tone = 'good', label = 'RUNNING';
+  if(ageH == null){ tone = 'neutral'; label = 'UNKNOWN'; }
+  else if(ageH > EVENT_RUN_MAX_AGE_HOURS){ tone = 'bad'; label = 'STALE'; }
+  else if(!active.length){ tone = 'neutral'; label = 'NO ACTIVE DETECTORS'; }
+  else if(ok.length < active.length){ tone = 'warn'; label = 'DEGRADED'; }
+  return { tone, label, lastRun: typeof last === 'number' ? last : null, trigger: d.last_run && d.last_run.trigger,
+    main: `${ok.length} of ${active.length} active detectors OK` + (inactive ? ` · ${inactive} not active` : ''), sub: '' };
+}
+var COLLECTOR_MAX_AGE_HOURS = 2;
+// Hourly research funding collector, from GitHub's public workflow-runs listing ({ ok, data } wrapper).
+function collectorModel(res, now){
+  if(!res || !res.ok || !res.data || !Array.isArray(res.data.workflow_runs)) return { tone: 'neutral', label: 'UNKNOWN', main: 'GitHub run history unavailable', sub: res && res.error ? String(res.error) : 'not loaded' };
+  const runs = res.data.workflow_runs.filter(r => r.status === 'completed');
+  if(!runs.length) return { tone: 'neutral', label: 'UNKNOWN', main: 'No completed run in the listing', sub: '' };
+  const latest = runs[0];
+  const last = Date.parse(latest.updated_at || latest.created_at);
+  const ageH = isFinite(last) ? (now - last) / 3600000 : null;
+  const recent = runs.slice(0, 12);
+  const failed = recent.filter(r => r.conclusion !== 'success').length;
+  let tone = 'good', label = 'RUNNING';
+  if(ageH == null){ tone = 'neutral'; label = 'UNKNOWN'; }
+  else if(ageH > COLLECTOR_MAX_AGE_HOURS){ tone = 'bad'; label = 'STALE'; }
+  else if(latest.conclusion !== 'success'){ tone = 'bad'; label = 'LAST RUN FAILED'; }
+  else if(failed){ tone = 'warn'; label = 'RECENT FAILURES'; }
+  return { tone, label, lastRun: isFinite(last) ? last : null, trigger: latest.event,
+    main: `${recent.length - failed} of the last ${recent.length} runs succeeded`, sub: '' };
+}
+var VARIANT_LOW_N = 10; // display rule only: marks a small local sample; the selection gate applies its own bar
+// One row per model variant for the cycle in a /predict payload: this cycle's own probability (from the payload's
+// own fields, not selection.scores[].p_up, which is each variant's latest RESOLVED prediction), the selection
+// layer's local record for it, and whether it is what production serves, a candidate, or a logged-only shadow.
+function variantCycleRows(d){
+  if(!d || d.ok === false || d.status !== 'ok') return [];
+  const ch = d.challenger && d.challenger.ok !== false ? d.challenger : null;
+  const sel = d.selection && d.selection.ok ? d.selection : null;
+  const scores = {}; for(const s of (sel && Array.isArray(sel.scores) ? sel.scores : [])) scores[s.variant] = s;
+  const cycle = {
+    original: d.p_up, experimental: d.experimental ? d.experimental.p_up : null, calibrated: d.calibrated_p_up,
+    challenger_flat: ch ? ch.p_up_flat : null, challenger_tilted: ch ? ch.p_up_tilted : null, challenger_calibrated: ch ? ch.calibrated_p_up_flat : null,
+  };
+  const chosen = sel ? sel.chosen_variant : null;
+  const rows = Object.keys(cycle).map(v => {
+    const s = scores[v] || null; const p = typeof cycle[v] === 'number' ? cycle[v] : null;
+    return { variant: v, pUp: p, direction: p == null ? null : (p >= 0.5 ? 'UP' : 'DOWN'),
+      role: chosen == null ? 'UNKNOWN' : v === chosen ? (sel.cleared_gate ? 'SELECTED' : 'SERVED_FALLBACK') : 'CANDIDATE',
+      localAccuracy: s && typeof s.lca === 'number' ? s.lca : null, localN: s && typeof s.n_matched === 'number' ? s.n_matched : null,
+      lowN: !!(s && typeof s.n_matched === 'number' && s.n_matched < VARIANT_LOW_N), scored: !!s };
+  });
+  if(ch && typeof ch.p_up_momentum === 'number') rows.push({ variant: 'challenger_momentum', pUp: ch.p_up_momentum, direction: ch.p_up_momentum >= 0.5 ? 'UP' : 'DOWN',
+    role: 'SHADOW', localAccuracy: null, localN: null, lowN: false, scored: false, triggered: ch.momentum_triggered === true });
+  return rows;
+}
+// EXP-002 as the registry reports it: counts and plan facts only, never a performance figure.
+function exp002Model(e){
+  if(!e) return null;
+  const evals = Array.isArray(e.standalone_evaluations) ? e.standalone_evaluations : [];
+  const plan = evals.find(x => x && x.evaluation_version === 'exp002-prospective-v1') || null;
+  const m = e.current_measured_result || {};
+  return { status: e.status || null, maturity: e.confidence_evidence_maturity || null,
+    loggedRows: typeof m.logged_rows === 'number' ? m.logged_rows : (typeof e.current_sample_size === 'number' ? e.current_sample_size : null),
+    latestRowTs: m.latest_row_ts || e.data_last_updated || null,
+    plan: plan ? { required: plan.sample && typeof plan.sample.required === 'number' ? plan.sample.required : null,
+      count: plan.sample && typeof plan.sample.count === 'number' ? plan.sample.count : null,
+      meaning: plan.sample && plan.sample.meaning || null, evaluationStatus: plan.evaluation_status || null,
+      specRef: plan.spec_ref || null, reason: plan.reason || null, limitations: Array.isArray(plan.limitations) ? plan.limitations : [] } : null };
+}
+// ---- END view-model helpers ----
+
+// ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
+// the same routes). Failed responses are not kept. The refresh button clears it. GET only; nothing is written. ----
+var _apiCache = new Map();
+var API_CACHE_MS = 60 * 1000;
+function apiFetch(url){
+  const hit = _apiCache.get(url);
+  if(hit && Date.now() - hit.t < API_CACHE_MS) return hit.p.then(r => r.clone());
+  const p = fetch(url);
+  _apiCache.set(url, { t: Date.now(), p });
+  p.then(r => { if(!r.ok && _apiCache.get(url) && _apiCache.get(url).p === p) _apiCache.delete(url); },
+         () => { if(_apiCache.get(url) && _apiCache.get(url).p === p) _apiCache.delete(url); });
+  return p.then(r => r.clone());
+}
+function apiCacheClear(){ _apiCache.clear(); }
+async function getJson(url){
+  try{
+    const r = await apiFetch(url);
+    const d = await r.json();
+    if(!r.ok || (d && d.ok === false)) return { ok: false, error: (d && d.error) || ('HTTP ' + r.status), data: d };
+    return { ok: true, data: d };
+  }catch(e){ return { ok: false, error: 'request failed' }; }
+}
+
+// ---- Dashboard: all forecasts at a glance (BTC, LINK, ETH x 12h, 24h) ----
+var _overview = {};
+var _overviewLoadedAt = 0;
+var OVERVIEW_REFRESH_MS = 5 * 60 * 1000; // re-entering the Dashboard refetches only after this; no polling
+function loadOverview(force){
+  if(!force && _overviewLoadedAt && Date.now() - _overviewLoadedAt < OVERVIEW_REFRESH_MS){ renderOverview(); return; }
+  _overviewLoadedAt = Date.now();
+  if(force) _overview = {};
+  renderOverview();
+  for(const c of COINS) for(const h of HORIZONS){
+    getJson(WORKER_URL + COIN_CONFIG[c].predict + '?horizon=' + h).then(res => { _overview[c + '-' + h] = res; renderOverview(); });
+  }
+}
+function overviewFreshnessChip(m){
+  if(m.freshness === 'FRESH') return chip('FRESH', 'good');
+  if(m.freshness === 'STALE') return chip('STALE', 'bad');
+  if(m.freshness === 'NONE') return chip('NO ROWS', 'bad');
+  return chip('FRESHNESS UNKNOWN', 'neutral');
+}
+function renderOverview(){
+  const host = document.getElementById('overviewBody');
+  if(!host) return;
+  const fr = (typeof _freshness !== 'undefined' && _freshness && _freshness.ok) ? _freshness.data.coins : null;
+  const now = Date.now();
+  const focused = host.contains(document.activeElement) ? document.activeElement.dataset : null; // keep keyboard focus across re-renders
+  host.innerHTML = COINS.map(c => HORIZONS.map(h => {
+    const m = forecastTileModel(c, h, _overview[c + '-' + h] || null, fr ? fr[c] : null, now);
+    const on = c === currentCoin && h === currentHorizon;
+    const head = `<div class="flex items-center justify-between gap-1"><span class="text-[11px] font-semibold text-[#E1E2E7]">${c} · ${h}h</span>${m.state === 'ok' ? overviewFreshnessChip(m) : ''}</div>`;
+    let body;
+    if(m.state === 'loading') body = `<div class="h-6 bg-[#3B494C] rounded w-1/2 animate-pulse mt-2"></div><div class="h-2 bg-[#3B494C] rounded w-3/4 animate-pulse mt-2"></div>`;
+    else if(m.state !== 'ok') body = `<p class="mt-2">${chip(m.state === 'error' ? 'ERROR' : 'UNAVAILABLE', m.state === 'error' ? 'bad' : 'neutral')}</p><p class="text-[10px] text-[#BAC9CD] mt-1">${esc(m.note)}</p>`;
+    else body = `<div class="flex items-baseline gap-2 mt-1"><span class="text-2xl font-bold font-mono-data text-[#BAF2FF]">${m.pct}%</span><span class="text-[11px] font-semibold" style="color:${m.direction === 'UP' ? '#4AE176' : '#FFB4AB'}">${m.direction === 'UP' ? '▲ UP' : '▼ DOWN'}</span></div>
+      <p class="text-[10px] text-[#BAC9CD] font-mono-data mt-1">${m.ts ? `<span title="${esc(fmtUtc(m.ts))}">${esc(fmtUtc(m.ts).slice(11))} · ${esc(ageStr(m.ts))}</span>` : 'time not reported'}</p>
+      ${m.variant ? `<p class="text-[10px] text-[#00E0FF] mt-0.5">via ${esc(SELECTION_VARIANT_LABELS[m.variant] || m.variant)}</p>` : ''}
+      ${m.note ? `<p class="text-[10px] text-[#FFB020] mt-0.5">${esc(m.note)}</p>` : ''}`;
+    return `<button type="button" data-ov-coin="${c}" data-ov-h="${h}" aria-pressed="${on}" aria-label="${c} ${h} hour forecast${m.state === 'ok' ? ': ' + m.pct + ' percent chance of a positive return' : ''}. Show detail."
+      class="ov-tile text-left rounded-xl border p-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00E0FF] ${on ? 'border-[#00E0FF] bg-[#00E0FF]/5' : 'border-[#3B494C] bg-[#0B0E11] hover:border-[#00E0FF]/40'}">${head}${body}</button>`;
+  }).join('')).join('');
+  if(focused){ const again = host.querySelector(`.ov-tile[data-ov-coin="${focused.ovCoin}"][data-ov-h="${focused.ovH}"]`); if(again) again.focus(); }
+  host.querySelectorAll('.ov-tile').forEach(btn => {
+    btn.onclick = () => {
+      currentCoin = btn.dataset.ovCoin; currentHorizon = Number(btn.dataset.ovH);
+      buildCoinTabs(); buildHorizonTabs(); refreshAll();
+    };
+  });
+}
+
+// ---- Dashboard: system status (scheduled predictions, event detection, hourly funding collector) ----
+var COLLECTOR_RUNS_URL = 'https://api.github.com/repos/quiquandon-oss/PulseWorkerV2/actions/workflows/research-funding-intraday-schedule.yml/runs?per_page=12';
+var _sysEvents = null, _sysCollector = null, _sysLoadedAt = 0;
+var SYSTEM_STATUS_REFRESH_MS = 10 * 60 * 1000;
+function loadSystemStatus(force){
+  if(!force && _sysLoadedAt && Date.now() - _sysLoadedAt < SYSTEM_STATUS_REFRESH_MS){ renderSystemStatus(); return; }
+  _sysLoadedAt = Date.now();
+  if(force){ _sysEvents = null; _sysCollector = null; }
+  renderSystemStatus();
+  getJson(WORKER_URL + '/api/events/health').then(r => { _sysEvents = r; renderSystemStatus(); });
+  getJson(COLLECTOR_RUNS_URL).then(r => { _sysCollector = r; renderSystemStatus(); });
+}
+function statusCell(title, m, lines){
+  return `<div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3">
+    <div class="flex items-center justify-between gap-2 flex-wrap"><span class="text-[11px] font-semibold text-[#E1E2E7]">${esc(title)}</span>${chip(m.label, m.tone)}</div>
+    <p class="text-[11px] text-[#E1E2E7] mt-1.5">${esc(m.main)}</p>
+    ${lines.filter(Boolean).map(l => `<p class="text-[10px] text-[#BAC9CD] font-mono-data mt-0.5">${esc(l)}</p>`).join('')}
+  </div>`;
+}
+function renderSystemStatus(){
+  const host = document.getElementById('systemStatusBody');
+  if(!host) return;
+  const now = Date.now();
+  const loading = { tone: 'neutral', label: 'LOADING', main: 'Reading the latest report…', sub: '' };
+  const fr = (typeof _freshness !== 'undefined') ? _freshness : null;
+  const p = fr ? predictionRunsModel(fr, now) : loading;
+  const e = _sysEvents ? eventDetectionModel(_sysEvents, now) : loading;
+  const c = _sysCollector ? collectorModel(_sysCollector, now) : loading;
+  host.innerHTML =
+    statusCell('Scheduled predictions (every 3 h)', p, [
+      p.lastCron ? `last run ${fmtUtc(p.lastCron)} (${ageStr(p.lastCron)})` : p.sub,
+      p.nextDue ? `next due ${fmtUtc(p.nextDue)}` : '',
+      p.versions && p.versions.length ? `Worker version on latest rows: ${p.versions.join(', ')}` : '' ]) +
+    statusCell('Event detection (hourly)', e, [
+      e.lastRun ? `last run ${fmtUtc(e.lastRun)} (${ageStr(e.lastRun)}${e.trigger ? ', ' + e.trigger : ''})` : e.sub ]) +
+    statusCell('Funding collector (hourly, GitHub Actions)', c, [
+      c.lastRun ? `last run ${fmtUtc(c.lastRun)} (${ageStr(c.lastRun)}${c.trigger ? ', ' + c.trigger : ''})` : c.sub ]);
+}
+
+// ---- Lab: every variant for the current cycle ----
+var _variantCycleSeq = 0;
+var VARIANT_ROLE_CHIP = {
+  SELECTED: ['PRODUCTION · SELECTED', 'good'], SERVED_FALLBACK: ['PRODUCTION · FALLBACK', 'info'],
+  CANDIDATE: ['CANDIDATE · NOT SERVED', 'neutral'], SHADOW: ['SHADOW · LOGGED ONLY', 'neutral'], UNKNOWN: ['ROLE NOT REPORTED', 'neutral'],
+};
+var VARIANT_EXTRA_LABELS = { challenger_momentum: 'Challenger Momentum (EXP-003)' };
+async function loadVariantCycle(){
+  const host = document.getElementById('variantCycleBody');
+  if(!host) return;
+  const seq = ++_variantCycleSeq, coin = currentCoin, horizon = currentHorizon;
+  document.getElementById('variantCycleScope').textContent = `${coin} · ${horizon}h`;
+  host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
+  const res = await getJson(WORKER_URL + COIN_CONFIG[coin].predict + '?horizon=' + horizon);
+  if(seq !== _variantCycleSeq) return;
+  const d = res.data;
+  const rows = variantCycleRows(d);
+  if(!rows.length){
+    host.innerHTML = `<p class="text-xs">${chip(res.ok || d ? 'UNAVAILABLE' : 'ERROR', res.ok || d ? 'neutral' : 'bad')} <span class="text-[#BAC9CD]">${res.ok || d ? 'No prediction is available for this coin and horizon, so there are no variant values to compare.' : 'The prediction request failed. Use refresh to retry.'}</span></p>`;
+    return;
+  }
+  const asOf = !d.ts ? 'computation time not reported' : d.served_from === 'snapshot' ? `scheduled run of ${fmtUtc(d.ts)}` : `computed ${fmtUtc(d.ts)}`;
+  host.innerHTML = `
+    <p class="text-[11px] text-[#BAC9CD] font-mono-data mb-2">Cycle: ${esc(asOf)} (${esc(ageStr(d.ts))})</p>
+    <div class="overflow-x-auto"><table class="w-full text-xs min-w-[520px]">
+      <thead><tr class="text-left text-[10px] uppercase tracking-wide text-[#8A9599] border-b border-[#3B494C]">
+        <th scope="col" class="py-1.5 pr-3 font-semibold">Model</th><th scope="col" class="py-1.5 pr-3 font-semibold">Role</th>
+        <th scope="col" class="py-1.5 pr-3 font-semibold">P(up), this cycle</th><th scope="col" class="py-1.5 pr-3 font-semibold">Call</th>
+        <th scope="col" class="py-1.5 font-semibold">Local record (selection layer)</th></tr></thead>
+      <tbody>${rows.map(r => {
+        const role = VARIANT_ROLE_CHIP[r.role] || VARIANT_ROLE_CHIP.UNKNOWN;
+        const rec = r.role === 'SHADOW' ? `<span class="text-[#8A9599]">not part of selection${r.triggered ? ' · overlay triggered this cycle' : ' · overlay not triggered'}</span>`
+          : !r.scored ? '<span class="text-[#8A9599]">not scored this cycle</span>'
+          : `<span class="font-mono-data">${Math.round(r.localAccuracy * 100)}% right on n=${r.localN}</span> ${r.lowN ? chip('LOW N', 'warn') : ''}`;
+        return `<tr class="border-b border-[#3B494C]/50">
+          <td class="py-1.5 pr-3 font-semibold text-[#E1E2E7]">${esc(SELECTION_VARIANT_LABELS[r.variant] || VARIANT_EXTRA_LABELS[r.variant] || r.variant)}</td>
+          <td class="py-1.5 pr-3">${chip(role[0], role[1])}</td>
+          <td class="py-1.5 pr-3 font-mono-data">${r.pUp == null ? '<span class="text-[#8A9599]">not reported</span>' : Math.round(r.pUp * 100) + '%'}</td>
+          <td class="py-1.5 pr-3 font-semibold" style="color:${r.direction === 'UP' ? '#4AE176' : r.direction === 'DOWN' ? '#FFB4AB' : '#8A9599'}">${r.direction === 'UP' ? '▲ UP' : r.direction === 'DOWN' ? '▼ DOWN' : '—'}</td>
+          <td class="py-1.5">${rec}</td></tr>`; }).join('')}</tbody></table></div>
+    <p class="text-[10px] text-[#8A9599] mt-2 leading-relaxed">Only the row marked PRODUCTION is what the Dashboard serves. Candidates are computed every cycle and compared by the selection layer but are not served; shadow rows are logged for an experiment and never enter selection. "Local record" is the selection layer's own figure: how often the variant was right on the n most similar past resolved cases where it made the same call. LOW N marks n under ${VARIANT_LOW_N} (a display rule; the selection gate applies its own significance bar). Overall resolved accuracy per variant is in the charts and tables around this card.</p>`;
+}
+
+// ---- Experiments: EXP-002 prospective comparison (counts and plan facts only) ----
+function renderExp002(){
+  const host = document.getElementById('exp002Body');
+  if(!host) return;
+  if(!_registry || !_registry.ok){
+    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Experiment registry could not be read (${esc(_registry ? _registry.error : 'not loaded')}).</span></p>`;
+    return;
+  }
+  const e = findExperiment('EXP-002');
+  const m = exp002Model(e);
+  if(!m){
+    host.innerHTML = `<p>${chip('NOT IN REGISTRY','neutral')} <span class="text-[#BAC9CD]">EXP-002 is not listed in the registry response.</span></p>`;
+    return;
+  }
+  const plan = m.plan;
+  host.innerHTML = `
+    <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(m.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(m.maturity)} <span class="text-[#BAC9CD] ml-1">Decision state</span> ${decisionChip(e)} <span class="text-[#BAC9CD] ml-1">Analysis</span> ${plan ? statusChipFor(plan.evaluationStatus) : chip('PLAN NOT REPORTED','neutral')}</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+      <div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">Checkpoint (per horizon)</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${plan && plan.required != null ? plan.required + ' informative pairs' : 'not defined'}</p><p class="text-[10px] text-[#BAC9CD] mt-0.5">${plan && plan.meaning ? esc(plan.meaning) : ''}</p></div>
+      <div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">Progress toward checkpoint</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${plan && plan.count != null ? plan.count + (plan.required != null ? ' / ' + plan.required : '') : 'not reported by the API'}</p><p class="text-[10px] text-[#BAC9CD] mt-0.5">${plan && plan.count != null ? '' : 'The count of kept informative pairs is computed offline by the committed evaluator, not by the Worker.'}</p></div>
+      <div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">Shadow rows logged (all time)</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${m.loggedRows != null ? m.loggedRows : 'not reported'}</p><p class="text-[10px] text-[#BAC9CD] mt-0.5">${m.latestRowTs ? 'latest ' + esc(fmtUtc(m.latestRowTs)) + ' (' + esc(ageStr(m.latestRowTs)) + ')' : ''}</p></div>
+    </div>
+    <dl>
+      ${plan ? field('Frozen plan', plan.reason) : ''}
+      ${plan ? field('Plan reference', plan.specRef) : ''}
+      ${plan && plan.limitations.length ? field('Current limitation', plan.limitations.join(' ')) : ''}
+      ${field('Next action', e.next_action)}
+    </dl>
+    <p class="text-[10px] text-[#8A9599] mt-2">Counts only. The plan allows a single analysis at the checkpoint, so no accuracy or comparison figure is shown before it. Logged rows include rows from before the plan's start date, which the plan excludes.</p>`;
+}
+
 const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
 
 // setDot() removed along with its only callers (checkWorker/checkDb/the
@@ -818,7 +1178,7 @@ async function loadPrediction(){
   document.getElementById('evidenceBody').innerHTML = '<p class="text-[#BAC9CD]">Loading…</p>';
   document.getElementById('calibNote').textContent = '';
   try{
-    const r = await fetch(WORKER_URL + cfg.predict + '?horizon=' + horizonAtCall);
+    const r = await apiFetch(WORKER_URL + cfg.predict + '?horizon=' + horizonAtCall);
     const d = await r.json();
     // A newer call already started since this one began -- its own render
     // (already done, or about to happen) is the one that should win.
@@ -850,10 +1210,7 @@ async function loadPrediction(){
     // RESOLVED prediction at selection time (backend semantics since the
     // selection layer was introduced), so it is shown only as a fallback for
     // older responses, and labelled as such. ----
-    const selection = (d.selection && d.selection.ok && d.selection.chosen_variant) ? d.selection : null;
-    const usingNonOriginal = selection && selection.chosen_variant !== 'original';
-    const hasCycleValue = usingNonOriginal && typeof selection.cycle_p_up === 'number';
-    const headlinePUp = usingNonOriginal ? (hasCycleValue ? selection.cycle_p_up : selection.chosen_p_up) : d.p_up;
+    const { selection, usingNonOriginal, hasCycleValue, pUp: headlinePUp } = headlineOf(d);
 
     document.getElementById('predPUp').textContent = Math.round(headlinePUp * 100) + '%';
     document.getElementById('predAsOf').textContent = !d.ts ? 'Computation time not reported'
@@ -900,7 +1257,7 @@ async function loadPrediction(){
     // track record underneath a DIFFERENT variant's number would imply
     // that history belongs to the number being shown, when it doesn't.
     if (usingNonOriginal) {
-      const vr = await fetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant);
+      const vr = await apiFetch(WORKER_URL + '/variant-calibration?coin=' + coinAtCall + '&horizon=' + horizonAtCall + '&variant=' + selection.chosen_variant);
       const vc = await vr.json().catch(() => ({ ok: false, error: 'unreadable response' }));
       if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
       const vErr = (!vr.ok || vc.ok === false) ? (vc.error || ('HTTP ' + vr.status)) : null;
@@ -912,7 +1269,7 @@ async function loadPrediction(){
         upRate: null, calibrated: null,
       });
     } else {
-      const cr = await fetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall);
+      const cr = await apiFetch(WORKER_URL + cfg.calib + '?horizon=' + horizonAtCall);
       const c = await cr.json().catch(() => ({ ok: false, error: 'unreadable response' }));
       if (mySeq !== _predictionRequestSeq) return; // superseded while this second fetch was in flight
       const cErr = (!cr.ok || c.ok === false) ? (c.error || ('HTTP ' + cr.status)) : null;
@@ -1297,7 +1654,7 @@ async function loadChart(){
   chartRaw = { prices: [], predictions: [], loadedFor: null, error: null };
   renderHistoryRecap();
   try{
-    const r = await fetch(WORKER_URL + cfg.chart + '?horizon=' + horizonAtCall);
+    const r = await apiFetch(WORKER_URL + cfg.chart + '?horizon=' + horizonAtCall);
     const d = await r.json();
     if (mySeq !== _chartRequestSeq) return;
     if(d.ok){
@@ -1333,11 +1690,13 @@ function loadFreshness(force){
   if(_freshnessPromise) return _freshnessPromise;
   _freshnessPromise = (async () => {
     try{
-      const r = await fetch(WORKER_URL + '/prediction-freshness');
+      const r = await apiFetch(WORKER_URL + '/prediction-freshness');
       const d = await r.json();
       _freshness = d && d.ok && d.coins ? { ok: true, data: d } : { ok: false, error: (d && d.error) || 'no freshness report' };
     }catch(e){ _freshness = { ok: false, error: 'request failed' }; }
     renderDataQuality();
+    renderOverview();
+    renderSystemStatus();
     return _freshness;
   })();
   return _freshnessPromise;
@@ -1357,7 +1716,7 @@ function completenessChip(cron24, expected){
 const FRESHNESS_REPORT_MAX_AGE_MS = 3 * 60 * 60 * 1000; // one 3h cron tick
 // Re-render once a minute so ages and the outdated-report rule track the
 // clock while the page stays open. No request is made.
-setInterval(() => { if (activeView === 'dashboard') renderDataQuality(); }, 60000);
+setInterval(() => { if (activeView === 'dashboard') { renderDataQuality(); renderOverview(); renderSystemStatus(); } }, 60000);
 function renderDataQuality(){
   const host = document.getElementById('dqBody');
   if(!host) return;
@@ -1458,6 +1817,8 @@ let _labLoadedFor = null;
 
 function loadDashboardIfNeeded(){
   loadFreshness();
+  loadOverview();
+  loadSystemStatus();
   const key = comboKey();
   if (_dashboardLoadedFor === key) return;
   _dashboardLoadedFor = key;
@@ -1484,7 +1845,7 @@ function loadExperimentsIfNeeded(){
 }
 
 function renderScopeChip(){
-  const show = activeView === 'lab' || activeView === 'history';
+  const show = activeView === 'lab';
   document.getElementById('scopeChip').classList.toggle('hidden', !show);
   document.getElementById('scopeChipValue').textContent = currentCoin + ' · ' + currentHorizon + 'H';
 }
@@ -1512,11 +1873,11 @@ function renderNav(){
     if (on) btn.setAttribute('aria-current', 'page'); else btn.removeAttribute('aria-current');
   });
   for (const n of NAV) document.getElementById('view-' + n.key).classList.toggle('hidden', activeView !== n.key);
-  // Coin/horizon toggle: Dashboard-only now, per explicit request. Lab's
-  // content (Challenger, experiments) is still coin/horizon-scoped and
-  // keeps using whatever combo was last set on Dashboard -- there's just
-  // no way to change it from within Lab itself anymore.
-  document.getElementById('coinHorizonToggle').classList.toggle('hidden', activeView !== 'dashboard');
+  // Coin/horizon toggle: on the Dashboard and on History (where it is the
+  // asset/horizon filter for the records). Lab stays scoped to whatever
+  // combo was last chosen, per the earlier explicit request, and says so
+  // in the scope chip.
+  document.getElementById('coinHorizonToggle').classList.toggle('hidden', activeView !== 'dashboard' && activeView !== 'history');
   renderScopeChip();
   if (activeView === 'dashboard') loadDashboardIfNeeded();
   if (activeView === 'lab') loadLabIfNeeded();
@@ -1615,7 +1976,7 @@ async function loadBacktestHistory(){
   const hist = document.getElementById('historyBacktestTbody');
   const msg = (cols, text, cls) => `<tr><td colspan="${cols}" class="px-2 py-6 text-center ${cls || 'text-[#BAC9CD]'}">${text}</td></tr>`;
   try{
-    const r = await fetch(WORKER_URL + '/backtest-history');
+    const r = await apiFetch(WORKER_URL + '/backtest-history');
     const d = await r.json();
     if(!d.ok || !d.runs || !d.runs.length){
       dash.innerHTML = msg(5, 'No backtests run yet.');
@@ -1638,7 +1999,7 @@ loadBacktestHistory();
 async function loadRegimeSplitHistory(){
   const tbody = document.getElementById('regimeSplitTbody');
   try{
-    const r = await fetch(WORKER_URL + '/backtest-regime-split-history');
+    const r = await apiFetch(WORKER_URL + '/backtest-regime-split-history');
     const d = await r.json();
     if(!d.ok || !d.runs || !d.runs.length){
       tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">No regime-split test run yet.</td></tr>';
@@ -1676,7 +2037,7 @@ async function loadChallengerLive(){
   if(!host) return;
   host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
   try{
-    const r = await fetch(WORKER_URL + '/challenger-recent?limit=30');
+    const r = await apiFetch(WORKER_URL + '/challenger-recent?limit=30');
     const d = await r.json();
     const rows = (d.predictions || []).filter(p => p.coin === currentCoin && p.horizon_hours === currentHorizon);
     if(!rows.length){
@@ -1721,7 +2082,7 @@ async function loadChallengerCalib(){
   if(!host) return;
   host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
   try{
-    const r = await fetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon);
+    const r = await apiFetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon);
     const d = await r.json();
     if(!d.ok || (d.n_resolved || 0) < 5){
       host.innerHTML = `<p class="text-xs text-[#BAC9CD]">Only ${d.n_resolved || 0} resolved challenger prediction${(d.n_resolved||0)===1?'':'s'} so far for ${currentCoin} · ${currentHorizon}h — need at least 5 before this comparison means anything.</p>`;
@@ -1755,7 +2116,7 @@ async function loadChallengerRecap(){
   if(!host) return;
   host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
   try{
-    const r = await fetch(WORKER_URL + '/challenger-recent?limit=50');
+    const r = await apiFetch(WORKER_URL + '/challenger-recent?limit=50');
     const d = await r.json();
     const rows = (d.predictions || []).filter(p => p.coin === currentCoin && p.horizon_hours === currentHorizon);
     if(!rows.length){ host.innerHTML = '<p class="text-xs text-[#BAC9CD]">None yet.</p>'; return; }
@@ -1794,7 +2155,9 @@ document.getElementById('refreshBtn').onclick = async () => {
     _dashboardLoadedFor = null;
     _labLoadedFor = null;
     _chartLoadedFor = null;
+    apiCacheClear();
     loadFreshness(true);
+    if (activeView === 'dashboard') { loadOverview(true); loadSystemStatus(true); } else { _overviewLoadedAt = 0; _sysLoadedAt = 0; }
     if (activeView === 'experiments') { _experimentsLoaded = false; loadExperimentsIfNeeded(); }
     await refreshAll();
   } finally {
@@ -1804,6 +2167,7 @@ document.getElementById('refreshBtn').onclick = async () => {
 
 // ═══ LAB TAB ═══
 function loadLab(){
+  loadVariantCycle();
   loadLabWeightingAndHero();
   loadLabCompareChart();
   loadLabCombinedHistoryChart();
@@ -1824,7 +2188,7 @@ async function fetchAllCalibrations(){
   ];
   return Promise.all(combos.map(async c => {
     try{
-      const r = await fetch(WORKER_URL + c.path + '?horizon=' + c.horizon);
+      const r = await apiFetch(WORKER_URL + c.path + '?horizon=' + c.horizon);
       const d = await r.json();
       return { coin: c.coin, horizon: c.horizon, accuracy: d.accuracy ?? null, n_resolved: d.n_resolved || 0 };
     }catch(e){
@@ -1870,10 +2234,10 @@ async function loadLabWeightingAndHero(){
     const [combos, predResults] = await Promise.all([
       fetchAllCalibrations(),
       Promise.all([
-        fetch(WORKER_URL + COIN_CONFIG.BTC.predict + '?horizon=12').then(r=>r.json()).catch(()=>null),
-        fetch(WORKER_URL + COIN_CONFIG.BTC.predict + '?horizon=24').then(r=>r.json()).catch(()=>null),
-        fetch(WORKER_URL + COIN_CONFIG.LINK.predict + '?horizon=12').then(r=>r.json()).catch(()=>null),
-        fetch(WORKER_URL + COIN_CONFIG.LINK.predict + '?horizon=24').then(r=>r.json()).catch(()=>null),
+        apiFetch(WORKER_URL + COIN_CONFIG.BTC.predict + '?horizon=12').then(r=>r.json()).catch(()=>null),
+        apiFetch(WORKER_URL + COIN_CONFIG.BTC.predict + '?horizon=24').then(r=>r.json()).catch(()=>null),
+        apiFetch(WORKER_URL + COIN_CONFIG.LINK.predict + '?horizon=12').then(r=>r.json()).catch(()=>null),
+        apiFetch(WORKER_URL + COIN_CONFIG.LINK.predict + '?horizon=24').then(r=>r.json()).catch(()=>null),
       ]),
     ]);
     const { simple, pooled, totalN } = computeCombinedAccuracy(combos);
@@ -1920,14 +2284,14 @@ async function loadLabCompareChart(){
   wireFullscreenToggle('labCompareFullscreenBtn', 'labCompareCard', 'labCompareChartContainer', () => labCompareChartInstance, '260px');
   try{
     const [core, challenger, knnHistory, challengerHistory] = await Promise.all([
-      fetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon).then(r=>r.json()),
-      fetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
+      apiFetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon).then(r=>r.json()),
+      apiFetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
       // Calibrated variants' overall accuracy isn't on the snapshot
       // endpoints above yet — reusing the -history endpoints' own latest
       // point instead of adding a new backend computation, since that
       // data's already being fetched elsewhere in this same tab.
-      fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
-      fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
+      apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
+      apiFetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
     ]);
     const bars = [];
     if(core && core.n_resolved > 0){
@@ -2073,8 +2437,8 @@ async function loadLabCombinedHistoryChart(){
   wireFullscreenToggle('labCombinedHistoryFullscreenBtn', 'labCombinedHistoryCard', 'labCombinedHistoryChartContainer', () => labCombinedHistoryChartInstance, '280px');
   try{
     const [knnRes, challengerRes] = await Promise.all([
-      fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()),
-      fetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
+      apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()),
+      apiFetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
     ]);
     const knnPointsAll = (knnRes && knnRes.points) || [];
     const challengerPointsAll = (challengerRes && challengerRes.ok && challengerRes.points) || [];
@@ -2260,7 +2624,7 @@ async function loadSelectedModel(){
   if(!body) return;
   document.getElementById('selectedModelCoinLabel').textContent = `${currentCoin} · ${currentHorizon}h`;
   try{
-    const r = await fetch(WORKER_URL + '/selection-history?coin=' + currentCoin + '&horizon=' + currentHorizon + '&limit=5');
+    const r = await apiFetch(WORKER_URL + '/selection-history?coin=' + currentCoin + '&horizon=' + currentHorizon + '&limit=5');
     const d = await r.json();
     if(!d.ok || !d.decisions || !d.decisions.length){
       body.innerHTML = `<p class="text-xs text-mutet">No selection decisions logged yet for ${currentCoin} · ${currentHorizon}h — this runs automatically alongside each prediction cycle, check back after the next one.</p>`;
@@ -2302,8 +2666,8 @@ async function loadLabModelHealth(){
     const results = await Promise.all(combos.map(async ({coin, horizon}) => {
       const cfg = COIN_CONFIG[coin];
       const [knnRes, chRes] = await Promise.all([
-        fetch(WORKER_URL + cfg.calibHistory + '?horizon=' + horizon).then(r=>r.json()).catch(()=>null),
-        fetch(WORKER_URL + '/challenger-calibration-history?coin=' + coin + '&horizon=' + horizon).then(r=>r.json()).catch(()=>null),
+        apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + horizon).then(r=>r.json()).catch(()=>null),
+        apiFetch(WORKER_URL + '/challenger-calibration-history?coin=' + coin + '&horizon=' + horizon).then(r=>r.json()).catch(()=>null),
       ]);
       const knnPoints = (knnRes && knnRes.points) || [];
       const chPoints = (chRes && chRes.ok && chRes.points) || [];
@@ -2443,7 +2807,7 @@ async function loadLabModelHealth(){
 const learningApi = {
   async getDailyOverview(){
     try{
-      const r = await fetch(WORKER_URL + '/api/learning/daily');
+      const r = await apiFetch(WORKER_URL + '/api/learning/daily');
       if(!r.ok) return { ok:false, unavailable:true };
       const d = await r.json();
       if(d.ok === false) return { ok:false, unavailable:true };
@@ -2452,7 +2816,7 @@ const learningApi = {
   },
   async getChatGptOverview(){
     try{
-      const r = await fetch(WORKER_URL + '/api/learning/chatgpt');
+      const r = await apiFetch(WORKER_URL + '/api/learning/chatgpt');
       if(!r.ok) return { ok:false, unavailable:true };
       const d = await r.json();
       if(d.ok === false) return { ok:false, unavailable:true };
@@ -2461,7 +2825,7 @@ const learningApi = {
   },
   async getSelection(coin, horizon){
     try{
-      const r = await fetch(WORKER_URL + '/select-variant?coin=' + coin + '&horizon=' + horizon);
+      const r = await apiFetch(WORKER_URL + '/select-variant?coin=' + coin + '&horizon=' + horizon);
       if(!r.ok) return { ok:false, unavailable:true };
       const d = await r.json();
       if(d.ok === false) return { ok:false, unavailable:true };
@@ -2470,7 +2834,7 @@ const learningApi = {
   },
   async getSelectionHistory(coin, horizon, limit){
     try{
-      const r = await fetch(WORKER_URL + '/selection-history?coin=' + coin + '&horizon=' + horizon + '&limit=' + (limit || 20));
+      const r = await apiFetch(WORKER_URL + '/selection-history?coin=' + coin + '&horizon=' + horizon + '&limit=' + (limit || 20));
       if(!r.ok) return { ok:false, unavailable:true };
       const d = await r.json();
       if(d.ok === false) return { ok:false, unavailable:true };
@@ -2822,7 +3186,7 @@ async function loadAnalystRelayPrompt(){
   el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Checking for a candidate…</p>`;
   let data;
   try {
-    const res = await fetch(WORKER_URL + '/analyst-relay/prompt');
+    const res = await apiFetch(WORKER_URL + '/analyst-relay/prompt');
     data = await res.json();
   } catch (e) {
     el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Could not reach the Worker to check for a candidate.</p>`;
@@ -3091,7 +3455,7 @@ var EVENTS_LIMIT = 200;
 
 async function fetchJson(path){
   try{
-    const r = await fetch(WORKER_URL + path);
+    const r = await apiFetch(WORKER_URL + path);
     const d = await r.json();
     if(!r.ok || d.ok === false) return { ok: false, error: d.error || ('HTTP ' + r.status) };
     return { ok: true, data: d };
@@ -3113,6 +3477,7 @@ async function loadExperiments(){
   document.getElementById('expLoadedAt').textContent = fmtUtc(Date.now());
   renderGoalA();
   renderGoalB();
+  renderExp002();
   renderRegistry();
 }
 
@@ -3309,7 +3674,7 @@ function renderRegistry(){
   body.insertAdjacentHTML('beforeend', `<p class="text-[10px] text-[#8A9599] mt-3 leading-relaxed">Registry generated ${fmtUtc(_registry.data.generated_ts)}. Entries use the registry's own EXP-NNN identifiers; TimesFM (EXP-004) and Experiment 5 (EXP-011) are identified from their registry titles. The registry does not define "E1–E6" labels, so none are applied here.</p>`);
 }
 
-document.getElementById('expRefreshBtn').onclick = () => { _experimentsLoaded = false; loadExperimentsIfNeeded(); };
+document.getElementById('expRefreshBtn').onclick = () => { apiCacheClear(); _experimentsLoaded = false; loadExperimentsIfNeeded(); };
 // The learning block (former AI Learning view) loads only when opened.
 document.getElementById('learningDetails').addEventListener('toggle', (ev) => {
   if (ev.target.open && !_learningLoaded) loadLearningOverview();

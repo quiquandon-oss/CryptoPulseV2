@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertRunModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -124,20 +124,30 @@ test('EXP-002: counts and plan facts only', () => {
   assert.equal(plain(H.exp002Model({ status: 'X' })).plan, null);
 });
 
+const hourly = (runs, lastTs) => ({ kind: 'scheduled', key: '0 * * * *', invocations: runs, last_ts: lastTs });
 const usage = (over = {}, dayOver = {}) => ({ ok: true, data: { ok: true, recording: true, daily_read_limit: 5000000,
-  days: [{ day: '2026-11-13', rows_read: 1000000, rows_written: 200, entries: [{ last_ts: NOW - 20 * 60000 }, { last_ts: NOW - 50 * 60000 }], ...dayOver },
+  days: [{ day: '2026-11-13', rows_read: 1000000, rows_written: 200, entries: [hourly(14, NOW - 20 * 60000), { kind: 'fetch', key: 'GET /chart-data', invocations: 9, last_ts: NOW - 50 * 60000 }], ...dayOver },
     { day: '2026-11-12', rows_read: 1500000, entries: [] }], ...over } });
 
-test('database usage: healthy figures, remaining, projection, previous day', () => {
-  const m = H.d1UsageModel(usage(), NOW); // 14:00 UTC, 1.0M read
+test('database usage: healthy figures, remaining, reliable projection, previous day', () => {
+  const m = H.d1UsageModel(usage(), NOW); // 14:00 UTC, 14 hourly runs recorded, 1.0M read
   assert.deepEqual([m.label, m.tone, m.read, m.limit, m.remaining, m.pct, m.lastTs], ['HEALTHY', 'good', 1000000, 5000000, 4000000, 20, NOW - 20 * 60000]);
-  assert.equal(Math.round(m.projected), 1714286);
-  assert.equal(m.projectedPct, 34.3);
+  assert.deepEqual([Math.round(m.projected), m.projectedPct, m.projectionQuality, m.coverageComplete, m.coveredHours], [1714286, 34.3, 'reliable', true, 14]);
   assert.equal(m.prev.day, '2026-11-12');
   assert.match(m.main, /1,000,000 of 5,000,000 rows read today \(20%\)/);
 });
 
-test('database usage: warning by share used, warning by projection, critical at the limit', () => {
+test('database usage: partial-day recording gives a provisional projection that never changes the status', () => {
+  const part = (read) => H.d1UsageModel(usage({}, { rows_read: read, entries: [hourly(5, NOW - 10 * 60000)] }), NOW);
+  const m = part(1500000);                                      // 5 h measured of 14 h: 300,000 rows/h -> 7.2M per day
+  assert.deepEqual([m.label, m.projectionQuality, m.coverageComplete, m.coveredHours, Math.round(m.projected), m.projectionOverThreshold],
+    ['HEALTHY', 'provisional', false, 5, 7200000, true]);
+  assert.equal(part(3100000).label, 'WARNING');                 // the measured share still warns
+  const none = H.d1UsageModel(usage({}, { entries: [{ kind: 'fetch', key: 'GET /x', invocations: 3, last_ts: NOW - 60000 }] }), NOW);
+  assert.deepEqual([none.label, none.projected, none.projectionQuality], ['HEALTHY', null, 'none']);
+});
+
+test('database usage: warning by share used, warning by reliable projection, critical at the limit', () => {
   assert.equal(H.d1UsageModel(usage({}, { rows_read: 3100000 }), NOW).label, 'WARNING');             // 62% used
   const proj = H.d1UsageModel(usage({}, { rows_read: 2600000 }), NOW);                                 // 52% used, 89% projected
   assert.deepEqual([proj.label, proj.tone], ['WARNING', 'warn']);
@@ -145,12 +155,12 @@ test('database usage: warning by share used, warning by projection, critical at 
   const crit = H.d1UsageModel(usage({}, { rows_read: 5200000 }), NOW);
   assert.deepEqual([crit.label, crit.tone, crit.remaining], ['CRITICAL', 'bad', 0]);
   const early = Date.UTC(2026, 10, 13, 1, 0, 0);
-  const e = H.d1UsageModel(usage({}, { rows_read: 600000, entries: [{ last_ts: early - 60000 }] }), early);
-  assert.deepEqual([e.label, e.projected], ['HEALTHY', null]);                                         // too early to project
+  const e = H.d1UsageModel(usage({}, { rows_read: 600000, entries: [hourly(2, early - 60000)] }), early);
+  assert.deepEqual([e.label, e.projected, e.projectionQuality], ['HEALTHY', null, 'none']);            // too early to project
 });
 
 test('database usage: stale, missing, failed and partial responses are never healthy', () => {
-  assert.equal(H.d1UsageModel(usage({}, { entries: [{ last_ts: NOW - 3 * HOUR }] }), NOW).label, 'STALE');
+  assert.equal(H.d1UsageModel(usage({}, { entries: [hourly(11, NOW - 3 * HOUR)] }), NOW).label, 'STALE');
   const none = H.d1UsageModel(usage({ days: [{ day: '2026-11-12', rows_read: 5, entries: [] }] }), NOW);
   assert.deepEqual([none.label, none.tone], ['STALE', 'bad']);
   assert.equal(H.d1UsageModel(usage({ days: [] }), Date.UTC(2026, 10, 13, 0, 30, 0)).label, 'UNKNOWN');
@@ -161,16 +171,30 @@ test('database usage: stale, missing, failed and partial responses are never hea
   }
 });
 
-test('alert checks: passing, alert, stale, unknown', () => {
+test('alerts: an open alert issue is an active alert whatever the latest run says', () => {
   const run = (minsAgo, conclusion = 'success', status = 'completed') => ({ status, conclusion, event: 'workflow_dispatch', updated_at: new Date(NOW - minsAgo * 60000).toISOString() });
-  const list = (runs) => ({ ok: true, data: { workflow_runs: runs } });
-  assert.deepEqual([H.alertRunModel(list([run(60)]), NOW).label, H.alertRunModel(list([run(60)]), NOW).tone], ['PASSING', 'good']);
-  assert.deepEqual([H.alertRunModel(list([run(60, 'failure')]), NOW).label, H.alertRunModel(list([run(60, 'failure')]), NOW).tone], ['ALERT', 'bad']);
-  assert.equal(H.alertRunModel(list([run(5, null, 'in_progress'), run(60)]), NOW).label, 'PASSING');
-  assert.equal(H.alertRunModel(list([run(300)]), NOW).label, 'STALE');
-  assert.equal(H.alertRunModel(list([run(60, 'cancelled')]), NOW).label, 'UNKNOWN');
-  assert.equal(H.alertRunModel(list([]), NOW).label, 'UNKNOWN');
-  assert.equal(H.alertRunModel({ ok: false, error: 'HTTP 403' }, NOW).tone, 'neutral');
+  const runs = (list) => ({ ok: true, data: { workflow_runs: list } });
+  const issues = (list) => ({ ok: true, data: list });
+  const issue = { number: 7, state: 'open', title: 'Operations alert: 1 problem found by the scheduled checks', created_at: new Date(NOW - 5 * HOUR).toISOString(), html_url: 'https://github.com/o/r/issues/7' };
+  const m = H.alertModel(runs([run(60)]), issues([issue]), NOW);      // deduplicated run is green, alert still active
+  assert.deepEqual([m.label, m.tone, m.number, m.link, m.since], ['ALERT ACTIVE', 'bad', 7, 'https://github.com/o/r/issues/7', NOW - 5 * HOUR]);
+  assert.equal(H.alertModel({ ok: false, error: 'HTTP 403' }, issues([issue]), NOW).label, 'ALERT ACTIVE');
+  assert.equal(H.alertModel(runs([run(60)]), issues([{ ...issue, html_url: 'javascript:alert(1)' }]), NOW).link, null);
+  assert.equal(H.alertModel(runs([run(60)]), issues([{ ...issue, pull_request: {} }]), NOW).label, 'PASSING');
+});
+
+test('alerts: passing needs no open alert and a recent successful run; unreadable sources are unknown', () => {
+  const run = (minsAgo, conclusion = 'success', status = 'completed') => ({ status, conclusion, event: 'schedule', updated_at: new Date(NOW - minsAgo * 60000).toISOString() });
+  const runs = (list) => ({ ok: true, data: { workflow_runs: list } });
+  const none = { ok: true, data: [] };
+  assert.deepEqual([H.alertModel(runs([run(60)]), none, NOW).label, H.alertModel(runs([run(60)]), none, NOW).tone], ['PASSING', 'good']);
+  assert.equal(H.alertModel(runs([run(5, null, 'in_progress'), run(60)]), none, NOW).label, 'PASSING');
+  assert.deepEqual([H.alertModel(runs([run(60, 'failure')]), none, NOW).label, H.alertModel(runs([run(60, 'failure')]), none, NOW).tone], ['CHECK FAILED', 'bad']);
+  assert.equal(H.alertModel(runs([run(300)]), none, NOW).label, 'STALE');
+  for (const m of [H.alertModel(runs([run(60)]), { ok: false, error: 'HTTP 403' }, NOW), H.alertModel(runs([run(60)]), null, NOW),
+    H.alertModel({ ok: false, error: 'HTTP 403' }, none, NOW), H.alertModel(runs([]), none, NOW), H.alertModel(runs([run(60, 'cancelled')]), none, NOW)]) {
+    assert.deepEqual([m.label, m.tone], ['UNKNOWN', 'neutral']);
+  }
 });
 
 test('page source: one write request, user-entered key only, no embedded secrets', () => {

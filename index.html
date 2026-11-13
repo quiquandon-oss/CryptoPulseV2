@@ -936,6 +936,7 @@ function renderOverview(){
   if(!host) return;
   const fr = (typeof _freshness !== 'undefined' && _freshness && _freshness.ok) ? _freshness.data.coins : null;
   const now = Date.now();
+  const focused = host.contains(document.activeElement) ? document.activeElement.dataset : null; // keep keyboard focus across re-renders
   host.innerHTML = COINS.map(c => HORIZONS.map(h => {
     const m = forecastTileModel(c, h, _overview[c + '-' + h] || null, fr ? fr[c] : null, now);
     const on = c === currentCoin && h === currentHorizon;
@@ -950,6 +951,7 @@ function renderOverview(){
     return `<button type="button" data-ov-coin="${c}" data-ov-h="${h}" aria-pressed="${on}" aria-label="${c} ${h} hour forecast${m.state === 'ok' ? ': ' + m.pct + ' percent chance of a positive return' : ''}. Show detail."
       class="ov-tile text-left rounded-xl border p-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00E0FF] ${on ? 'border-[#00E0FF] bg-[#00E0FF]/5' : 'border-[#3B494C] bg-[#0B0E11] hover:border-[#00E0FF]/40'}">${head}${body}</button>`;
   }).join('')).join('');
+  if(focused){ const again = host.querySelector(`.ov-tile[data-ov-coin="${focused.ovCoin}"][data-ov-h="${focused.ovH}"]`); if(again) again.focus(); }
   host.querySelectorAll('.ov-tile').forEach(btn => {
     btn.onclick = () => {
       currentCoin = btn.dataset.ovCoin; currentHorizon = Number(btn.dataset.ovH);

@@ -2851,6 +2851,10 @@ async function loadAnalystRelayPrompt(){
     <p class="text-[10px] text-[#8A9599] mb-2">Paste the Gemini app's response below:</p>
     <textarea id="relayResponseInput" placeholder="Paste Gemini's response here…" class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7] mb-2"></textarea>
     <button id="relaySubmitBtn" class="w-full bg-[#00E0FF] text-[#0B0E11] rounded-xl py-2 text-xs font-bold">Submit</button>
+    <div class="mt-2">
+      <label for="relayKeyInput" class="block text-[9px] text-[#8A9599] mb-1">Write key (admin token). Required to submit. Kept in this tab only and cleared when the tab closes.</label>
+      <input id="relayKeyInput" type="password" autocomplete="off" placeholder="Admin token" class="w-full bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7]">
+    </div>
     <div id="relayResult" class="mt-2"></div>
     <p class="text-[9px] text-[#8A9599] mt-2 font-mono-data">context ${(data.contextHash || '').slice(0, 12)}…</p>
   `;
@@ -2877,11 +2881,17 @@ async function submitAnalystRelay(){
   const resultEl = document.getElementById('relayResult');
   if (!text){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Paste a response first.</p>`; return; }
   if (!_relayCurrentCandidate){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">No candidate loaded — refresh first.</p>`; return; }
+  // The Worker accepts relay submissions only with the owner's admin token (Authorization: Bearer). It is held
+  // in sessionStorage: this tab only, never written to disk-persistent storage, never sent anywhere else.
+  const keyInput = document.getElementById('relayKeyInput');
+  let relayKey = (keyInput && keyInput.value.trim()) || '';
+  try { if (relayKey) sessionStorage.setItem('cp_relay_key', relayKey); else relayKey = sessionStorage.getItem('cp_relay_key') || ''; } catch (e) { /* storage unavailable: use the field value */ }
+  if (!relayKey){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Enter the write key first. Submissions are owner-only.</p>`; return; }
   resultEl.innerHTML = `<p class="text-[10px] text-[#BAC9CD]">Submitting…</p>`;
   try {
     const res = await fetch(WORKER_URL + '/analyst-relay/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + relayKey },
       body: JSON.stringify({
         candidateId: _relayCurrentCandidate.candidateId,
         assets: _relayCurrentCandidate.assets,
@@ -2894,8 +2904,17 @@ async function submitAnalystRelay(){
       }),
     });
     const data = await res.json();
+    if (res.status === 401){
+      try { sessionStorage.removeItem('cp_relay_key'); } catch (e) { /* nothing stored */ }
+      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Write key rejected. Nothing was saved. Check the key and try again.</p>`;
+      return;
+    }
+    if (res.status === 503){
+      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submissions are disabled on the backend (no admin token configured). Nothing was saved.</p>`;
+      return;
+    }
     if (!data.ok){
-      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submission failed: ${String(data.error || 'unknown error')}</p>`;
+      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submission failed: ${String(data.error || 'unknown error').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</p>`;
       return;
     }
     const statusColor = data.validationStatus === 'ok' ? '#00E0A0' : (data.validationStatus === 'no_catalyst_found' ? '#BAC9CD' : '#FFB020');

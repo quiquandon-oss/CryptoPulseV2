@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertRunModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -122,6 +122,55 @@ test('EXP-002: counts and plan facts only', () => {
   assert.ok(!JSON.stringify(m).includes('accuracy'), 'no performance field is carried into the view model');
   assert.equal(H.exp002Model(null), null);
   assert.equal(plain(H.exp002Model({ status: 'X' })).plan, null);
+});
+
+const usage = (over = {}, dayOver = {}) => ({ ok: true, data: { ok: true, recording: true, daily_read_limit: 5000000,
+  days: [{ day: '2026-11-13', rows_read: 1000000, rows_written: 200, entries: [{ last_ts: NOW - 20 * 60000 }, { last_ts: NOW - 50 * 60000 }], ...dayOver },
+    { day: '2026-11-12', rows_read: 1500000, entries: [] }], ...over } });
+
+test('database usage: healthy figures, remaining, projection, previous day', () => {
+  const m = H.d1UsageModel(usage(), NOW); // 14:00 UTC, 1.0M read
+  assert.deepEqual([m.label, m.tone, m.read, m.limit, m.remaining, m.pct, m.lastTs], ['HEALTHY', 'good', 1000000, 5000000, 4000000, 20, NOW - 20 * 60000]);
+  assert.equal(Math.round(m.projected), 1714286);
+  assert.equal(m.projectedPct, 34.3);
+  assert.equal(m.prev.day, '2026-11-12');
+  assert.match(m.main, /1,000,000 of 5,000,000 rows read today \(20%\)/);
+});
+
+test('database usage: warning by share used, warning by projection, critical at the limit', () => {
+  assert.equal(H.d1UsageModel(usage({}, { rows_read: 3100000 }), NOW).label, 'WARNING');             // 62% used
+  const proj = H.d1UsageModel(usage({}, { rows_read: 2600000 }), NOW);                                 // 52% used, 89% projected
+  assert.deepEqual([proj.label, proj.tone], ['WARNING', 'warn']);
+  assert.equal(H.d1UsageModel(usage({}, { rows_read: 2400000 }), NOW).label, 'HEALTHY');               // 48% used, 82% projected
+  const crit = H.d1UsageModel(usage({}, { rows_read: 5200000 }), NOW);
+  assert.deepEqual([crit.label, crit.tone, crit.remaining], ['CRITICAL', 'bad', 0]);
+  const early = Date.UTC(2026, 10, 13, 1, 0, 0);
+  const e = H.d1UsageModel(usage({}, { rows_read: 600000, entries: [{ last_ts: early - 60000 }] }), early);
+  assert.deepEqual([e.label, e.projected], ['HEALTHY', null]);                                         // too early to project
+});
+
+test('database usage: stale, missing, failed and partial responses are never healthy', () => {
+  assert.equal(H.d1UsageModel(usage({}, { entries: [{ last_ts: NOW - 3 * HOUR }] }), NOW).label, 'STALE');
+  const none = H.d1UsageModel(usage({ days: [{ day: '2026-11-12', rows_read: 5, entries: [] }] }), NOW);
+  assert.deepEqual([none.label, none.tone], ['STALE', 'bad']);
+  assert.equal(H.d1UsageModel(usage({ days: [] }), Date.UTC(2026, 10, 13, 0, 30, 0)).label, 'UNKNOWN');
+  for (const bad of [null, { ok: false, error: 'HTTP 404' }, { ok: false, error: 'request failed' }, usage({ recording: false }),
+    usage({ daily_read_limit: undefined }), usage({}, { rows_read: undefined }), usage({}, { entries: [] }), usage({}, { entries: undefined })]) {
+    const m = H.d1UsageModel(bad, NOW);
+    assert.deepEqual([m.label, m.tone], ['UNKNOWN', 'neutral']);
+  }
+});
+
+test('alert checks: passing, alert, stale, unknown', () => {
+  const run = (minsAgo, conclusion = 'success', status = 'completed') => ({ status, conclusion, event: 'workflow_dispatch', updated_at: new Date(NOW - minsAgo * 60000).toISOString() });
+  const list = (runs) => ({ ok: true, data: { workflow_runs: runs } });
+  assert.deepEqual([H.alertRunModel(list([run(60)]), NOW).label, H.alertRunModel(list([run(60)]), NOW).tone], ['PASSING', 'good']);
+  assert.deepEqual([H.alertRunModel(list([run(60, 'failure')]), NOW).label, H.alertRunModel(list([run(60, 'failure')]), NOW).tone], ['ALERT', 'bad']);
+  assert.equal(H.alertRunModel(list([run(5, null, 'in_progress'), run(60)]), NOW).label, 'PASSING');
+  assert.equal(H.alertRunModel(list([run(300)]), NOW).label, 'STALE');
+  assert.equal(H.alertRunModel(list([run(60, 'cancelled')]), NOW).label, 'UNKNOWN');
+  assert.equal(H.alertRunModel(list([]), NOW).label, 'UNKNOWN');
+  assert.equal(H.alertRunModel({ ok: false, error: 'HTTP 403' }, NOW).tone, 'neutral');
 });
 
 test('page source: one write request, user-entered key only, no embedded secrets', () => {

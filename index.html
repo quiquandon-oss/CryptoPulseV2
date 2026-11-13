@@ -175,7 +175,7 @@
         <h2 id="systemStatusTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#BAC9CD] font-bold">System status</h2>
         <button type="button" class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'systemStatusNote')" aria-controls="systemStatusNote">ⓘ Info</button>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="systemStatusNote">Read-only. Scheduled predictions come from <span class="font-mono-data">/prediction-freshness</span> (all 12 logged series: 3 assets × 2 horizons × core and challenger). Event detection comes from <span class="font-mono-data">/api/events/health</span>. The funding collector line is the public run history of its GitHub Actions workflow. A green status needs an explicit healthy report; UNKNOWN means the report could not be read, not that the system is healthy. These checks cover whether jobs ran and saved rows, not whether the market data behind them is correct.</p>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="systemStatusNote">Read-only. Database reads come from <span class="font-mono-data">/d1-usage</span>: rows read today as recorded by the Worker, against the daily limit the same response reports. It is a lower bound (requests reading fewer than 50 rows are not recorded) and the counter resets at 00:00 UTC. WARNING uses the backend alert's own thresholds (above 60% used, or above 85% projected for the day); CRITICAL means the limit is reached; STALE means no measurement in the last 2 hours. Alert checks is the public run history of the workflow that tests for stale predictions, stopped workflows and the daily read limit; a failed run is the alert, and GitHub's notification for failed runs is its only delivery channel. Scheduled predictions come from <span class="font-mono-data">/prediction-freshness</span> (all 12 logged series: 3 assets × 2 horizons × core and challenger). Event detection comes from <span class="font-mono-data">/api/events/health</span>. The funding collector line is the public run history of its GitHub Actions workflow. A green status needs an explicit healthy report; UNKNOWN means the report could not be read, not that the system is healthy. These checks cover whether jobs ran and saved rows, not whether the market data behind them is correct.</p>
       <div id="systemStatusBody" class="grid grid-cols-1 md:grid-cols-3 gap-2" aria-live="polite"></div>
     </section>
 
@@ -887,6 +887,58 @@ function exp002Model(e){
       meaning: plan.sample && plan.sample.meaning || null, evaluationStatus: plan.evaluation_status || null,
       specRef: plan.spec_ref || null, reason: plan.reason || null, limitations: Array.isArray(plan.limitations) ? plan.limitations : [] } : null };
 }
+// Database (D1) read consumption for the current UTC day, from /d1-usage ({ ok, data } wrapper). Thresholds are the
+// ones the backend's alert uses (PulseWorkerV2 ops/d1_usage_alert.py): warn above 60% of the daily limit used, or
+// above 85% projected to the end of the day; a day with nothing recorded after its first two hours is stale. The
+// limit itself comes from the response. Totals are a lower bound (requests under 50 rows are not recorded).
+var D1_WARN_SHARE_SO_FAR = 0.60, D1_WARN_SHARE_PROJECTED = 0.85, D1_MIN_HOURS_FOR_PROJECTION = 3, D1_STALE_HOURS = 2;
+function d1UsageModel(res, now){
+  const unknown = (main, sub) => ({ tone: 'neutral', label: 'UNKNOWN', main, sub: sub || '' });
+  if(!res) return unknown('Usage report not loaded');
+  if(!res.ok || !res.data) return unknown('Usage report unavailable', res.error ? String(res.error) : '');
+  const d = res.data;
+  if(d.recording === false) return unknown('Usage is not being recorded by the Worker');
+  const limit = typeof d.daily_read_limit === 'number' && d.daily_read_limit > 0 ? d.daily_read_limit : null;
+  const today = new Date(now).toISOString().slice(0, 10);
+  const days = Array.isArray(d.days) ? d.days : [];
+  const day = days.find(x => x && x.day === today) || null;
+  const prev = days.filter(x => x && x.day < today).sort((a, b) => a.day < b.day ? 1 : -1)[0] || null;
+  const hours = (now % 86400000) / 3600000;
+  if(!day) return hours >= D1_STALE_HOURS
+    ? { tone: 'bad', label: 'STALE', main: 'Nothing recorded today', sub: 'every hourly run should record usage', day: today, prev }
+    : unknown('Nothing recorded yet today', 'the UTC day has just started');
+  const read = typeof day.rows_read === 'number' ? day.rows_read : null;
+  if(read == null || limit == null) return unknown(read == null ? 'Rows read not reported' : 'Daily limit not reported');
+  const stamps = (Array.isArray(day.entries) ? day.entries : []).map(e => e && e.last_ts).filter(t => typeof t === 'number');
+  const lastTs = stamps.length ? Math.max(...stamps) : null;
+  const projected = hours >= D1_MIN_HOURS_FOR_PROJECTION ? read * 24 / hours : null;
+  const base = { day: today, read, limit, remaining: Math.max(0, limit - read), pct: Math.round(read / limit * 1000) / 10,
+    written: typeof day.rows_written === 'number' ? day.rows_written : null, lastTs, projected,
+    projectedPct: projected == null ? null : Math.round(projected / limit * 1000) / 10, prev,
+    main: `${read.toLocaleString('en-US')} of ${limit.toLocaleString('en-US')} rows read today (${(Math.round(read / limit * 1000) / 10)}%)`, sub: '' };
+  if(lastTs == null) return { ...base, tone: 'neutral', label: 'UNKNOWN', sub: 'measurement time not reported' };
+  if(now - lastTs > D1_STALE_HOURS * 3600000) return { ...base, tone: 'bad', label: 'STALE' };
+  if(read >= limit) return { ...base, tone: 'bad', label: 'CRITICAL' };
+  if(read > D1_WARN_SHARE_SO_FAR * limit || (projected != null && projected > D1_WARN_SHARE_PROJECTED * limit)) return { ...base, tone: 'warn', label: 'WARNING' };
+  return { ...base, tone: 'good', label: 'HEALTHY' };
+}
+var ALERT_RUN_MAX_AGE_HOURS = 4; // started every 3 h, one hour after each prediction run
+// The alert workflow (prediction staleness, workflow health, daily read limit), from GitHub's public run listing.
+// A failed run is the alert: it means one of its checks found a problem.
+function alertRunModel(res, now){
+  if(!res || !res.ok || !res.data || !Array.isArray(res.data.workflow_runs)) return { tone: 'neutral', label: 'UNKNOWN', main: 'GitHub run history unavailable', sub: res && res.error ? String(res.error) : 'not loaded' };
+  const runs = res.data.workflow_runs.filter(r => r.status === 'completed');
+  if(!runs.length) return { tone: 'neutral', label: 'UNKNOWN', main: 'No completed run in the listing', sub: '' };
+  const latest = runs[0];
+  const last = Date.parse(latest.updated_at || latest.created_at);
+  const ageH = isFinite(last) ? (now - last) / 3600000 : null;
+  const out = { lastRun: isFinite(last) ? last : null, trigger: latest.event, sub: '' };
+  if(ageH == null) return { ...out, tone: 'neutral', label: 'UNKNOWN', main: 'Run time not reported' };
+  if(ageH > ALERT_RUN_MAX_AGE_HOURS) return { ...out, tone: 'bad', label: 'STALE', main: 'The checks have not run recently' };
+  if(latest.conclusion === 'success') return { ...out, tone: 'good', label: 'PASSING', main: 'Latest run found no problem' };
+  if(latest.conclusion === 'failure') return { ...out, tone: 'bad', label: 'ALERT', main: 'Latest run reported a problem' };
+  return { ...out, tone: 'neutral', label: 'UNKNOWN', main: `Latest run ended as ${latest.conclusion || 'not reported'}` };
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -962,15 +1014,18 @@ function renderOverview(){
 
 // ---- Dashboard: system status (scheduled predictions, event detection, hourly funding collector) ----
 var COLLECTOR_RUNS_URL = 'https://api.github.com/repos/quiquandon-oss/PulseWorkerV2/actions/workflows/research-funding-intraday-schedule.yml/runs?per_page=12';
-var _sysEvents = null, _sysCollector = null, _sysLoadedAt = 0;
+var ALERT_RUNS_URL = 'https://api.github.com/repos/quiquandon-oss/PulseWorkerV2/actions/workflows/prediction-staleness-alert.yml/runs?per_page=5';
+var _sysEvents = null, _sysCollector = null, _sysUsage = null, _sysAlert = null, _sysLoadedAt = 0;
 var SYSTEM_STATUS_REFRESH_MS = 10 * 60 * 1000;
 function loadSystemStatus(force){
   if(!force && _sysLoadedAt && Date.now() - _sysLoadedAt < SYSTEM_STATUS_REFRESH_MS){ renderSystemStatus(); return; }
   _sysLoadedAt = Date.now();
-  if(force){ _sysEvents = null; _sysCollector = null; }
+  if(force){ _sysEvents = null; _sysCollector = null; _sysUsage = null; _sysAlert = null; }
   renderSystemStatus();
   getJson(WORKER_URL + '/api/events/health').then(r => { _sysEvents = r; renderSystemStatus(); });
   getJson(COLLECTOR_RUNS_URL).then(r => { _sysCollector = r; renderSystemStatus(); });
+  getJson(WORKER_URL + '/d1-usage?days=2').then(r => { _sysUsage = r; renderSystemStatus(); });
+  getJson(ALERT_RUNS_URL).then(r => { _sysAlert = r; renderSystemStatus(); });
 }
 function statusCell(title, m, lines){
   return `<div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3">
@@ -988,6 +1043,9 @@ function renderSystemStatus(){
   const p = fr ? predictionRunsModel(fr, now) : loading;
   const e = _sysEvents ? eventDetectionModel(_sysEvents, now) : loading;
   const c = _sysCollector ? collectorModel(_sysCollector, now) : loading;
+  const u = _sysUsage ? d1UsageModel(_sysUsage, now) : loading;
+  const a = _sysAlert ? alertRunModel(_sysAlert, now) : loading;
+  const n = v => Math.round(v).toLocaleString('en-US');
   host.innerHTML =
     statusCell('Scheduled predictions (every 3 h)', p, [
       p.lastCron ? `last run ${fmtUtc(p.lastCron)} (${ageStr(p.lastCron)})` : p.sub,
@@ -996,7 +1054,16 @@ function renderSystemStatus(){
     statusCell('Event detection (hourly)', e, [
       e.lastRun ? `last run ${fmtUtc(e.lastRun)} (${ageStr(e.lastRun)}${e.trigger ? ', ' + e.trigger : ''})` : e.sub ]) +
     statusCell('Funding collector (hourly, GitHub Actions)', c, [
-      c.lastRun ? `last run ${fmtUtc(c.lastRun)} (${ageStr(c.lastRun)}${c.trigger ? ', ' + c.trigger : ''})` : c.sub ]);
+      c.lastRun ? `last run ${fmtUtc(c.lastRun)} (${ageStr(c.lastRun)}${c.trigger ? ', ' + c.trigger : ''})` : c.sub ]) +
+    statusCell('Database reads today (D1, resets 00:00 UTC)', u, [
+      u.remaining != null ? `remaining today ${n(u.remaining)} rows` : u.sub,
+      u.projected != null ? `projected for the day at this rate ${n(u.projected)} (${u.projectedPct}%)` : (u.read != null ? 'no projection in the first 3 h of the day' : ''),
+      u.lastTs ? `last measurement ${fmtUtc(u.lastTs)} (${ageStr(u.lastTs)})` : (u.read != null ? u.sub : ''),
+      u.prev && typeof u.prev.rows_read === 'number' ? `previous recorded day ${u.prev.day}: ${n(u.prev.rows_read)} rows` : '',
+      u.read != null ? 'recorded lower bound · warns above 60% used or 85% projected' : '' ]) +
+    statusCell('Alert checks (every 3 h, GitHub Actions)', a, [
+      a.lastRun ? `last run ${fmtUtc(a.lastRun)} (${ageStr(a.lastRun)}${a.trigger ? ', ' + a.trigger : ''})` : a.sub,
+      'covers stale predictions, stopped workflows, daily read limit' ]);
 }
 
 // ---- Lab: every variant for the current cycle ----

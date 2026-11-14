@@ -1010,6 +1010,11 @@ function sentimentV2Model(res, now){
   else if(!v2.available) notices.push({ tone: 'info', text: 'V2 has no results yet. It starts from the newest V1 reading; earlier V2 values are not back-filled.' });
   else if(v2.insufficient_history) notices.push({ tone: 'info', text: 'V2 has insufficient history in this period to draw a line (' + (num(v2.points_in_period) || 0) + ' point' + (num(v2.points_in_period) === 1 ? '' : 's') + ').' });
   const staleNote = (label, s) => { if(s && s.stale && num(s.last_ts) !== null) notices.push({ tone: 'warn', text: label + ' is stale: last value ' + ago(s.last_ts) + ' ago.' }); };
+  // The Worker also reports the newest reading V1 wrote (v1_history_last_ts). If it is newer than the newest V1 point
+  // here, V1 is producing and its reading has not been copied for V2 yet (the Worker copies it at its next hourly run).
+  const v1Hist = num(d.v1_history_last_ts), v1Arch = ss.v1 ? num(ss.v1.last_ts) : null;
+  const lagging = v1Hist !== null && (v1Arch === null || v1Hist > v1Arch);
+  if(lagging) notices.push({ tone: 'info', text: 'Newer V1 reading from ' + ago(v1Hist) + ' ago is waiting to be processed; it appears here after the next hourly run.' });
   staleNote('V1 sentiment', ss.v1);
   staleNote('BTC price', ss.btc);
   if(v2.available && !d.v2_error) staleNote('V2 sentiment', v2);

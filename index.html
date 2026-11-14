@@ -672,7 +672,7 @@
       </div>
       <div class="flex items-center gap-4 flex-wrap text-[11px] text-[#BAC9CD] mb-2" aria-hidden="true">
         <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#3B82F6"></span>V1 sentiment</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#22C55E"></span>V2 sentiment</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#22C55E"></span>V2 sentiment <span class="text-[#8A9599]">(hollow = earlier method)</span></span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#F59E0B"></span>BTC price</span>
       </div>
       <p id="sv2Status" class="text-[11px] text-[#BAC9CD] mb-2" aria-live="polite">Loading…</p>
@@ -682,6 +682,17 @@
         <p id="sv2Empty" class="hidden absolute inset-0 items-center justify-center text-sm text-[#BAC9CD] text-center px-6"></p>
       </div>
     </section>
+    <!-- Secondary detail, collapsed: the graph above stays the primary view (spec §7). -->
+    <details id="sv2Details" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <summary class="cursor-pointer select-none text-sm font-semibold flex items-center justify-between gap-2">
+        <span>Evidence, sources and AI annotation</span><span id="sv2DetailsHint" class="text-[11px] font-normal text-[#BAC9CD]"></span>
+      </summary>
+      <div class="mt-4 space-y-5">
+        <div><h3 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">AI annotation</h3><div id="sv2Ai" class="text-xs"></div></div>
+        <div><h3 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">Latest evidence (24 h)</h3><ul id="sv2Evidence" class="space-y-1.5 text-xs"></ul></div>
+        <div><h3 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">Sources</h3><div id="sv2Sources" class="overflow-x-auto text-xs"></div></div>
+      </div>
+    </details>
   </div>
 
   <footer class="mt-10 text-[11px] text-[#8A9599]">
@@ -1002,7 +1013,7 @@ function sentimentV2Model(res, now){
     return { state: 'error', rows: [], notices: [{ tone: 'bad', text: 'Comparison data could not be loaded' + (res && res.error ? ' (' + res.error + ')' : '') + '.' }], status: '' };
   }
   const d = res.data, ss = d.series_status || {};
-  const rows = d.points.filter((p) => p && num(p.ts) !== null).map((p) => ({ ts: p.ts, v1: num(p.v1), v2: num(p.v2), btc: num(p.btc), v2Status: p.v2_status || null }))
+  const rows = d.points.filter((p) => p && num(p.ts) !== null).map((p) => ({ ts: p.ts, v1: num(p.v1), v2: num(p.v2), btc: num(p.btc), v2Status: p.v2_status || null, v2Version: p.v2_version || null }))
     .sort((a, b) => a.ts - b.ts);
   const v2 = ss.v2 || {};
   const notices = [];
@@ -1035,7 +1046,44 @@ function sentimentV2Model(res, now){
   parts.push(lastV1 !== null ? 'Last V1 update ' + ago(lastV1) + ' ago' : 'No V1 update in this period');
   parts.push(d.v2_error ? 'V2 unavailable' : v2.available ? 'V2 available' + (num(v2.last_ts) !== null ? ', last ' + ago(v2.last_ts) + ' ago' : '') : 'V2 not started');
   if(d.downsampled) parts.push('sampled to ' + rows.length + ' points');
+  if(d.current_calc_version) parts.push('method ' + d.current_calc_version + (num(d.current_version_since) !== null ? ' since ' + ago(d.current_version_since) + ' ago' : ''));
   return { state: rows.length ? 'ok' : 'empty', rows, notices, status: parts.join(' · ') };
+}
+// Evidence list: only https links are rendered as links; times shown as age.
+function sv2EvidenceModel(res, now){
+  if(!res || !res.ok || !res.data) return { state: 'error', items: [], note: 'Evidence could not be loaded.' };
+  const d = res.data;
+  if(d.available === false) return { state: 'unavailable', items: [], note: 'Evidence collection is not active yet.' };
+  const items = (Array.isArray(d.items) ? d.items : []).map(x => {
+    const ts = Number(x.published_ts ?? x.retrieved_ts);
+    const url = typeof x.canonical_url === 'string' && /^https:\/\//.test(x.canonical_url) ? x.canonical_url : null;
+    const tone = x.lexicon_hits > 0 ? (x.lexicon_score > 0 ? 'good' : x.lexicon_score < 0 ? 'bad' : 'neutral') : 'neutral';
+    return { id: x.evidence_id, title: String(x.title || ''), source: x.source_name || x.source_id, family: x.family, url, ts: isFinite(ts) ? ts : null,
+      tone, label: x.lexicon_hits > 0 ? (x.lexicon_score > 0 ? '+' + x.lexicon_score : String(x.lexicon_score)) : '·' };
+  });
+  return { state: items.length ? 'ok' : 'empty', items, note: items.length ? '' : 'No evidence collected in the last 24 hours.' };
+}
+// Source health and AI budget from /api/sentiment-v2/status.
+function sv2StatusModel(res, now){
+  if(!res || !res.ok || !res.data) return { state: 'error', sources: [], ai: null, collector: null };
+  const d = res.data;
+  const sources = (d.sources || []).map(s => {
+    const ok = s.last_status === 'OK' || s.last_status === 'NOT_MODIFIED';
+    const tone = s.last_status === 'NEVER_RUN' || s.last_status === 'NOT_CONFIGURED' ? 'neutral' : ok ? (s.fresh ? 'good' : 'warn') : 'bad';
+    return { id: s.id, name: s.name, family: s.family, status: s.last_status, tone, fresh: !!s.fresh,
+      reliability: typeof s.reliability === 'number' ? Math.round(s.reliability * 100) + '%' : '—', attempts: s.attempts || 0,
+      lastEvidenceTs: s.last_evidence_ts ?? null, error: s.last_error || null };
+  });
+  const ai = d.ai || null;
+  let aiLine = 'AI annotation off', aiTone = 'neutral';
+  if(ai && ai.enabled){
+    aiLine = `${ai.model} · ${ai.committed_neurons} of ${ai.daily_neuron_budget} Neurons today · ${ai.calls} call${ai.calls === 1 ? '' : 's'}`;
+    aiTone = ai.account_limited_today ? 'bad' : ai.remaining_neurons <= 0 ? 'warn' : 'good';
+    if(ai.account_limited_today) aiLine += ' · account free allocation reached: stopped for today';
+    else if(ai.remaining_neurons <= 0) aiLine += ' · daily budget used: stopped for today';
+  }
+  const collector = d.collector ? { enabled: !!d.collector.enabled, label: d.collector.enabled ? 'collector on' : 'collector off' } : null;
+  return { state: 'ok', sources, ai: { line: aiLine, tone: aiTone }, collector, version: d.calc_version || null };
 }
 // ---- END view-model helpers ----
 
@@ -2081,7 +2129,36 @@ function loadSentimentV2IfNeeded(force){
     if(seq === _sv2Seq && p === _sv2Period && activeView === 'sentiment') renderSentimentV2(res);
   });
 }
+var _sv2DetailsAt = 0;
+function loadSv2DetailsIfOpen(force){
+  const el = document.getElementById('sv2Details');
+  if(!el || !el.open) return;
+  if(!force && _sv2DetailsAt && Date.now() - _sv2DetailsAt < SV2_REFRESH_MS) return;
+  _sv2DetailsAt = Date.now();
+  getJson(WORKER_URL + '/api/sentiment-v2/evidence?hours=24&limit=12').then(r => renderSv2Evidence(sv2EvidenceModel(r, Date.now())));
+  getJson(WORKER_URL + '/api/sentiment-v2/status').then(r => renderSv2Status(sv2StatusModel(r, Date.now())));
+}
+function renderSv2Evidence(m){
+  const host = document.getElementById('sv2Evidence');
+  if(m.state !== 'ok'){ host.innerHTML = `<li class="text-[#BAC9CD]">${esc(m.note)}</li>`; return; }
+  host.innerHTML = m.items.map(x => `<li class="flex gap-2 items-start">${chip(x.label, x.tone)}<span class="min-w-0"><span class="text-[#BAC9CD]">${esc(x.source)} · ${x.ts ? esc(ageStr(x.ts)) : '—'}</span><br>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer nofollow" class="hover:text-[#00E0FF] break-words">${esc(x.title)}</a>` : esc(x.title)}</span></li>`).join('');
+}
+function renderSv2Status(m){
+  const host = document.getElementById('sv2Sources');
+  if(m.state !== 'ok'){ host.innerHTML = '<p class="text-[#BAC9CD]">Source status could not be loaded.</p>'; return; }
+  document.getElementById('sv2DetailsHint').textContent = [m.collector ? m.collector.label : null, m.version].filter(Boolean).join(' · ');
+  host.innerHTML = `<p class="mb-2 flex gap-2 items-start">${chip('AI', m.ai.tone)}<span class="text-[#BAC9CD] break-words min-w-0">${esc(m.ai.line)}</span></p><table class="w-full text-left"><thead class="text-[#8A9599]"><tr><th class="py-1 pr-2 font-normal">Source</th><th class="pr-2 font-normal">Status</th><th class="pr-2 font-normal">Reliability</th><th class="font-normal">Latest item</th></tr></thead><tbody>` +
+    m.sources.map(x => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 pr-2">${esc(x.name)}<br><span class="text-[#8A9599]">${esc(x.family.replace(/_/g, ' '))}</span></td><td class="pr-2" title="${esc(x.error || '')}">${chip(x.status, x.tone)}</td><td class="pr-2 font-mono-data">${esc(x.reliability)}</td><td>${x.lastEvidenceTs ? esc(ageStr(x.lastEvidenceTs)) : '—'}${x.fresh ? '' : ' <span class="text-[#8A9599]">(not fresh)</span>'}</td></tr>`).join('') + '</tbody></table>';
+}
+function renderSv2Ai(res){
+  const host = document.getElementById('sv2Ai');
+  const l = res && res.ok && res.data ? res.data.v2_latest : null;
+  const a = l && l.ai_annotation;
+  if(!a){ host.innerHTML = `<p class="text-[#BAC9CD]">${l ? 'No AI annotation for the latest V2 result' + (l.ai_status ? ' (' + esc(l.ai_status.replace(/_/g, ' ')) + ')' : '') + '. The score never depends on it.' : 'No V2 result yet.'}</p>`; return; }
+  host.innerHTML = `<p>${esc(a.summary)}</p><p class="text-[#BAC9CD] mt-1">Uncertainty: ${esc(a.uncertainty)}</p><p class="text-[#8A9599] mt-1">Cites ${a.cited_ids.length} evidence item${a.cited_ids.length === 1 ? '' : 's'} · ${esc(l.ai_model || '')} · annotation only, never a score input</p>`;
+}
 function renderSentimentV2(res){
+  renderSv2Ai(res);
   const m = sentimentV2Model(res, Date.now());
   document.getElementById('sv2Status').textContent = m.status;
   document.getElementById('sv2Notices').innerHTML = m.notices.map(n => `<li>${chip(n.tone === 'bad' ? 'ERROR' : n.tone === 'warn' ? 'CHECK' : 'NOTE', n.tone)} <span class="text-[#BAC9CD]">${esc(n.text)}</span></li>`).join('');
@@ -2093,13 +2170,16 @@ function renderSentimentV2(res){
   const ds = (label, key, color, axis, radius) => ({ label, data: rows.map(r => ({ x: r.ts, y: r[key] })), borderColor: color, backgroundColor: color,
     yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 4, tension: 0.2, spanGaps: false });
   const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', dense ? 0 : 2), ds('V2 sentiment', 'v2', '#22C55E', 'ys', 2.5), ds('BTC price', 'btc', '#F59E0B', 'yp', dense ? 0 : 2)];
+  // Earlier-method V2 values (sv2-1.0.0) are drawn hollow; the current method's points are filled.
+  datasets[1].pointBackgroundColor = rows.map(r => r.v2Version === 'sv2-1.0.0' ? 'rgba(0,0,0,0)' : '#22C55E');
+  datasets[1].pointBorderColor = '#22C55E';
   if(_sv2Chart){ _sv2Chart.$rows = rows; _sv2Chart.data.datasets = datasets; _sv2Chart.update(); return; }
   const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
   _sv2Chart = new Chart(document.getElementById('sv2Chart').getContext('2d'), {
     type: 'line', data: { datasets },
     options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
       scales: {
-        x: { type: 'time', time: { displayFormats: { minute: 'MMM d HH:mm', hour: 'MMM d HH:mm', day: 'MMM d' } }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 16 }, grid: { color: 'rgba(59,73,76,0.4)' } },
+        x: { type: 'time', time: { displayFormats: window.innerWidth < 640 ? { minute: 'HH:mm', hour: 'HH:mm', day: 'MMM d' } : { minute: 'MMM d HH:mm', hour: 'MMM d HH:mm', day: 'MMM d' } }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 16, maxTicksLimit: window.innerWidth < 640 ? 4 : 8 }, grid: { color: 'rgba(59,73,76,0.4)' } },
         ys: { position: 'left', min: 0, max: 100, title: { display: true, text: 'Sentiment', color: '#BAC9CD', font: { size: 10 } }, ticks: tick, grid: { color: 'rgba(59,73,76,0.4)' } },
         yp: { position: 'right', title: { display: true, text: 'BTC (USD)', color: '#BAC9CD', font: { size: 10 } }, ticks: { ...tick, callback: v => '$' + Number(v).toLocaleString() }, grid: { drawOnChartArea: false } },
       },
@@ -2110,12 +2190,13 @@ function renderSentimentV2(res){
             title: items => items.length ? fmtUtc(items[0].parsed.x) : '',
             label: item => { const r = (_sv2Chart.$rows || [])[item.dataIndex]; if(!r) return '';
               const f = v => v === null ? 'missing' : String(v);
-              return ['V1:  ' + f(r.v1), 'V2:  ' + (r.v2Pre ? 'not started' : r.v2 === null ? 'missing' : r.v2 + (r.v2Status && r.v2Status !== 'OK' ? ' (incomplete inputs)' : '')), 'BTC: ' + (r.btc === null ? 'missing' : '$' + r.btc.toLocaleString())]; },
+              return ['V1:  ' + f(r.v1), 'V2:  ' + (r.v2Pre ? 'not started' : r.v2 === null ? 'missing' : r.v2 + (r.v2Status && r.v2Status !== 'OK' ? ' (incomplete inputs)' : '') + (r.v2Version ? '  [' + r.v2Version + ']' : '')), 'BTC: ' + (r.btc === null ? 'missing' : '$' + r.btc.toLocaleString())]; },
           } } } },
   });
   _sv2Chart.$rows = rows;
 }
 buildSv2Periods();
+document.getElementById('sv2Details').addEventListener('toggle', () => loadSv2DetailsIfOpen());
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
   btn.onclick = () => { activeView = btn.dataset.view; history.replaceState(null, '', '#' + activeView); renderNav(); };
@@ -2392,7 +2473,7 @@ document.getElementById('refreshBtn').onclick = async () => {
     if (activeView === 'dashboard') { loadOverview(true); loadSystemStatus(true); } else { _overviewLoadedAt = 0; _sysLoadedAt = 0; }
     if (activeView === 'experiments') { _experimentsLoaded = false; loadExperimentsIfNeeded(); }
     _sv2LoadedAt = {};
-    if (activeView === 'sentiment') loadSentimentV2IfNeeded(true);
+    if (activeView === 'sentiment') { loadSentimentV2IfNeeded(true); loadSv2DetailsIfOpen(true); }
     await refreshAll();
   } finally {
     icon.classList.remove('spinning');

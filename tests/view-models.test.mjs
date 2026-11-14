@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2EvidenceModel, sv2StatusModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -294,4 +294,54 @@ test('sentiment v2: a V1 reading not yet processed is reported, not hidden behin
   assert.match(texts(lag), /V1 sentiment is stale: last value 9 h ago/);
   assert.doesNotMatch(texts(H.sentimentV2Model(sv2({ v1_history_last_ts: NOW - HOUR }), NOW)), /waiting to be processed/, 'caught up');
   assert.doesNotMatch(texts(H.sentimentV2Model(sv2(), NOW)), /waiting to be processed/, 'older Worker without the field');
+});
+
+// ---- Sentiment V2 evidence, sources and AI budget (scope lock 2026-11-14) ----
+test('sentiment v2 evidence: https links only, lexicon tone, honest empty/unavailable/error states', () => {
+  const m = H.sv2EvidenceModel({ ok: true, data: { items: [
+    { evidence_id: 'ev_a', title: 'Bitcoin rally', source_name: 'Decrypt', canonical_url: 'https://decrypt.co/x', published_ts: NOW - HOUR, retrieved_ts: NOW, lexicon_score: 2, lexicon_hits: 1 },
+    { evidence_id: 'ev_b', title: 'x', source_id: 'fed_press', canonical_url: 'javascript:alert(1)', retrieved_ts: NOW, lexicon_score: 0, lexicon_hits: 0 },
+    { evidence_id: 'ev_c', title: 'Exchange hack', source_name: 'CryptoSlate', canonical_url: 'http://x.org', retrieved_ts: NOW, lexicon_score: -2, lexicon_hits: 1 },
+  ] } }, NOW);
+  assert.equal(m.state, 'ok');
+  assert.deepEqual(plain(m.items.map((x) => [x.url, x.tone, x.label])), [['https://decrypt.co/x', 'good', '+2'], [null, 'neutral', '·'], [null, 'bad', '-2']]);
+  assert.equal(m.items[0].ts, NOW - HOUR, 'publication time preferred');
+  assert.equal(H.sv2EvidenceModel({ ok: true, data: { items: [] } }, NOW).state, 'empty');
+  assert.equal(H.sv2EvidenceModel({ ok: true, data: { available: false, items: [] } }, NOW).state, 'unavailable');
+  assert.equal(H.sv2EvidenceModel({ ok: false, error: 'HTTP 500' }, NOW).state, 'error');
+});
+
+test('sentiment v2 status: source tones, reliability, and the AI budget line says when inference stopped', () => {
+  const base = { calc_version: 'sv2-1.1.0', collector: { enabled: true }, sources: [
+    { id: 'a', name: 'A', family: 'market_sentiment_news', last_status: 'OK', fresh: true, reliability: 0.95, attempts: 20 },
+    { id: 'b', name: 'B', family: 'macroeconomic', last_status: 'HTTP_ERROR', fresh: false, reliability: 0.5, attempts: 4, last_error: 'HTTP 500' },
+    { id: 'c', name: 'C', family: 'regulation_geopolitics', last_status: 'NOT_CONFIGURED', fresh: false, reliability: null, attempts: 0 },
+    { id: 'd', name: 'D', family: 'macroeconomic', last_status: 'NOT_MODIFIED', fresh: false, reliability: 1, attempts: 3 },
+  ] };
+  const ai = (o) => ({ ok: true, data: { ...base, ai: { enabled: true, model: '@cf/zai-org/glm-4.7-flash', daily_neuron_budget: 1000, committed_neurons: 120, calls: 3, remaining_neurons: 880, account_limited_today: false, ...o } } });
+  const m = H.sv2StatusModel(ai({}), NOW);
+  assert.deepEqual(plain(m.sources.map((x) => [x.tone, x.reliability])), [['good', '95%'], ['bad', '50%'], ['neutral', '—'], ['warn', '100%']]);
+  assert.equal(m.collector.label, 'collector on');
+  assert.deepEqual([m.ai.tone, /120 of 1000 Neurons today · 3 calls/.test(m.ai.line)], ['good', true]);
+  const used = H.sv2StatusModel(ai({ remaining_neurons: 0, committed_neurons: 1000 }), NOW).ai;
+  assert.deepEqual([used.tone, /daily budget used: stopped for today/.test(used.line)], ['warn', true]);
+  const lim = H.sv2StatusModel(ai({ account_limited_today: true }), NOW).ai;
+  assert.deepEqual([lim.tone, /account free allocation reached/.test(lim.line)], ['bad', true]);
+  assert.equal(H.sv2StatusModel({ ok: true, data: { ...base, ai: { enabled: false } } }, NOW).ai.line, 'AI annotation off');
+  assert.equal(H.sv2StatusModel(null, NOW).state, 'error');
+});
+
+test('sentiment v2: points carry their calc version and the status line names the current method', () => {
+  const m = H.sentimentV2Model(sv2({ current_calc_version: 'sv2-1.1.0', current_version_since: NOW - 3 * HOUR,
+    points: [{ ts: NOW - 5 * HOUR, v1: 35, btc: 1, v2: 30, v2_status: 'OK', v2_version: 'sv2-1.0.0' }, { ts: NOW - HOUR, v1: 30, btc: 1, v2: 31, v2_status: 'OK', v2_version: 'sv2-1.1.0' }] }), NOW);
+  assert.deepEqual(plain(m.rows.map((r) => r.v2Version)), ['sv2-1.0.0', 'sv2-1.1.0']);
+  assert.match(m.status, /method sv2-1\.1\.0 since 3 h ago/);
+});
+
+test('page source: evidence panel is collapsed below the graph and loads only when opened', () => {
+  const graph = SRC.indexOf('id="sv2Chart"'), details = SRC.indexOf('id="sv2Details"');
+  assert.ok(graph > 0 && details > graph, 'details after the graph');
+  assert.ok(!/<details id="sv2Details"[^>]*\bopen\b/.test(SRC), 'collapsed by default');
+  assert.ok(/addEventListener\('toggle', \(\) => loadSv2DetailsIfOpen\(\)\)/.test(SRC));
+  assert.ok(/rel="noopener noreferrer nofollow"/.test(SRC), 'external evidence links are isolated');
 });

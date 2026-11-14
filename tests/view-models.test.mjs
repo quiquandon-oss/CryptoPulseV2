@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -213,4 +213,77 @@ test('page source: inline scripts parse', () => {
   const scripts = [...SRC.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
   assert.ok(scripts.length >= 1);
   for (const s of scripts) new vm.Script(s);
+});
+
+// ---- Sentiment V2 tab ----
+const sv2 = (over = {}, ss = {}) => ({ ok: true, data: { ok: true, period: '7d', points: [
+  { ts: NOW - 5 * HOUR, v1: 35, btc: 68856, v2: null, v2_status: null },
+  { ts: NOW - 3 * HOUR, v1: 33, btc: 66989, v2: 41, v2_status: 'OK' },
+  { ts: NOW - 1 * HOUR, v1: 30, btc: 66500, v2: 44.5, v2_status: 'DEGRADED' },
+], downsampled: false, truncated: false, btc_truncated: false, v2_error: null,
+  series_status: { v1: { last_ts: NOW - HOUR, stale: false }, btc: { last_ts: NOW - HOUR, stale: false },
+    v2: { first_ts: NOW - 3 * HOUR, last_ts: NOW - HOUR, points_in_period: 2, available: true, stale: false, insufficient_history: false }, ...ss }, ...over } });
+const texts = (m) => m.notices.map((n) => n.text).join(' | ');
+
+test('sentiment v2: periods match the Worker route and the spec', () => {
+  assert.deepEqual(plain(H.SV2_PERIODS).map((p) => p[0]), ['24h', '7d', '30d', '90d', 'all']);
+  assert.deepEqual(plain(H.SV2_PERIODS).map((p) => p[1]), ['24H', '7D', '30D', '90D', 'ALL']);
+});
+
+test('sentiment v2: values pass through unchanged and stay aligned per timestamp', () => {
+  const m = H.sentimentV2Model(sv2(), NOW);
+  assert.equal(m.state, 'ok');
+  assert.deepEqual(plain(m.rows.map((r) => [r.v1, r.v2, r.btc])), [[35, null, 68856], [33, 41, 66989], [30, 44.5, 66500]]);
+  assert.match(m.status, /Last V1 update 1 h ago · V2 available, last 1 h ago/);
+  assert.match(texts(m), /1 V2 point was computed with incomplete inputs/);
+  assert.doesNotMatch(texts(m), /Missing points/, 'V1 points before V2 started are not counted as missing V2');
+  assert.deepEqual(m.rows.map((r) => r.v2Pre), [true, false, false], 'before V2 started is not "missing"');
+});
+
+test('sentiment v2: no V2 yet, and too little V2 history, are stated', () => {
+  const none = H.sentimentV2Model(sv2({ points: [{ ts: NOW - HOUR, v1: 30, btc: 66500, v2: null }] },
+    { v2: { first_ts: null, last_ts: null, points_in_period: 0, available: false, stale: true, insufficient_history: true } }), NOW);
+  assert.match(texts(none), /V2 has no results yet/);
+  assert.match(none.status, /V2 not started/);
+  assert.doesNotMatch(texts(none), /V2 sentiment is stale/, 'a series that never started is not called stale');
+  const one = H.sentimentV2Model(sv2({}, { v2: { first_ts: NOW - HOUR, last_ts: NOW - HOUR, points_in_period: 1, available: true, stale: false, insufficient_history: true } }), NOW);
+  assert.match(texts(one), /insufficient history in this period to draw a line \(1 point\)/);
+});
+
+test('sentiment v2: stale series and missing points are flagged', () => {
+  const m = H.sentimentV2Model(sv2({ points: [
+    { ts: NOW - 9 * HOUR, v1: 35, btc: null, v2: 40, v2_status: 'OK' },
+    { ts: NOW - 8 * HOUR, v1: null, btc: 66000, v2: null, v2_status: null },
+  ] }, { v1: { last_ts: NOW - 9 * HOUR, stale: true }, btc: { last_ts: NOW - 8 * HOUR, stale: true },
+    v2: { first_ts: NOW - 9 * HOUR, last_ts: NOW - 9 * HOUR, points_in_period: 1, available: true, stale: true, insufficient_history: true } }), NOW);
+  const t = texts(m);
+  assert.match(t, /V1 sentiment is stale: last value 9 h ago/);
+  assert.match(t, /BTC price is stale: last value 8 h ago/);
+  assert.match(t, /V2 sentiment is stale/);
+  assert.match(t, /Missing points: 1 V1, 1 V2, 1 BTC/);
+  assert.ok(m.notices.filter((n) => /stale/.test(n.text)).every((n) => n.tone === 'warn'));
+});
+
+test('sentiment v2: errors and empty periods never draw invented data', () => {
+  for (const r of [{ ok: false, error: 'HTTP 500' }, null, { ok: true, data: { ok: true } }]) {
+    const m = H.sentimentV2Model(r, NOW);
+    assert.deepEqual([m.state, m.rows.length, m.notices[0].tone], ['error', 0, 'bad']);
+  }
+  assert.match(texts(H.sentimentV2Model({ ok: false, error: 'HTTP 500' }, NOW)), /HTTP 500/);
+  assert.equal(H.sentimentV2Model(sv2({ points: [] }), NOW).state, 'empty');
+  const e = H.sentimentV2Model(sv2({ v2_error: 'D1_ERROR' }), NOW);
+  assert.match(texts(e), /V2 results could not be read/);
+  assert.match(e.status, /V2 unavailable/);
+});
+
+test('page source: Sentiment V2 tab, colours, axes and route', () => {
+  assert.ok(/data-view="sentiment"/.test(SRC) && /id="view-sentiment"/.test(SRC), 'tab and view present');
+  assert.equal((SRC.match(/data-view="sentiment"/g) || []).length, 2, 'desktop and mobile nav');
+  assert.ok(/\{ key: 'sentiment', label: 'Sentiment V2'/.test(SRC));
+  assert.ok(/'V1 sentiment', 'v1', '#3B82F6'/.test(SRC), 'V1 blue');
+  assert.ok(/'V2 sentiment', 'v2', '#22C55E'/.test(SRC), 'V2 green');
+  assert.ok(/'BTC price', 'btc', '#F59E0B'/.test(SRC), 'BTC orange');
+  assert.ok(/ys: \{ position: 'left', min: 0, max: 100/.test(SRC), 'sentiment left axis 0-100');
+  assert.ok(/yp: \{ position: 'right'/.test(SRC), 'BTC right axis');
+  assert.ok(/apiFetch|getJson\(WORKER_URL \+ '\/api\/sentiment-v2\/comparison\?period='/.test(SRC), 'read through the GET memo');
 });

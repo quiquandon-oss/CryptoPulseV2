@@ -77,6 +77,7 @@
     <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="experiments" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="history" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="sentiment" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
   </nav>
 
   <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
@@ -661,6 +662,28 @@
     <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are under Experiments → Learning loop &amp; model selection. Challenger's own recent calls are in the Lab.</p>
   </div>
 
+  <!-- Sentiment V2: one graph comparing V1 sentiment, V2 sentiment and BTC price at the same timestamps
+       (data: PulseWorkerV2 /api/sentiment-v2/comparison; spec docs/SENTIMENT_V2_BUILD_SPEC.md §7). -->
+  <div id="view-sentiment" class="hidden">
+    <section id="sv2Card" aria-labelledby="sv2Title" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <h2 id="sv2Title" class="text-lg font-bold tracking-tight">Sentiment V1 vs V2 vs BTC</h2>
+        <div id="sv2Periods" role="group" aria-label="Period" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div>
+      </div>
+      <div class="flex items-center gap-4 flex-wrap text-[11px] text-[#BAC9CD] mb-2" aria-hidden="true">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#3B82F6"></span>V1 sentiment</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#22C55E"></span>V2 sentiment</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#F59E0B"></span>BTC price</span>
+      </div>
+      <p id="sv2Status" class="text-[11px] text-[#BAC9CD] mb-2" aria-live="polite">Loading…</p>
+      <ul id="sv2Notices" class="space-y-1 mb-3 text-[11px]"></ul>
+      <div class="relative h-[300px] sm:h-[380px]">
+        <canvas id="sv2Chart" role="img" aria-label="Line chart of V1 sentiment, V2 sentiment (0 to 100, left axis) and BTC price (USD, right axis) over the selected period"></canvas>
+        <p id="sv2Empty" class="hidden absolute inset-0 items-center justify-center text-sm text-[#BAC9CD] text-center px-6"></p>
+      </div>
+    </section>
+  </div>
+
   <footer class="mt-10 text-[11px] text-[#8A9599]">
     Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">PulseWorkerV2 ↗</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">CryptoPulse ↗</a>
   </footer>
@@ -670,7 +693,7 @@
 <!-- Bottom mobile nav: the same four sections as the desktop pill nav, as
      always-visible icon buttons (no hidden desktop-only menu). Same
      .nav-tab buttons and renderNav() state, just a second surface. -->
-<nav aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-4 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50">
+<nav aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-5 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50">
   <button type="button" data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">monitoring</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">Dashboard</span>
@@ -686,6 +709,10 @@
   <button type="button" data-view="history" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">history</span>
     <span class="text-[10px] font-semibold uppercase tracking-wide">History</span>
+  </button>
+  <button type="button" data-view="sentiment" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">compare_arrows</span>
+    <span class="text-[10px] font-semibold uppercase tracking-wide">Sentiment</span>
   </button>
 </nav>
 
@@ -965,6 +992,45 @@ function alertModel(runsRes, issuesRes, now){
   if(latest.conclusion === 'success') return { ...out, tone: 'good', label: 'PASSING', main: 'No alert open; latest checks passed' };
   if(latest.conclusion === 'failure') return { ...out, tone: 'bad', label: 'CHECK FAILED', main: 'Latest check run failed without an open alert' };
   return unknown(`No alert open; latest run ended as ${latest.conclusion || 'not reported'}`);
+}
+// Sentiment V2 tab. Values are shown exactly as the Worker returns them; nothing is recomputed here.
+var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'], ['all', 'ALL']];
+function sentimentV2Model(res, now){
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const ago = (ts) => { const h = (now - ts) / 3600000; return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? Math.round(h) + ' h' : Math.round(h / 24) + ' d'; };
+  if(!res || !res.ok || !res.data || !Array.isArray(res.data.points)){
+    return { state: 'error', rows: [], notices: [{ tone: 'bad', text: 'Comparison data could not be loaded' + (res && res.error ? ' (' + res.error + ')' : '') + '.' }], status: '' };
+  }
+  const d = res.data, ss = d.series_status || {};
+  const rows = d.points.filter((p) => p && num(p.ts) !== null).map((p) => ({ ts: p.ts, v1: num(p.v1), v2: num(p.v2), btc: num(p.btc), v2Status: p.v2_status || null }))
+    .sort((a, b) => a.ts - b.ts);
+  const v2 = ss.v2 || {};
+  const notices = [];
+  if(d.v2_error) notices.push({ tone: 'bad', text: 'V2 results could not be read; V1 and BTC are shown.' });
+  else if(!v2.available) notices.push({ tone: 'info', text: 'V2 has no results yet. It starts from the newest V1 reading; earlier V2 values are not back-filled.' });
+  else if(v2.insufficient_history) notices.push({ tone: 'info', text: 'V2 has insufficient history in this period to draw a line (' + (num(v2.points_in_period) || 0) + ' point' + (num(v2.points_in_period) === 1 ? '' : 's') + ').' });
+  const staleNote = (label, s) => { if(s && s.stale && num(s.last_ts) !== null) notices.push({ tone: 'warn', text: label + ' is stale: last value ' + ago(s.last_ts) + ' ago.' }); };
+  staleNote('V1 sentiment', ss.v1);
+  staleNote('BTC price', ss.btc);
+  if(v2.available && !d.v2_error) staleNote('V2 sentiment', v2);
+  const v2First = num(v2.first_ts);
+  for(const r of rows) r.v2Pre = r.v2 === null && (v2First === null || r.ts < v2First);
+  const missV1 = rows.filter((r) => r.v1 === null).length, missBtc = rows.filter((r) => r.btc === null).length;
+  const missV2 = v2First === null ? 0 : rows.filter((r) => r.ts >= v2First && r.v2 === null).length;
+  const degraded = rows.filter((r) => r.v2 !== null && r.v2Status && r.v2Status !== 'OK').length;
+  const miss = [];
+  if(missV1) miss.push(missV1 + ' V1');
+  if(missV2) miss.push(missV2 + ' V2');
+  if(missBtc) miss.push(missBtc + ' BTC');
+  if(miss.length) notices.push({ tone: 'warn', text: 'Missing points: ' + miss.join(', ') + ' (shown as gaps).' });
+  if(degraded) notices.push({ tone: 'warn', text: degraded + ' V2 point' + (degraded === 1 ? ' was' : 's were') + ' computed with incomplete inputs (marked in the tooltip).' });
+  if(d.truncated || d.btc_truncated) notices.push({ tone: 'neutral', text: 'Only the most recent observations in this period are included.' });
+  const lastV1 = ss.v1 && num(ss.v1.last_ts);
+  const parts = [];
+  parts.push(lastV1 !== null ? 'Last V1 update ' + ago(lastV1) + ' ago' : 'No V1 update in this period');
+  parts.push(d.v2_error ? 'V2 unavailable' : v2.available ? 'V2 available' + (num(v2.last_ts) !== null ? ', last ' + ago(v2.last_ts) + ' ago' : '') : 'V2 not started');
+  if(d.downsampled) parts.push('sampled to ' + rows.length + ' points');
+  return { state: rows.length ? 'ok' : 'empty', rows, notices, status: parts.join(' · ') };
 }
 // ---- END view-model helpers ----
 
@@ -1893,6 +1959,7 @@ const NAV = [
   { key: 'lab', label: 'Lab' },
   { key: 'experiments', label: 'Experiments' },
   { key: 'history', label: 'History' },
+  { key: 'sentiment', label: 'Sentiment V2', short: 'Sentiment' },
 ];
 let activeView = (location.hash || '').replace('#', '') || 'dashboard';
 // Old #learning links land on Experiments with the learning block open.
@@ -1965,7 +2032,7 @@ function renderNav(){
     const on = btn.dataset.view === activeView;
     if(btn.classList.contains('nav-tab-mobile')){
       // Bottom icon nav: keep the icon+label layout, just recolor.
-      btn.querySelector('span:last-child').textContent = item.label;
+      btn.querySelector('span:last-child').textContent = item.short || item.label;
       btn.className = 'nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0 ' + (on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]');
     } else {
       btn.textContent = item.label;
@@ -1984,7 +2051,66 @@ function renderNav(){
   if (activeView === 'lab') loadLabIfNeeded();
   if (activeView === 'history') loadHistoryIfNeeded();
   if (activeView === 'experiments') loadExperimentsIfNeeded();
+  if (activeView === 'sentiment') loadSentimentV2IfNeeded();
 }
+
+// ---- Sentiment V2 tab ----
+var _sv2Period = '7d';
+var _sv2LoadedAt = {};                          // per period; re-entering the tab refetches after SV2_REFRESH_MS
+var SV2_REFRESH_MS = 5 * 60 * 1000;             // matches the Worker's 5-minute cache; no polling
+var _sv2Chart = null;
+var _sv2Seq = 0;
+function buildSv2Periods(){
+  const host = document.getElementById('sv2Periods');
+  host.innerHTML = SV2_PERIODS.map(([k, l]) =>
+    `<button type="button" data-p="${k}" aria-pressed="${k === _sv2Period}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${k === _sv2Period ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${l}</button>`).join('');
+  host.querySelectorAll('button').forEach(b => { b.onclick = () => { _sv2Period = b.dataset.p; buildSv2Periods(); loadSentimentV2IfNeeded(); }; });
+}
+function loadSentimentV2IfNeeded(force){
+  const p = _sv2Period;
+  if(!force && _sv2LoadedAt[p] && Date.now() - _sv2LoadedAt[p] < SV2_REFRESH_MS && _sv2LoadedAt[p + ':res']){ renderSentimentV2(_sv2LoadedAt[p + ':res']); return; }
+  const seq = ++_sv2Seq;
+  document.getElementById('sv2Status').textContent = 'Loading…';
+  getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=' + p).then(res => {
+    if(res.ok){ _sv2LoadedAt[p] = Date.now(); _sv2LoadedAt[p + ':res'] = res; }
+    if(seq === _sv2Seq && p === _sv2Period && activeView === 'sentiment') renderSentimentV2(res);
+  });
+}
+function renderSentimentV2(res){
+  const m = sentimentV2Model(res, Date.now());
+  document.getElementById('sv2Status').textContent = m.status;
+  document.getElementById('sv2Notices').innerHTML = m.notices.map(n => `<li>${chip(n.tone === 'bad' ? 'ERROR' : n.tone === 'warn' ? 'CHECK' : 'NOTE', n.tone)} <span class="text-[#BAC9CD]">${esc(n.text)}</span></li>`).join('');
+  const empty = document.getElementById('sv2Empty');
+  empty.classList.toggle('hidden', m.state === 'ok');
+  empty.classList.toggle('flex', m.state !== 'ok');
+  empty.textContent = m.state === 'empty' ? 'No observations in this period.' : m.state === 'error' ? 'The comparison could not be loaded. Try again with the refresh button.' : '';
+  const rows = m.rows, dense = rows.length > 60;
+  const ds = (label, key, color, axis, radius) => ({ label, data: rows.map(r => ({ x: r.ts, y: r[key] })), borderColor: color, backgroundColor: color,
+    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 4, tension: 0.2, spanGaps: false });
+  const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', dense ? 0 : 2), ds('V2 sentiment', 'v2', '#22C55E', 'ys', 2.5), ds('BTC price', 'btc', '#F59E0B', 'yp', dense ? 0 : 2)];
+  if(_sv2Chart){ _sv2Chart.$rows = rows; _sv2Chart.data.datasets = datasets; _sv2Chart.update(); return; }
+  const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
+  _sv2Chart = new Chart(document.getElementById('sv2Chart').getContext('2d'), {
+    type: 'line', data: { datasets },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { type: 'time', time: { displayFormats: { minute: 'MMM d HH:mm', hour: 'MMM d HH:mm', day: 'MMM d' } }, ticks: { ...tick, maxRotation: 0, autoSkipPadding: 16 }, grid: { color: 'rgba(59,73,76,0.4)' } },
+        ys: { position: 'left', min: 0, max: 100, title: { display: true, text: 'Sentiment', color: '#BAC9CD', font: { size: 10 } }, ticks: tick, grid: { color: 'rgba(59,73,76,0.4)' } },
+        yp: { position: 'right', title: { display: true, text: 'BTC (USD)', color: '#BAC9CD', font: { size: 10 } }, ticks: { ...tick, callback: v => '$' + Number(v).toLocaleString() }, grid: { drawOnChartArea: false } },
+      },
+      plugins: { legend: { display: false },
+        tooltip: { backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1, titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' }, padding: 10, displayColors: false,
+          filter: (item, i) => i === 0,
+          callbacks: {
+            title: items => items.length ? fmtUtc(items[0].parsed.x) : '',
+            label: item => { const r = (_sv2Chart.$rows || [])[item.dataIndex]; if(!r) return '';
+              const f = v => v === null ? 'missing' : String(v);
+              return ['V1:  ' + f(r.v1), 'V2:  ' + (r.v2Pre ? 'not started' : r.v2 === null ? 'missing' : r.v2 + (r.v2Status && r.v2Status !== 'OK' ? ' (incomplete inputs)' : '')), 'BTC: ' + (r.btc === null ? 'missing' : '$' + r.btc.toLocaleString())]; },
+          } } } },
+  });
+  _sv2Chart.$rows = rows;
+}
+buildSv2Periods();
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
   btn.onclick = () => { activeView = btn.dataset.view; history.replaceState(null, '', '#' + activeView); renderNav(); };
@@ -2260,6 +2386,8 @@ document.getElementById('refreshBtn').onclick = async () => {
     loadFreshness(true);
     if (activeView === 'dashboard') { loadOverview(true); loadSystemStatus(true); } else { _overviewLoadedAt = 0; _sysLoadedAt = 0; }
     if (activeView === 'experiments') { _experimentsLoaded = false; loadExperimentsIfNeeded(); }
+    _sv2LoadedAt = {};
+    if (activeView === 'sentiment') loadSentimentV2IfNeeded(true);
     await refreshAll();
   } finally {
     icon.classList.remove('spinning');

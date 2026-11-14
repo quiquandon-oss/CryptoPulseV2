@@ -287,3 +287,11 @@ test('page source: Sentiment V2 tab, colours, axes and route', () => {
   assert.ok(/yp: \{ position: 'right'/.test(SRC), 'BTC right axis');
   assert.ok(/apiFetch|getJson\(WORKER_URL \+ '\/api\/sentiment-v2\/comparison\?period='/.test(SRC), 'read through the GET memo');
 });
+
+test('sentiment v2: a V1 reading not yet processed is reported, not hidden behind "stale"', () => {
+  const lag = H.sentimentV2Model(sv2({ v1_history_last_ts: NOW - 30 * 60000 }, { v1: { last_ts: NOW - 9 * HOUR, stale: true } }), NOW);
+  assert.match(texts(lag), /Newer V1 reading from 30 min ago is waiting to be processed/);
+  assert.match(texts(lag), /V1 sentiment is stale: last value 9 h ago/);
+  assert.doesNotMatch(texts(H.sentimentV2Model(sv2({ v1_history_last_ts: NOW - HOUR }), NOW)), /waiting to be processed/, 'caught up');
+  assert.doesNotMatch(texts(H.sentimentV2Model(sv2(), NOW)), /waiting to be processed/, 'older Worker without the field');
+});

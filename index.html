@@ -2152,7 +2152,8 @@ function renderSv2Status(m){
 }
 function renderSv2Ai(res){
   const host = document.getElementById('sv2Ai');
-  const l = res && res.ok && res.data ? res.data.v2_latest : null;
+  if(!res || !res.ok || !res.data){ host.innerHTML = '<p class="text-[#BAC9CD]">V2 data is unavailable right now, so the AI annotation cannot be shown.</p>'; return; }
+  const l = res.data.v2_latest;
   const a = l && l.ai_annotation;
   if(!a){ host.innerHTML = `<p class="text-[#BAC9CD]">${l ? 'No AI annotation for the latest V2 result' + (l.ai_status ? ' (' + esc(l.ai_status.replace(/_/g, ' ')) + ')' : '') + '. The score never depends on it.' : 'No V2 result yet.'}</p>`; return; }
   host.innerHTML = `<p>${esc(a.summary)}</p><p class="text-[#BAC9CD] mt-1">Uncertainty: ${esc(a.uncertainty)}</p><p class="text-[#8A9599] mt-1">Cites ${a.cited_ids.length} evidence item${a.cited_ids.length === 1 ? '' : 's'} · ${esc(l.ai_model || '')} · annotation only, never a score input</p>`;

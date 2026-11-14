@@ -344,4 +344,5 @@ test('page source: evidence panel is collapsed below the graph and loads only wh
   assert.ok(!/<details id="sv2Details"[^>]*\bopen\b/.test(SRC), 'collapsed by default');
   assert.ok(/addEventListener\('toggle', \(\) => loadSv2DetailsIfOpen\(\)\)/.test(SRC));
   assert.ok(/rel="noopener noreferrer nofollow"/.test(SRC), 'external evidence links are isolated');
+  assert.ok(/if\(!res \|\| !res\.ok \|\| !res\.data\)\{ host\.innerHTML = '<p class="text-\[#BAC9CD\]">V2 data is unavailable right now/.test(SRC), 'a failed load is not shown as "no V2 result yet"');
 });

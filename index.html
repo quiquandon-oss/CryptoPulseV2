@@ -1006,6 +1006,20 @@ function alertModel(runsRes, issuesRes, now){
 }
 // Sentiment V2 tab. Values are shown exactly as the Worker returns them; nothing is recomputed here.
 var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'], ['all', 'ALL']];
+// V1 is recorded only when the V1 app is open, so readings can be many hours apart. A line drawn across such a gap would
+// suggest values that were never observed: the chart breaks it instead. The limit is 6 h, or 3x the median spacing when
+// points are sparser (long periods / downsampled), so ordinary spacing never breaks the line. The median is only used
+// with enough gaps (SV2_LINE_BREAK_MIN_GAPS): in a tiny sample it is dominated by the very gap being judged.
+var SV2_LINE_BREAK_MIN_MS = 6 * 3600000;
+var SV2_LINE_BREAK_MIN_GAPS = 10;
+function sv2LineBreakMs(rows){
+  const gaps = [];
+  for(let i = 1; i < rows.length; i++) gaps.push(rows[i].ts - rows[i - 1].ts);
+  if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return SV2_LINE_BREAK_MIN_MS;
+  const s = gaps.slice().sort((a, b) => a - b), mid = Math.floor(s.length / 2);
+  const median = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  return Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median);
+}
 function sentimentV2Model(res, now){
   const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
   const ago = (ts) => { const h = (now - ts) / 3600000; return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? Math.round(h) + ' h' : Math.round(h / 24) + ' d'; };
@@ -1041,13 +1055,17 @@ function sentimentV2Model(res, now){
   if(miss.length) notices.push({ tone: 'warn', text: 'Missing points: ' + miss.join(', ') + ' (shown as gaps).' });
   if(degraded) notices.push({ tone: 'warn', text: degraded + ' V2 point' + (degraded === 1 ? ' was' : 's were') + ' computed with incomplete inputs (marked in the tooltip).' });
   if(d.truncated || d.btc_truncated) notices.push({ tone: 'neutral', text: 'Only the most recent observations in this period are included.' });
+  const breakMs = sv2LineBreakMs(rows);
+  let lineBreaks = 0;
+  for(let i = 1; i < rows.length; i++) if(rows[i].ts - rows[i - 1].ts > breakMs) lineBreaks++;
+  if(lineBreaks) notices.push({ tone: 'neutral', text: 'Lines break where readings are more than ' + Math.round(breakMs / 3600000) + ' h apart (' + lineBreaks + ' gap' + (lineBreaks === 1 ? '' : 's') + '): V1 is only recorded while the V1 app is open.' });
   const lastV1 = ss.v1 && num(ss.v1.last_ts);
   const parts = [];
   parts.push(lastV1 !== null ? 'Last V1 update ' + ago(lastV1) + ' ago' : 'No V1 update in this period');
   parts.push(d.v2_error ? 'V2 unavailable' : v2.available ? 'V2 available' + (num(v2.last_ts) !== null ? ', last ' + ago(v2.last_ts) + ' ago' : '') : 'V2 not started');
   if(d.downsampled) parts.push('sampled to ' + rows.length + ' points');
   if(d.current_calc_version) parts.push('method ' + d.current_calc_version + (num(d.current_version_since) !== null ? ' since ' + ago(d.current_version_since) + ' ago' : ''));
-  return { state: rows.length ? 'ok' : 'empty', rows, notices, status: parts.join(' · ') };
+  return { state: rows.length ? 'ok' : 'empty', rows, notices, status: parts.join(' · '), breakMs };
 }
 // Evidence list: only https links are rendered as links; times shown as age.
 function sv2EvidenceModel(res, now){
@@ -2177,9 +2195,11 @@ function renderSentimentV2(res){
   empty.classList.toggle('hidden', m.state === 'ok');
   empty.classList.toggle('flex', m.state !== 'ok');
   empty.textContent = m.state === 'empty' ? 'No observations in this period.' : m.state === 'error' ? 'The comparison could not be loaded. Try again with the refresh button.' : '';
-  const rows = m.rows, dense = rows.length > 60;
+  const rows = m.rows, dense = rows.length > 60, breakMs = m.breakMs;
+  // A segment between two drawn points further apart than breakMs is not drawn (data, indices and tooltips unchanged).
   const ds = (label, key, color, axis, radius) => ({ label, data: rows.map(r => ({ x: r.ts, y: r[key] })), borderColor: color, backgroundColor: color,
-    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 4, tension: 0.2, spanGaps: false });
+    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 4, tension: 0.2, spanGaps: false,
+    segment: { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > breakMs ? 'transparent' : undefined) } });
   const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', dense ? 0 : 2), ds('V2 sentiment', 'v2', '#22C55E', 'ys', 2.5), ds('BTC price', 'btc', '#F59E0B', 'yp', dense ? 0 : 2)];
   // Earlier-method V2 values (sv2-1.0.0) are drawn hollow; the current method's points are filled.
   datasets[1].pointBackgroundColor = rows.map(r => r.v2Version === 'sv2-1.0.0' ? 'rgba(0,0,0,0)' : '#22C55E');

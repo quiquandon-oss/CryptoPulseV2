@@ -1065,6 +1065,13 @@ function sv2EvidenceModel(res, now){
 }
 // Source health and AI budget from /api/sentiment-v2/status.
 function sv2StatusModel(res, now){
+  // The Worker reports health 'schema_missing' (with ok:false) while its evidence tables are not set up: a known
+  // setup state, not a failure, and V2 scores do not depend on it.
+  if(res && res.data && res.data.health === 'schema_missing'){
+    const c = res.data.collector;
+    return { state: 'pending', sources: [], ai: null, collector: c ? { enabled: !!c.enabled, label: c.enabled ? 'collector on' : 'collector off' } : null,
+      version: res.data.calc_version || null, note: 'Evidence storage is not set up yet, so no source status is available. V2 scores do not depend on it.' };
+  }
   if(!res || !res.ok || !res.data) return { state: 'error', sources: [], ai: null, collector: null };
   const d = res.data;
   const sources = (d.sources || []).map(s => {
@@ -2145,7 +2152,10 @@ function renderSv2Evidence(m){
 }
 function renderSv2Status(m){
   const host = document.getElementById('sv2Sources');
-  if(m.state !== 'ok'){ host.innerHTML = '<p class="text-[#BAC9CD]">Source status could not be loaded.</p>'; return; }
+  if(m.state !== 'ok'){
+    if(m.collector || m.version) document.getElementById('sv2DetailsHint').textContent = [m.collector ? m.collector.label : null, m.version].filter(Boolean).join(' · ');
+    host.innerHTML = `<p class="text-[#BAC9CD]">${esc(m.note || 'Source status could not be loaded.')}</p>`; return;
+  }
   document.getElementById('sv2DetailsHint').textContent = [m.collector ? m.collector.label : null, m.version].filter(Boolean).join(' · ');
   host.innerHTML = `<p class="mb-2 flex gap-2 items-start">${chip('AI', m.ai.tone)}<span class="text-[#BAC9CD] break-words min-w-0">${esc(m.ai.line)}</span></p><table class="w-full text-left"><thead class="text-[#8A9599]"><tr><th class="py-1 pr-2 font-normal">Source</th><th class="pr-2 font-normal">Status</th><th class="pr-2 font-normal">Reliability</th><th class="font-normal">Latest item</th></tr></thead><tbody>` +
     m.sources.map(x => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 pr-2">${esc(x.name)}<br><span class="text-[#8A9599]">${esc(x.family.replace(/_/g, ' '))}</span></td><td class="pr-2" title="${esc(x.error || '')}">${chip(x.status, x.tone)}</td><td class="pr-2 font-mono-data">${esc(x.reliability)}</td><td>${x.lastEvidenceTs ? esc(ageStr(x.lastEvidenceTs)) : '—'}${x.fresh ? '' : ' <span class="text-[#8A9599]">(not fresh)</span>'}</td></tr>`).join('') + '</tbody></table>';

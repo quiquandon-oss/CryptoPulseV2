@@ -329,6 +329,13 @@ test('sentiment v2 status: source tones, reliability, and the AI budget line say
   assert.deepEqual([lim.tone, /account free allocation reached/.test(lim.line)], ['bad', true]);
   assert.equal(H.sv2StatusModel({ ok: true, data: { ...base, ai: { enabled: false } } }, NOW).ai.line, 'AI annotation off');
   assert.equal(H.sv2StatusModel(null, NOW).state, 'error');
+  // Worker before migration 0029 (PulseWorkerV2 #141): ok:false with health 'schema_missing' is a setup state, not an error.
+  const pending = H.sv2StatusModel({ ok: false, error: 'HTTP 200', data: { ok: false, health: 'schema_missing', calc_version: 'sv2-1.1.0', collector: { enabled: false } } }, NOW);
+  assert.equal(pending.state, 'pending');
+  assert.match(pending.note, /not set up yet/);
+  assert.equal(pending.collector.label, 'collector off');
+  // Any other failure is still an error.
+  assert.equal(H.sv2StatusModel({ ok: false, error: 'HTTP 500', data: { ok: false, health: 'error' } }, NOW).state, 'error');
 });
 
 test('sentiment v2: points carry their calc version and the status line names the current method', () => {

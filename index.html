@@ -997,12 +997,14 @@ function alertModel(runsRes, issuesRes, now){
 var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'], ['all', 'ALL']];
 // V1 is recorded only when the V1 app is open, so readings can be many hours apart. A line drawn across such a gap would
 // suggest values that were never observed: the chart breaks it instead. The limit is 6 h, or 3x the median spacing when
-// points are sparser (long periods / downsampled), so ordinary spacing never breaks the line.
+// points are sparser (long periods / downsampled), so ordinary spacing never breaks the line. The median is only used
+// with enough gaps (SV2_LINE_BREAK_MIN_GAPS): in a tiny sample it is dominated by the very gap being judged.
 var SV2_LINE_BREAK_MIN_MS = 6 * 3600000;
+var SV2_LINE_BREAK_MIN_GAPS = 10;
 function sv2LineBreakMs(rows){
   const gaps = [];
   for(let i = 1; i < rows.length; i++) gaps.push(rows[i].ts - rows[i - 1].ts);
-  if(!gaps.length) return SV2_LINE_BREAK_MIN_MS;
+  if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return SV2_LINE_BREAK_MIN_MS;
   const s = gaps.slice().sort((a, b) => a - b), mid = Math.floor(s.length / 2);
   const median = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
   return Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median);

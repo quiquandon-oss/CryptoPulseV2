@@ -307,8 +307,13 @@ test('sentiment v2: the line breaks across gaps longer than max(6 h, 3x median s
   const even = H.sentimentV2Model(sv2({ points: pts([5, 4, 3, 2, 1]) }), NOW);
   assert.doesNotMatch(texts(even), /Lines break/);
   // Sparse (downsampled) series: the limit follows 3x the median spacing so ordinary spacing is not broken.
-  assert.equal(H.sv2LineBreakMs([0, 4, 8, 12, 16].map((h) => ({ ts: h * HOUR }))), 12 * HOUR);
+  assert.equal(H.sv2LineBreakMs([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40].map((h) => ({ ts: h * HOUR }))), 12 * HOUR);
   assert.equal(H.sv2LineBreakMs([{ ts: 0 }]), 6 * HOUR);
+  // Codex P2: a tiny sample cannot inflate the limit (2 readings 10 h apart; 3 readings 1 h and 10 h apart).
+  assert.equal(H.sv2LineBreakMs([0, 10].map((h) => ({ ts: h * HOUR }))), 6 * HOUR);
+  assert.equal(H.sv2LineBreakMs([0, 1, 11].map((h) => ({ ts: h * HOUR }))), 6 * HOUR);
+  const tiny = H.sentimentV2Model(sv2({ points: pts([12, 11, 1]) }), NOW);
+  assert.match(texts(tiny), /more than 6 h apart \(1 gap\)/);
 });
 
 test('sentiment v2: the chart draws no segment across a break (static check of renderSentimentV2)', () => {

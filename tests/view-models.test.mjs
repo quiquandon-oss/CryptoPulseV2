@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -294,4 +294,24 @@ test('sentiment v2: a V1 reading not yet processed is reported, not hidden behin
   assert.match(texts(lag), /V1 sentiment is stale: last value 9 h ago/);
   assert.doesNotMatch(texts(H.sentimentV2Model(sv2({ v1_history_last_ts: NOW - HOUR }), NOW)), /waiting to be processed/, 'caught up');
   assert.doesNotMatch(texts(H.sentimentV2Model(sv2(), NOW)), /waiting to be processed/, 'older Worker without the field');
+});
+
+test('sentiment v2: the line breaks across gaps longer than max(6 h, 3x median spacing); values are untouched', () => {
+  const pts = (hours) => hours.map((h, i) => ({ ts: NOW - h * HOUR, v1: 30 + i, btc: 66000 + i, v2: null }));
+  // Spacing 1-2 h with one 9 h overnight gap: limit stays at 6 h, one break, values unchanged.
+  const m = H.sentimentV2Model(sv2({ points: pts([20, 19, 17, 16, 7, 6, 5]) }), NOW);
+  assert.equal(m.breakMs, 6 * HOUR);
+  assert.match(texts(m), /Lines break where readings are more than 6 h apart \(1 gap\)/);
+  assert.deepEqual(plain(m.rows.map((r) => r.v1)), [30, 31, 32, 33, 34, 35, 36]);
+  // Evenly spaced readings never break.
+  const even = H.sentimentV2Model(sv2({ points: pts([5, 4, 3, 2, 1]) }), NOW);
+  assert.doesNotMatch(texts(even), /Lines break/);
+  // Sparse (downsampled) series: the limit follows 3x the median spacing so ordinary spacing is not broken.
+  assert.equal(H.sv2LineBreakMs([0, 4, 8, 12, 16].map((h) => ({ ts: h * HOUR }))), 12 * HOUR);
+  assert.equal(H.sv2LineBreakMs([{ ts: 0 }]), 6 * HOUR);
+});
+
+test('sentiment v2: the chart draws no segment across a break (static check of renderSentimentV2)', () => {
+  assert.match(SRC, /segment: \{ borderColor: c => \(c\.p1\.parsed\.x - c\.p0\.parsed\.x > breakMs \? 'transparent' : undefined\) \}/);
+  assert.match(SRC, /spanGaps: false,\s*\n\s*segment:/, 'missing values still show as gaps');
 });

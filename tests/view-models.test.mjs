@@ -429,3 +429,14 @@ test('sentiment v2 sources: a source disabled in config shows DISABLED (not NEVE
   assert.equal(cfg.ai.line, 'AI annotation off · @cf/zai-org/glm-4.7-flash configured but daily budget 0 Neurons · no calls');
   assert.equal(cfg.ai.tone, 'neutral');
 });
+
+test('sentiment v2 chart: the break limit never exceeds 24 h, even when sparse downsampled data has a long median (Codex P2)', () => {
+  // 12 h median spacing (3x = 36 h) with a 30 h outage: the outage must still break the line.
+  const hours = [0, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120, 150, 162];
+  const rows = hours.map((h) => ({ ts: h * HOUR }));
+  assert.equal(H.sv2LineBreakMs(rows), 24 * HOUR);
+  assert.equal(H.sv2LineBreakMs(rows, 365 * 24 * HOUR), 24 * HOUR);
+  let breaks = 0; const br = H.sv2LineBreakMs(rows);
+  for (let i = 1; i < rows.length; i++) if (rows[i].ts - rows[i - 1].ts > br) breaks++;
+  assert.equal(breaks, 1, 'only the 30 h outage breaks; the regular 12 h spacing is connected');
+});

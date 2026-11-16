@@ -1031,7 +1031,8 @@ function sv2LineBreakMs(rows, windowMs){
   if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return Math.max(SV2_LINE_BREAK_MIN_MS, w);
   const s = gaps.slice().sort((a, b) => a - b), mid = Math.floor(s.length / 2);
   const median = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-  return Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median, w);
+  // Never above SV2_LINE_BREAK_MAX_WINDOW_MS, whatever the median: a gap of more than a day always breaks the line (Codex P2).
+  return Math.min(SV2_LINE_BREAK_MAX_WINDOW_MS, Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median, w));
 }
 function sentimentV2Model(res, now){
   const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);

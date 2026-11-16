@@ -602,3 +602,13 @@ test('sentiment v2: hourly V1 server readings are labelled per point and announc
   assert.deepEqual(plain(legacy.rows.map((r) => r.v1Origin)), [null, null, null]);
   assert.doesNotMatch(texts(legacy), /server reading/);
 });
+
+test('sentiment v2: unscored hourly server points are not "missing V2"; V2 gets its own line-break scale', () => {
+  const pts = [];
+  for (let k = 12; k >= 1; k--) pts.push({ ts: NOW - k * HOUR, v1: 36, btc: 66000, v2: k % 4 === 0 ? 45 : null, v2_status: k % 4 === 0 ? 'OK' : null, v1_origin: 'server' });
+  pts.push({ ts: NOW - 30 * 60000, v1: 35, btc: 66000, v2: null, v1_origin: 'browser' });
+  const m = H.sentimentV2Model(sv2({ points: pts, v1_server_input: { enabled: true, readings_in_period: 12, error: null } },
+    { v2: { first_ts: NOW - 12 * HOUR, last_ts: NOW - 4 * HOUR, points_in_period: 3, available: true, stale: false, insufficient_history: false } }), NOW);
+  assert.match(texts(m), /Missing points: 1 V2/);            // only the app reading counts
+  assert.ok(m.v2BreakMs >= 4 * HOUR, 'V2 readings 4 h apart stay connected');
+});

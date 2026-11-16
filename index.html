@@ -1131,6 +1131,22 @@ function sv2StatusModel(res, now){
   const collector = d.collector ? { enabled: !!d.collector.enabled, label: d.collector.enabled ? 'collector on' : 'collector off' } : null;
   return { state: 'ok', sources, ai: { line: aiLine, tone: aiTone }, collector, version: d.calc_version || null };
 }
+// AI annotation: structured, validated fields only (owner decision 2026-11-16). No free-text summary, note, uncertainty
+// or confidence is shown, even if an older API response still carries one.
+function sv2AiAnnotationModel(latest){
+  const a = latest && latest.ai_annotation;
+  if(!a || typeof a !== 'object') return null;
+  const arr = (x) => (Array.isArray(x) ? x : []);
+  const str = (x) => (typeof x === 'string' ? x : x === null || x === undefined ? '' : String(x));
+  return {
+    cited: arr(a.cited_ids).filter((x) => typeof x === 'string'),
+    entities: arr(a.entities).filter((e) => e && typeof e.name === 'string').map((e) => ({ id: str(e.id), name: e.name, kind: str(e.kind) })),
+    figures: arr(a.figures).filter((f) => f && (typeof f.value === 'string' || typeof f.value === 'number')).map((f) => ({ id: str(f.id), value: str(f.value) })),
+    contradictions: arr(a.contradictions).map((c) => arr(c && c.ids).filter((x) => typeof x === 'string')).filter((ids) => ids.length >= 2),
+    relevance: arr(a.event_relevance).filter((e) => e && typeof e.id === 'string').map((e) => ({ id: e.id, relevance: str(e.relevance), overlap: str(e.overlap) })),
+    model: str(latest.ai_model),
+  };
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -2205,7 +2221,11 @@ function renderSv2Ai(res){
   const l = res.data.v2_latest;
   const a = l && l.ai_annotation;
   if(!a){ host.innerHTML = `<p class="text-[#BAC9CD]">${l ? 'No AI annotation for the latest V2 result' + (l.ai_status ? ' (' + esc(l.ai_status.replace(/_/g, ' ')) + ')' : '') + '. The score never depends on it.' : 'No V2 result yet.'}</p>`; return; }
-  host.innerHTML = `<p>${esc(a.summary)}</p><p class="text-[#BAC9CD] mt-1">Uncertainty: ${esc(a.uncertainty)}</p><p class="text-[#8A9599] mt-1">Cites ${a.cited_ids.length} evidence item${a.cited_ids.length === 1 ? '' : 's'} · ${esc(l.ai_model || '')} · annotation only, never a score input</p>`;
+  const m = sv2AiAnnotationModel(l);
+  const row = (label, items) => items.length ? `<p class="mt-1"><span class="text-[#8A9599]">${label}:</span> ${items.map(esc).join(' · ')}</p>` : '';
+  host.innerHTML = row('Entities', m.entities.map((e) => e.name + (e.kind ? ' (' + e.kind + ')' : ''))) + row('Figures', m.figures.map((f) => f.value)) +
+    row('Conflicting items', m.contradictions.map((ids) => ids.length + ' items')) + row('Event relevance', m.relevance.map((e) => e.relevance + ', overlap ' + e.overlap)) +
+    `<p class="text-[#8A9599] mt-1">Cites ${m.cited.length} evidence item${m.cited.length === 1 ? '' : 's'}${m.model ? ' · ' + esc(m.model) : ''} · structured references checked against the evidence titles · no summary or confidence shown · never a score input</p>`;
 }
 function renderSentimentV2(res){
   renderSv2Ai(res);

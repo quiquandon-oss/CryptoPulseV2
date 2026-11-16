@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2EvidenceModel, sv2StatusModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, sv2StatusModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -439,4 +439,23 @@ test('sentiment v2 chart: the break limit never exceeds 24 h, even when sparse d
   let breaks = 0; const br = H.sv2LineBreakMs(rows);
   for (let i = 1; i < rows.length; i++) if (rows[i].ts - rows[i - 1].ts > br) breaks++;
   assert.equal(breaks, 1, 'only the 30 h outage breaks; the regular 12 h spacing is connected');
+});
+
+test('sentiment v2 AI panel: structured fields only; no summary, uncertainty, confidence or notes are shown', () => {
+  assert.equal(H.sv2AiAnnotationModel(null), null);
+  assert.equal(H.sv2AiAnnotationModel({ ai_annotation: null }), null);
+  const legacy = { ai_model: '@cf/zai-org/glm-4.7-flash', ai_annotation: { summary: 'Losses associated with Ethereum mining.', uncertainty: 'low', confidence: 0.9,
+    cited_ids: ['evidence:e1', 'evidence:e2'], entities: [{ id: 'evidence:e1', name: 'BitMine', kind: 'organization' }],
+    figures: [{ id: 'evidence:e1', value: '8.83' }], contradictions: [{ ids: ['evidence:e1', 'evidence:e2'], note: 'they disagree' }, { ids: ['evidence:e1'] }],
+    event_relevance: [{ id: 'event:x', relevance: 'low', overlap: 'none' }] } };
+  const m = plain(H.sv2AiAnnotationModel(legacy));
+  assert.deepEqual(m, { cited: ['evidence:e1', 'evidence:e2'], entities: [{ id: 'evidence:e1', name: 'BitMine', kind: 'organization' }],
+    figures: [{ id: 'evidence:e1', value: '8.83' }], contradictions: [['evidence:e1', 'evidence:e2']],
+    relevance: [{ id: 'event:x', relevance: 'low', overlap: 'none' }], model: '@cf/zai-org/glm-4.7-flash' });
+  assert.doesNotMatch(JSON.stringify(m), /Ethereum mining|uncertainty|confidence|they disagree/);
+  // The renderer never reads free-text fields.
+  const a = SRC.indexOf('function renderSv2Ai'), b = SRC.indexOf('function renderSentimentV2', a);
+  const body = SRC.slice(a, b);
+  assert.doesNotMatch(body, /\.summary|\.uncertainty|\.confidence|\.note\b|Uncertainty:/);
+  assert.match(body, /sv2AiAnnotationModel\(l\)/);
 });

@@ -1012,13 +1012,27 @@ var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'],
 // with enough gaps (SV2_LINE_BREAK_MIN_GAPS): in a tiny sample it is dominated by the very gap being judged.
 var SV2_LINE_BREAK_MIN_MS = 6 * 3600000;
 var SV2_LINE_BREAK_MIN_GAPS = 10;
-function sv2LineBreakMs(rows){
+// On longer ranges a gap that is small next to the visible window does not hide the trend: the limit also grows to
+// 1/12 of the window (7D: 14 h, 30D: 60 h), but never above SV2_LINE_BREAK_MAX_WINDOW_MS, so a gap of more than a day
+// (an outage, the V1 app closed for days) always breaks the line. Each reading keeps its marker either way.
+var SV2_LINE_BREAK_WINDOW_FRACTION = 1 / 12;
+var SV2_LINE_BREAK_MAX_WINDOW_MS = 24 * 3600000;
+// Trend lines for the V1 / V2 / BTC comparison: straight segments between consecutive real readings (no curve
+// smoothing that could overshoot a reading), every reading keeps a visible marker (smaller on dense ranges), and
+// segments across gaps longer than breakMs or across missing values are not drawn (see sv2LineBreakMs, spanGaps).
+function sv2SeriesStyle(nRows){
+  const dense = nRows > 60;
+  return { tension: 0, spanGaps: false, v1Radius: dense ? 1.5 : 2.5, v2Radius: 3, btcRadius: dense ? 1.5 : 2.5 };
+}
+function sv2LineBreakMs(rows, windowMs){
   const gaps = [];
   for(let i = 1; i < rows.length; i++) gaps.push(rows[i].ts - rows[i - 1].ts);
-  if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return SV2_LINE_BREAK_MIN_MS;
+  const w = typeof windowMs === 'number' && isFinite(windowMs) && windowMs > 0 ? Math.min(windowMs * SV2_LINE_BREAK_WINDOW_FRACTION, SV2_LINE_BREAK_MAX_WINDOW_MS) : 0;
+  if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return Math.max(SV2_LINE_BREAK_MIN_MS, w);
   const s = gaps.slice().sort((a, b) => a - b), mid = Math.floor(s.length / 2);
   const median = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-  return Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median);
+  // Never above SV2_LINE_BREAK_MAX_WINDOW_MS, whatever the median: a gap of more than a day always breaks the line (Codex P2).
+  return Math.min(SV2_LINE_BREAK_MAX_WINDOW_MS, Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median, w));
 }
 function sentimentV2Model(res, now){
   const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
@@ -1055,7 +1069,10 @@ function sentimentV2Model(res, now){
   if(miss.length) notices.push({ tone: 'warn', text: 'Missing points: ' + miss.join(', ') + ' (shown as gaps).' });
   if(degraded) notices.push({ tone: 'warn', text: degraded + ' V2 point' + (degraded === 1 ? ' was' : 's were') + ' computed with incomplete inputs (marked in the tooltip).' });
   if(d.truncated || d.btc_truncated) notices.push({ tone: 'neutral', text: 'Only the most recent observations in this period are included.' });
-  const breakMs = sv2LineBreakMs(rows);
+  // The visible window: the requested period (from_ts..to_ts), or for ALL the span of the readings themselves.
+  const winFrom = num(d.from_ts), winTo = num(d.to_ts);
+  const windowMs = winFrom !== null && winTo !== null ? winTo - winFrom : rows.length > 1 ? rows[rows.length - 1].ts - rows[0].ts : 0;
+  const breakMs = sv2LineBreakMs(rows, windowMs);
   let lineBreaks = 0;
   for(let i = 1; i < rows.length; i++) if(rows[i].ts - rows[i - 1].ts > breakMs) lineBreaks++;
   if(lineBreaks) notices.push({ tone: 'neutral', text: 'Lines break where readings are more than ' + Math.round(breakMs / 3600000) + ' h apart (' + lineBreaks + ' gap' + (lineBreaks === 1 ? '' : 's') + '): V1 is only recorded while the V1 app is open.' });
@@ -1092,15 +1109,19 @@ function sv2StatusModel(res, now){
   }
   if(!res || !res.ok || !res.data) return { state: 'error', sources: [], ai: null, collector: null };
   const d = res.data;
+  // A source switched off in the Worker config (collector.disabled_sources) is shown as DISABLED, never as waiting to run.
+  const disabled = new Set(d.collector && Array.isArray(d.collector.disabled_sources) ? d.collector.disabled_sources : []);
   const sources = (d.sources || []).map(s => {
-    const ok = s.last_status === 'OK' || s.last_status === 'NOT_MODIFIED';
-    const tone = s.last_status === 'NEVER_RUN' || s.last_status === 'NOT_CONFIGURED' ? 'neutral' : ok ? (s.fresh ? 'good' : 'warn') : 'bad';
-    return { id: s.id, name: s.name, family: s.family, status: s.last_status, tone, fresh: !!s.fresh,
+    const off = disabled.has(s.id), status = off ? 'DISABLED' : s.last_status;
+    const ok = !off && (s.last_status === 'OK' || s.last_status === 'NOT_MODIFIED');
+    const tone = off || s.last_status === 'NEVER_RUN' || s.last_status === 'NOT_CONFIGURED' ? 'neutral' : ok ? (s.fresh ? 'good' : 'warn') : 'bad';
+    return { id: s.id, name: s.name, family: s.family, status, tone, fresh: !off && !!s.fresh,
       reliability: typeof s.reliability === 'number' ? Math.round(s.reliability * 100) + '%' : '—', attempts: s.attempts || 0,
       lastEvidenceTs: s.last_evidence_ts ?? null, error: s.last_error || null };
   });
   const ai = d.ai || null;
-  let aiLine = 'AI annotation off', aiTone = 'neutral';
+  // Configured is not enabled: without a model AND a positive daily budget no call is ever made.
+  let aiLine = ai && !ai.enabled ? 'AI annotation off · ' + (ai.model ? ai.model + ' configured but ' : 'no model configured, ') + 'daily budget ' + (Number(ai.daily_neuron_budget) || 0) + ' Neurons · no calls' : 'AI annotation off', aiTone = 'neutral';
   if(ai && ai.enabled){
     aiLine = `${ai.model} · ${ai.committed_neurons} of ${ai.daily_neuron_budget} Neurons today · ${ai.calls} call${ai.calls === 1 ? '' : 's'}`;
     aiTone = ai.account_limited_today ? 'bad' : ai.remaining_neurons <= 0 ? 'warn' : 'good';
@@ -1109,6 +1130,22 @@ function sv2StatusModel(res, now){
   }
   const collector = d.collector ? { enabled: !!d.collector.enabled, label: d.collector.enabled ? 'collector on' : 'collector off' } : null;
   return { state: 'ok', sources, ai: { line: aiLine, tone: aiTone }, collector, version: d.calc_version || null };
+}
+// AI annotation: structured, validated fields only (owner decision 2026-11-16). No free-text summary, note, uncertainty
+// or confidence is shown, even if an older API response still carries one.
+function sv2AiAnnotationModel(latest){
+  const a = latest && latest.ai_annotation;
+  if(!a || typeof a !== 'object') return null;
+  const arr = (x) => (Array.isArray(x) ? x : []);
+  const str = (x) => (typeof x === 'string' ? x : x === null || x === undefined ? '' : String(x));
+  return {
+    cited: arr(a.cited_ids).filter((x) => typeof x === 'string'),
+    entities: arr(a.entities).filter((e) => e && typeof e.name === 'string').map((e) => ({ id: str(e.id), name: e.name, kind: str(e.kind) })),
+    figures: arr(a.figures).filter((f) => f && (typeof f.value === 'string' || typeof f.value === 'number')).map((f) => ({ id: str(f.id), value: str(f.value) })),
+    contradictions: arr(a.contradictions).map((c) => arr(c && c.ids).filter((x) => typeof x === 'string')).filter((ids) => ids.length >= 2),
+    relevance: arr(a.event_relevance).filter((e) => e && typeof e.id === 'string').map((e) => ({ id: e.id, relevance: str(e.relevance), overlap: str(e.overlap) })),
+    model: str(latest.ai_model),
+  };
 }
 // ---- END view-model helpers ----
 
@@ -2184,7 +2221,11 @@ function renderSv2Ai(res){
   const l = res.data.v2_latest;
   const a = l && l.ai_annotation;
   if(!a){ host.innerHTML = `<p class="text-[#BAC9CD]">${l ? 'No AI annotation for the latest V2 result' + (l.ai_status ? ' (' + esc(l.ai_status.replace(/_/g, ' ')) + ')' : '') + '. The score never depends on it.' : 'No V2 result yet.'}</p>`; return; }
-  host.innerHTML = `<p>${esc(a.summary)}</p><p class="text-[#BAC9CD] mt-1">Uncertainty: ${esc(a.uncertainty)}</p><p class="text-[#8A9599] mt-1">Cites ${a.cited_ids.length} evidence item${a.cited_ids.length === 1 ? '' : 's'} · ${esc(l.ai_model || '')} · annotation only, never a score input</p>`;
+  const m = sv2AiAnnotationModel(l);
+  const row = (label, items) => items.length ? `<p class="mt-1"><span class="text-[#8A9599]">${label}:</span> ${items.map(esc).join(' · ')}</p>` : '';
+  host.innerHTML = row('Entities', m.entities.map((e) => e.name + (e.kind ? ' (' + e.kind + ')' : ''))) + row('Figures', m.figures.map((f) => f.value)) +
+    row('Conflicting items', m.contradictions.map((ids) => ids.length + ' items')) + row('Event relevance', m.relevance.map((e) => e.relevance + ', overlap ' + e.overlap)) +
+    `<p class="text-[#8A9599] mt-1">Cites ${m.cited.length} evidence item${m.cited.length === 1 ? '' : 's'}${m.model ? ' · ' + esc(m.model) : ''} · structured references checked against the evidence titles · no summary or confidence shown · never a score input</p>`;
 }
 function renderSentimentV2(res){
   renderSv2Ai(res);
@@ -2195,12 +2236,12 @@ function renderSentimentV2(res){
   empty.classList.toggle('hidden', m.state === 'ok');
   empty.classList.toggle('flex', m.state !== 'ok');
   empty.textContent = m.state === 'empty' ? 'No observations in this period.' : m.state === 'error' ? 'The comparison could not be loaded. Try again with the refresh button.' : '';
-  const rows = m.rows, dense = rows.length > 60, breakMs = m.breakMs;
+  const rows = m.rows, breakMs = m.breakMs, st = sv2SeriesStyle(rows.length);
   // A segment between two drawn points further apart than breakMs is not drawn (data, indices and tooltips unchanged).
   const ds = (label, key, color, axis, radius) => ({ label, data: rows.map(r => ({ x: r.ts, y: r[key] })), borderColor: color, backgroundColor: color,
-    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 4, tension: 0.2, spanGaps: false,
+    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 5, tension: st.tension, spanGaps: st.spanGaps,
     segment: { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > breakMs ? 'transparent' : undefined) } });
-  const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', dense ? 0 : 2), ds('V2 sentiment', 'v2', '#22C55E', 'ys', 2.5), ds('BTC price', 'btc', '#F59E0B', 'yp', dense ? 0 : 2)];
+  const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', st.v1Radius), ds('V2 sentiment', 'v2', '#22C55E', 'ys', st.v2Radius), ds('BTC price', 'btc', '#F59E0B', 'yp', st.btcRadius)];
   // Earlier-method V2 values (sv2-1.0.0) are drawn hollow; the current method's points are filled.
   datasets[1].pointBackgroundColor = rows.map(r => r.v2Version === 'sv2-1.0.0' ? 'rgba(0,0,0,0)' : '#22C55E');
   datasets[1].pointBorderColor = '#22C55E';

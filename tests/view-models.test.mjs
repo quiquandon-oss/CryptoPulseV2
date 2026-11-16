@@ -585,3 +585,20 @@ test('page source: Forecasting Lab reads persisted research results only', () =>
   // Every report-derived string in the PEV-1 table is escaped (review finding).
   assert.match(SRC, /\$\{esc\(v\)\} excluded \(\$\{esc\(String\(k\)/);
 });
+
+test('sentiment v2: hourly V1 server readings are labelled per point and announced; the app-only line note goes away', () => {
+  const pts = [
+    { ts: NOW - 3 * HOUR, v1: 35, btc: 68856, v2: null, v1_origin: 'browser' },
+    { ts: NOW - 2 * HOUR, v1: 37, btc: 66989, v2: 40, v2_status: 'OK', v1_origin: 'server' },
+    { ts: NOW - HOUR, v1: 38, btc: 66500, v2: 41, v2_status: 'OK', v1_origin: 'server' },
+  ];
+  const m = H.sentimentV2Model(sv2({ points: pts, v1_server_input: { enabled: true, collector: 'scomp-v1', readings_in_period: 2, error: null } }), NOW);
+  assert.deepEqual(plain(m.rows.map((r) => r.v1Origin)), ['browser', 'server', 'server']);
+  assert.match(texts(m), /2 V1 points are hourly server readings .* drawn hollow/);
+  assert.doesNotMatch(texts(m), /only recorded while the V1 app is open/);
+  const err = H.sentimentV2Model(sv2({ points: pts.slice(0, 1), v1_server_input: { enabled: true, readings_in_period: 0, error: 'no such table' } }), NOW);
+  assert.match(texts(err), /server readings could not be read/);
+  const legacy = H.sentimentV2Model(sv2(), NOW);                    // Worker before the change: no origin, no notice
+  assert.deepEqual(plain(legacy.rows.map((r) => r.v1Origin)), [null, null, null]);
+  assert.doesNotMatch(texts(legacy), /server reading/);
+});

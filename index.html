@@ -75,6 +75,7 @@
   <nav aria-label="Sections" class="hidden md:flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-4 w-fit">
     <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
+    <button data-view="forecast" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="experiments" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="history" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
     <button data-view="sentiment" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
@@ -695,6 +696,78 @@
     </details>
   </div>
 
+  <!-- Forecasting Lab: TimesFM 2.5 (EXP-004, D1 experiment_4_timesfm via /research/timesfm-recent) and Chronos-2
+       (EXP-008, research-data/exp008-chronos derived/ledger.json) against actual BTC, on persisted research rows only.
+       Evaluation rules: research/plans/2026-11-01-prospective-evaluation-plans.md (frozen). -->
+  <div id="view-forecast" class="hidden">
+    <section class="rounded-2xl border border-[#A78BFA]/30 bg-[#A78BFA]/5 p-4 mb-6">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h2 class="text-lg font-bold tracking-tight">Forecasting Lab</h2>
+          <p class="text-xs text-[#BAC9CD] mt-1 leading-relaxed">TimesFM 2.5 and Chronos-2 forecast BTC from price history alone, at 12 h and 24 h, on GitHub Actions (research only, never a production input). Every number below comes from a persisted forecast and its recorded outcome.</p>
+        </div>
+        <div id="flHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 shrink-0"></div>
+      </div>
+      <ul class="text-[11px] text-[#BAC9CD] leading-relaxed list-disc pl-4 mt-2 space-y-0.5">
+        <li><span class="text-[#E1E2E7]">Prospective sample:</span> origins from 1 Nov 2026 (frozen plan). 10–31 Oct origins are shown but marked descriptive. Nothing before 9 Oct 21:00 UTC is read (sealed holdout).</li>
+        <li><span class="text-[#E1E2E7]">No verdict before the checkpoint:</span> the plan's first analysis is at 100 resolved origins per horizon. Until then, hit rates are descriptive and their 95% intervals are wide.</li>
+      </ul>
+      <p id="flStatus" class="text-[11px] text-[#8A9599] mt-2" aria-live="polite">Loading…</p>
+    </section>
+
+    <div id="flCards" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
+
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flMainTitle">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
+        <h3 id="flMainTitle" class="text-sm font-semibold">BTC: forecast vs actual</h3>
+        <div id="flPeriods" role="group" aria-label="Period" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap text-[11px] text-[#BAC9CD] mb-2" aria-hidden="true">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#E1E2E7"></span>BTC actual</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 border-t-2 border-dashed" style="border-color:#A78BFA"></span>TimesFM 2.5</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 border-t-2 border-dashed" style="border-color:#F472B6"></span>Chronos-2 <span class="text-[#8A9599]">(bar = q10–q90)</span></span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full border" style="border-color:#E1E2E7"></span>origin</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rotate-45" style="background:#FBBF24"></span>actual at target</span>
+      </div>
+      <p id="flMainNote" class="text-[11px] text-[#8A9599] mb-2"></p>
+      <div class="relative h-[300px] sm:h-[400px]"><canvas id="flMainChart" role="img" aria-label="BTC actual price with each TimesFM and Chronos-2 forecast drawn from its origin to its target, and the actual price at each target"></canvas>
+        <p id="flMainEmpty" class="hidden absolute inset-0 items-center justify-center text-sm text-[#BAC9CD] text-center px-6"></p></div>
+    </section>
+
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flPerfTitle">
+      <h3 id="flPerfTitle" class="text-sm font-semibold mb-1">Performance on the same origins</h3>
+      <p id="flPerfNote" class="text-[11px] text-[#BAC9CD] mb-3"></p>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div><h4 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">Direction accuracy (95% interval)</h4><div class="relative h-[220px]"><canvas id="flDirChart" role="img" aria-label="Direction accuracy of TimesFM, Chronos-2, always-UP and persistence on the same origins"></canvas></div><div id="flDirTable" class="mt-2 text-[11px]"></div></div>
+        <div><h4 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">Forecast error (return, percentage points)</h4><div class="relative h-[220px]"><canvas id="flErrChart" role="img" aria-label="MAE and RMSE of predicted versus realised return for both models"></canvas></div><div id="flErrTable" class="mt-2 text-[11px]"></div></div>
+        <div><h4 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">Predicted vs realised return</h4><div class="relative h-[260px]"><canvas id="flScatter" role="img" aria-label="Scatter of predicted against realised return; colour marks right or wrong direction"></canvas></div><p class="text-[10px] text-[#8A9599] mt-1">Filled = right direction, hollow = wrong. Above the dashed diagonal = realised move larger than forecast.</p></div>
+        <div><h4 class="text-xs uppercase tracking-wide text-[#BAC9CD] mb-2">Hit rate over time (cumulative)</h4><div class="relative h-[260px]"><canvas id="flTimeChart" role="img" aria-label="Cumulative direction hit rate of both models over origins"></canvas></div><div id="flWindows" class="mt-2 text-[11px]"></div></div>
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flAgreeTitle">
+      <h3 id="flAgreeTitle" class="text-sm font-semibold mb-3">Model agreement</h3>
+      <div id="flAgree" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"></div>
+    </section>
+
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flSentTitle">
+      <h3 id="flSentTitle" class="text-sm font-semibold mb-1">Sentiment vs forecasting</h3>
+      <p class="text-[11px] text-[#BAC9CD] mb-2">V1 and V2 sentiment (left axis) with BTC and each model's latest call per origin (▲ UP / ▼ DOWN, right axis), last 30 days.</p>
+      <div class="relative h-[260px] sm:h-[320px]"><canvas id="flSentChart" role="img" aria-label="V1 and V2 sentiment with BTC price and the models' forecast directions over the last 30 days"></canvas></div>
+      <h4 class="text-xs uppercase tracking-wide text-[#BAC9CD] mt-4 mb-2">Does sentiment add predictive value? (measured)</h4>
+      <div id="flPev1" class="text-[11px]"></div>
+    </section>
+
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flLedgerTitle">
+      <h3 id="flLedgerTitle" class="text-sm font-semibold mb-3">Forecast ledger</h3>
+      <div id="flLedgerFilters" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3 text-xs"></div>
+      <p id="flLedgerCount" class="text-[11px] text-[#8A9599] mb-2"></p>
+      <ul id="flLedgerCards" class="sm:hidden space-y-2 max-h-[560px] overflow-y-auto"></ul>
+      <div class="hidden sm:block overflow-x-auto max-h-[480px] overflow-y-auto border border-[#3B494C] rounded-lg"><table class="w-full text-left text-[11px] min-w-[760px]"><thead class="sticky top-0 bg-[#191C1F] text-[#8A9599]"><tr>
+        <th class="py-1.5 px-2 font-normal">Forecast</th><th class="px-2 font-normal">Model</th><th class="px-2 font-normal">Origin (UTC)</th><th class="px-2 font-normal">H</th><th class="px-2 font-normal">Call</th><th class="px-2 font-normal">Forecast</th><th class="px-2 font-normal">Actual</th><th class="px-2 font-normal">Error (pp)</th><th class="px-2 font-normal">Status</th></tr></thead><tbody id="flLedgerBody"></tbody></table></div>
+    </section>
+  </div>
+
   <footer class="mt-10 text-[11px] text-[#8A9599]">
     Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">PulseWorkerV2 ↗</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">CryptoPulse ↗</a>
   </footer>
@@ -704,26 +777,30 @@
 <!-- Bottom mobile nav: the same four sections as the desktop pill nav, as
      always-visible icon buttons (no hidden desktop-only menu). Same
      .nav-tab buttons and renderNav() state, just a second surface. -->
-<nav aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-5 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50">
+<nav aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-6 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50">
   <button type="button" data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">monitoring</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Dashboard</span>
+    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Dashboard</span>
   </button>
   <button type="button" data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">science</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Lab</span>
+    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Lab</span>
+  </button>
+  <button type="button" data-view="forecast" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
+    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">insights</span>
+    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Forecast</span>
   </button>
   <button type="button" data-view="experiments" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">fact_check</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Experiments</span>
+    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Experiments</span>
   </button>
   <button type="button" data-view="history" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">history</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">History</span>
+    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">History</span>
   </button>
   <button type="button" data-view="sentiment" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
     <span class="material-symbols-outlined text-[20px]" aria-hidden="true">compare_arrows</span>
-    <span class="text-[10px] font-semibold uppercase tracking-wide">Sentiment</span>
+    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Sentiment</span>
   </button>
 </nav>
 
@@ -1146,6 +1223,196 @@ function sv2AiAnnotationModel(latest){
     relevance: arr(a.event_relevance).filter((e) => e && typeof e.id === 'string').map((e) => ({ id: e.id, relevance: str(e.relevance), overlap: str(e.overlap) })),
     model: str(latest.ai_model),
   };
+}
+// ---- Forecasting Lab (TimesFM 2.5 = EXP-004, Chronos-2 = EXP-008): pure view models ----
+// Data rules (research/plans/2026-11-01-prospective-evaluation-plans.md, frozen 2026-10-31):
+// - Sealed period: no outcome before 2026-10-09T21:00Z is read, so any forecast whose origin is before the seal end is
+//   dropped before anything else (its forecast and its outcome).
+// - Population: origins from 2026-11-01T00:00Z are the prospective sample of the frozen plans; 2026-10-10..10-31 is the
+//   earlier post-seal look, descriptive only.
+// - Checkpoint: 100 resolved origins per horizon. Before it, figures are descriptive (counts, hit rates, Wilson 95%
+//   intervals), never a verdict.
+// Nothing here is recomputed from current models: every value comes from a persisted research row.
+var FL_SEAL_END = Date.UTC(2026, 9, 9, 21);
+var FL_PROSPECTIVE_START = Date.UTC(2026, 10, 1);
+var FL_CHECKPOINT = 100;
+var FL_MIN_WINDOW_N = 10;                       // a window with fewer paired outcomes shows "insufficient", no rate
+var FL_STALE_MS = 36 * 3600000;                 // both models run about daily; older than this is stale
+var FL_MODELS = { timesfm: { label: 'TimesFM 2.5', color: '#A78BFA' }, chronos: { label: 'Chronos-2', color: '#F472B6' } };
+function flNum(v){ return typeof v === 'number' && isFinite(v) ? v : null; }
+function flPopulation(originTs){ return originTs >= FL_PROSPECTIVE_START ? 'prospective' : 'post_seal_descriptive'; }
+// GET /research/timesfm-recent?horizon=H rows (experiment_4_timesfm) -> common forecast rows.
+function flTimesfmRows(res){
+  const f = res && res.ok && res.data && Array.isArray(res.data.forecasts) ? res.data.forecasts : [];
+  const out = [];
+  for(const r of f){
+    const origin = flNum(r && r.input_end_ts), p0 = flNum(r && r.price_at_prediction);
+    if(origin === null || p0 === null || origin < FL_SEAL_END) continue;
+    const resolved = flNum(r.resolved_ts) !== null && flNum(r.actual_return_pct) !== null;
+    const actualRet = resolved ? r.actual_return_pct : null;
+    out.push({ model: 'timesfm', id: 'EXP-004 #' + r.id, source: 'experiment_4_timesfm id ' + r.id, coin: r.coin || 'BTC',
+      horizon: r.horizon_hours, originTs: origin, issuedTs: flNum(r.ts), targetTs: flNum(r.target_ts), p0,
+      forecastPrice: flNum(r.forecast_price), predRet: flNum(r.predicted_return_pct), direction: r.direction || null,
+      q10: null, q90: null, persistenceDirection: null, persistenceCorrect: null,
+      status: resolved ? 'resolved' : 'pending', actualRet, actualDir: resolved ? r.actual_direction : null,
+      // The table stores the realised return, not the price: the price is p0 x (1 + return / 100) of the stored values.
+      actualPrice: resolved ? p0 * (1 + actualRet / 100) : null,
+      correct: resolved && (r.correct === 0 || r.correct === 1) ? r.correct : null, resolvedTs: flNum(r.resolved_ts),
+      population: flPopulation(origin), modelVersion: r.model_version || null });
+  }
+  return out.sort((a, b) => a.originTs - b.originTs);
+}
+// research-data/exp008-chronos derived/ledger.json -> common forecast rows (the ledger already drops sealed origins;
+// the check is repeated here so the rule never depends on the file).
+function flChronosRows(res){
+  const f = res && res.ok && res.data && Array.isArray(res.data.forecasts) ? res.data.forecasts : [];
+  const out = [];
+  for(const r of f){
+    const origin = flNum(r && r.input_end_ts), p0 = flNum(r && r.price_at_prediction);
+    if(origin === null || p0 === null || origin < FL_SEAL_END) continue;
+    const resolved = r.status === 'resolved' && flNum(r.actual_return_pct) !== null;
+    out.push({ model: 'chronos', id: r.id, source: r.forecast_file + (resolved && r.resolution_file ? ' + ' + r.resolution_file : ''),
+      coin: r.coin || 'BTC', horizon: r.horizon_hours, originTs: origin, issuedTs: flNum(r.issued_ts), targetTs: flNum(r.target_ts), p0,
+      forecastPrice: flNum(r.forecast_median), predRet: flNum(r.predicted_return_pct), direction: r.direction || null,
+      q10: flNum(r.forecast_q10), q90: flNum(r.forecast_q90),
+      persistenceDirection: r.persistence_direction || null, persistenceCorrect: resolved && (r.persistence_correct === 0 || r.persistence_correct === 1) ? r.persistence_correct : null,
+      status: resolved ? 'resolved' : (r.status === 'resolution_unreadable' ? 'unreadable' : 'pending'),
+      actualRet: resolved ? r.actual_return_pct : null, actualDir: resolved ? r.actual_direction : null,
+      actualPrice: resolved ? flNum(r.actual_price) : null,
+      correct: resolved && (r.correct === 0 || r.correct === 1) ? r.correct : null, resolvedTs: flNum(r.resolved_ts),
+      population: flPopulation(origin), modelVersion: r.model_version || null });
+  }
+  return out.sort((a, b) => a.originTs - b.originTs);
+}
+// Wilson 95% interval for k of n (same as exp008-chronos/evaluate.py).
+function flWilson(k, n){
+  if(!n) return null;
+  const z = 1.96, p = k / n, d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d;
+  const m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d;
+  return [c - m, c + m];
+}
+// Paired sample: same horizon and same origin, both resolved. Chronos-2 takes its origin from the TimesFM row, so a pair
+// shares origin, target and ground truth. Ground truth = the Chronos-2 resolution; a pair whose two stored outcomes
+// disagree is excluded and counted (as evaluate.py does).
+function flPairs(tfm, chr, horizon, population){
+  const byOrigin = new Map(tfm.filter(r => r.horizon === horizon).map(r => [r.originTs, r]));
+  const pairs = [];
+  let disagree = 0, chronosOnly = 0;
+  for(const c of chr){
+    if(c.horizon !== horizon || c.status !== 'resolved') continue;
+    if(population && c.population !== population) continue;
+    const t = byOrigin.get(c.originTs);
+    if(!t || t.status !== 'resolved'){ chronosOnly++; continue; }
+    if(t.actualDir !== c.actualDir){ disagree++; continue; }
+    pairs.push({ originTs: c.originTs, actualDir: c.actualDir, actualRet: c.actualRet, timesfm: t, chronos: c });
+  }
+  return { horizon, population: population || 'all', pairs, excludedDisagreeing: disagree, unpaired: chronosOnly };
+}
+// Direction hit rates on one paired sample: TimesFM, Chronos-2, always-UP and last-tick persistence (the frozen plan's
+// comparators). Same n for every row by construction.
+function flDirectionStats(paired){
+  const n = paired.pairs.length;
+  const row = (key, label, k) => ({ key, label, k, n, rate: n ? k / n : null, ci: flWilson(k, n) });
+  const persist = paired.pairs.filter(p => p.chronos.persistenceCorrect !== null);
+  return { n, rows: [
+    row('timesfm', FL_MODELS.timesfm.label, paired.pairs.filter(p => p.timesfm.direction === p.actualDir).length),
+    row('chronos', FL_MODELS.chronos.label, paired.pairs.filter(p => p.chronos.direction === p.actualDir).length),
+    row('always_up', 'Always UP', paired.pairs.filter(p => p.actualDir === 'UP').length),
+    persist.length === n ? row('persistence', 'Last-tick persistence', persist.filter(p => p.chronos.persistenceCorrect === 1).length)
+      : { key: 'persistence', label: 'Last-tick persistence', k: null, n: persist.length, rate: null, ci: null, note: 'persistence not recorded for every pair' },
+  ] };
+}
+// Error metrics on the paired sample, from stored values only: return errors in percentage points (MAE, RMSE) and the
+// absolute percentage error of the forecast price against the realised price (MAPE; prices are always > 0).
+function flErrorStats(paired, model){
+  const xs = paired.pairs.map(p => p[model]).filter(r => r.predRet !== null && r.actualRet !== null);
+  if(!xs.length) return { model, n: 0, mae: null, rmse: null, mape: null, bias: null };
+  const e = xs.map(r => r.predRet - r.actualRet);
+  const ape = xs.filter(r => r.forecastPrice !== null && r.actualPrice).map(r => Math.abs(r.forecastPrice - r.actualPrice) / r.actualPrice * 100);
+  return { model, n: xs.length, mae: e.reduce((s, v) => s + Math.abs(v), 0) / e.length,
+    rmse: Math.sqrt(e.reduce((s, v) => s + v * v, 0) / e.length), bias: e.reduce((s, v) => s + v, 0) / e.length,
+    mape: ape.length === xs.length ? ape.reduce((s, v) => s + v, 0) / ape.length : null };
+}
+// Predicted vs realised return per resolved forecast: direction right/wrong and, when the direction is right, whether
+// the size of the move was under- or overestimated.
+function flScatterPoints(rows){
+  return rows.filter(r => r.status === 'resolved' && r.predRet !== null && r.actualRet !== null).map(r => ({
+    x: r.predRet, y: r.actualRet, originTs: r.originTs, horizon: r.horizon, correct: r.direction === r.actualDir,
+    kind: r.direction !== r.actualDir ? 'wrong direction' : Math.abs(r.predRet) < Math.abs(r.actualRet) ? 'right direction, underestimated' : 'right direction, overestimated' }));
+}
+// Hit rate in a trailing window ending at `now`, only when the window holds at least FL_MIN_WINDOW_N pairs.
+function flWindowStats(paired, windowMs, now){
+  const ps = paired.pairs.filter(p => windowMs === Infinity || p.originTs >= now - windowMs);
+  if(ps.length < FL_MIN_WINDOW_N) return { n: ps.length, sufficient: false };
+  const k = (m) => ps.filter(p => p[m].direction === p.actualDir).length;
+  return { n: ps.length, sufficient: true, timesfm: k('timesfm') / ps.length, chronos: k('chronos') / ps.length };
+}
+// Cumulative hit rate over origins (performance over time), on the paired sample.
+function flCumulative(paired){
+  let kt = 0, kc = 0;
+  return paired.pairs.map((p, i) => {
+    if(p.timesfm.direction === p.actualDir) kt++;
+    if(p.chronos.direction === p.actualDir) kc++;
+    return { originTs: p.originTs, n: i + 1, timesfm: kt / (i + 1), chronos: kc / (i + 1) };
+  });
+}
+// Agreement at the newest shared origin per horizon, and how often the two agreed historically. Only forecasts with the
+// same origin and horizon are compared; anything else is "missing", never a manufactured consensus.
+function flAgreement(tfm, chr, horizon){
+  const t = tfm.filter(r => r.horizon === horizon), c = chr.filter(r => r.horizon === horizon);
+  const cByOrigin = new Map(c.map(r => [r.originTs, r]));
+  const shared = t.filter(r => cByOrigin.has(r.originTs));
+  const latestT = t.length ? t[t.length - 1] : null, latestC = c.length ? c[c.length - 1] : null;
+  const latestOrigin = Math.max(latestT ? latestT.originTs : -Infinity, latestC ? latestC.originTs : -Infinity);
+  const tAt = t.find(r => r.originTs === latestOrigin) || null, cAt = cByOrigin.get(latestOrigin) || null;
+  const state = !tAt || !cAt ? 'missing' : tAt.direction === cAt.direction ? 'agree' : 'disagree';
+  const agreed = shared.filter(r => r.direction === cByOrigin.get(r.originTs).direction).length;
+  return { horizon, latestOrigin: isFinite(latestOrigin) ? latestOrigin : null, timesfm: tAt, chronos: cAt, state,
+    persistence: cAt ? cAt.persistenceDirection : null, shared: shared.length, agreed };
+}
+// Model card: status from the persisted rows (never from the existence of a workflow), latest forecast, latest
+// outcome and progress to the frozen checkpoint.
+function flModelCard(model, rows, now, runs){
+  const label = FL_MODELS[model].label;
+  if(!rows.length) return { model, label, status: 'NO PERSISTED RESULTS', tone: 'neutral', latest: null, latestResolved: null, progress: {} };
+  const latest = rows.reduce((a, b) => (b.originTs > a.originTs ? b : a));
+  const resolved = rows.filter(r => r.status === 'resolved');
+  const latestResolved = resolved.length ? resolved.reduce((a, b) => (b.resolvedTs > a.resolvedTs ? b : a)) : null;
+  const lastRun = Array.isArray(runs) && runs.length ? runs[runs.length - 1] : null;
+  let status = 'PRODUCING FORECASTS', tone = 'good';
+  if(now - (latest.issuedTs || latest.originTs) > FL_STALE_MS){ status = 'STALE'; tone = 'warn'; }
+  if(lastRun && lastRun.errors > 0){ status = 'LAST RUN FAILED'; tone = 'bad'; }
+  const progress = {};
+  for(const h of [12, 24]) progress[h] = rows.filter(r => r.horizon === h && r.population === 'prospective' && r.status === 'resolved').length;
+  return { model, label, status, tone, latest, latestResolved, progress, pending: rows.filter(r => r.status === 'pending').length,
+    lastRunTs: lastRun ? lastRun.run_ts : null, evaluated: Object.values(progress).some(n => n >= FL_CHECKPOINT) };
+}
+// PEV-1 (research/evaluations/2026-11-01-pev1-report.json, frozen protocol, one run on TEST): does sentiment help the
+// k-NN direction model? Model B = corrected k-NN without sentiment, C = the same with V1 sentiment.
+function flPev1Model(report, coin){
+  const c = report && report.coins && report.coins[coin];
+  if(!c) return null;
+  const out = [];
+  for(const h of ['12h', '24h']){
+    const t = c[h] && c[h].test;
+    if(!t || !t.models) continue;
+    const m = (k, label) => (t.models[k] ? { key: k, label, ba: flNum(t.models[k].balanced_accuracy), baCi: t.models[k].ba_ci95 || null,
+      brier: flNum(t.models[k].brier), brierCi: t.models[k].brier_ci95 || null } : null);
+    const cb = t.paired && t.paired['C-B'];
+    out.push({ horizon: h, n: flNum(t.n_units), excluded: t.excluded || {}, decision: t.decision || {},
+      models: [m('always_up', 'Always UP'), m('persistence', 'Persistence'), m('climatology', 'Climatology'),
+        m('B', 'k-NN, no sentiment (B)'), m('C', 'k-NN + V1 sentiment (C)')].filter(Boolean),
+      cMinusB: cb ? { dBrier: flNum(cb.d_brier), dBrierCi: cb.d_brier_ci95 || null, dBa: flNum(cb.d_balanced_accuracy), dBaCi: cb.d_ba_ci95 || null } : null });
+  }
+  return { coin, generatedAt: flNum(report.generated_at), protocol: report.protocol || null, horizons: out };
+}
+// Ledger filter (model, horizon, status, population, date range, free text over id/source).
+function flLedgerFilter(rows, f){
+  const q = (f.text || '').trim().toLowerCase();
+  return rows.filter(r => (!f.model || r.model === f.model) && (!f.horizon || r.horizon === Number(f.horizon))
+    && (!f.status || r.status === f.status) && (!f.population || r.population === f.population)
+    && (f.from == null || r.originTs >= f.from) && (f.to == null || r.originTs <= f.to)
+    && (!q || String(r.id).toLowerCase().includes(q) || String(r.source).toLowerCase().includes(q)));
 }
 // ---- END view-model helpers ----
 
@@ -2072,7 +2339,8 @@ buildHorizonTabs();
 const NAV = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'lab', label: 'Lab' },
-  { key: 'experiments', label: 'Experiments' },
+  { key: 'forecast', label: 'Forecasting Lab', short: 'Forecast' },
+  { key: 'experiments', label: 'Experiments', short: 'Exper.' },
   { key: 'history', label: 'History' },
   { key: 'sentiment', label: 'Sentiment V2', short: 'Sentiment' },
 ];
@@ -2148,7 +2416,7 @@ function renderNav(){
     if(btn.classList.contains('nav-tab-mobile')){
       // Bottom icon nav: keep the icon+label layout, just recolor.
       btn.querySelector('span:last-child').textContent = item.short || item.label;
-      btn.className = 'nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl transition-colors shrink-0 ' + (on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]');
+      btn.className = 'nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-colors min-w-0 ' + (on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]');
     } else {
       btn.textContent = item.label;
       btn.className = 'nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ' + (on ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]');
@@ -2167,6 +2435,7 @@ function renderNav(){
   if (activeView === 'history') loadHistoryIfNeeded();
   if (activeView === 'experiments') loadExperimentsIfNeeded();
   if (activeView === 'sentiment') loadSentimentV2IfNeeded();
+  if (activeView === 'forecast') loadForecastLabIfNeeded();
 }
 
 // ---- Sentiment V2 tab ----
@@ -2266,6 +2535,229 @@ function renderSentimentV2(res){
           } } } },
   });
   _sv2Chart.$rows = rows;
+}
+// ---- Forecasting Lab: loading and rendering (all analysis is in the fl* view models above) ----
+var FL_LEDGER_URL = 'https://raw.githubusercontent.com/quiquandon-oss/PulseWorkerV2/refs/heads/research-data/exp008-chronos/exp008_chronos/derived/ledger.json';
+var FL_PEV1_URL = 'https://raw.githubusercontent.com/quiquandon-oss/PulseWorkerV2/main/research/evaluations/2026-11-01-pev1-report.json';
+var FL_PERIODS = [['1d', '24H', 86400000], ['7d', '7D', 7 * 86400000], ['30d', '30D', 30 * 86400000], ['90d', '90D', 90 * 86400000], ['all', 'ALL', Infinity]];
+var _fl = { horizon: 24, period: '30d', data: null, loadedAt: 0, charts: {}, ledger: { model: '', horizon: '', status: '', population: '', from: null, to: null, text: '' } };
+var FL_REFRESH_MS = 5 * 60 * 1000;
+function flChart(id, cfg){
+  if(_fl.charts[id]){ _fl.charts[id].destroy(); }
+  _fl.charts[id] = new Chart(document.getElementById(id).getContext('2d'), cfg);
+  return _fl.charts[id];
+}
+var FL_TICK = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
+var FL_GRID = { color: 'rgba(59,73,76,0.4)' };
+var FL_TOOLTIP = { backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1, titleColor: '#E1E2E7', bodyColor: '#BAC9CD', bodyFont: { family: 'monospace' }, padding: 10 };
+function flPct(v, d = 1){ return v === null || v === undefined ? '—' : (v * 100).toFixed(d) + '%'; }
+function flPp(v){ return v === null || v === undefined ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%'; }
+function flUsd(v){ return v === null || v === undefined ? '—' : '$' + Math.round(v).toLocaleString('en-US'); }
+function flSeg(host, items, active, onPick){
+  const el = document.getElementById(host);
+  el.innerHTML = items.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${String(k) === String(active)}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${String(k) === String(active) ? 'bg-[#A78BFA] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${l}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => { b.onclick = () => onPick(b.dataset.k); });
+}
+async function loadForecastLabIfNeeded(force){
+  flSeg('flHorizons', [[12, '12 h'], [24, '24 h']], _fl.horizon, k => { _fl.horizon = Number(k); renderForecastLab(); });
+  flSeg('flPeriods', FL_PERIODS.map(p => [p[0], p[1]]), _fl.period, k => { _fl.period = k; renderForecastLab(); });
+  if(!force && _fl.data && Date.now() - _fl.loadedAt < FL_REFRESH_MS){ renderForecastLab(); return; }
+  _fl.loadedAt = Date.now();
+  document.getElementById('flStatus').textContent = 'Loading persisted forecasts…';
+  const [t12, t24, led, prices, pev1, sent] = await Promise.all([
+    getJson(WORKER_URL + '/research/timesfm-recent?horizon=12&limit=100'), getJson(WORKER_URL + '/research/timesfm-recent?horizon=24&limit=100'),
+    getJson(FL_LEDGER_URL), getJson(WORKER_URL + COIN_CONFIG.BTC.chart), getJson(FL_PEV1_URL),
+    getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=30d')]);
+  _fl.data = { t12, t24, led, prices, pev1, sent,
+    timesfm: [...flTimesfmRows(t12), ...flTimesfmRows(t24)].sort((a, b) => a.originTs - b.originTs),
+    chronos: flChronosRows(led), runs: led.ok && led.data && Array.isArray(led.data.recent_runs) ? led.data.recent_runs : null };
+  renderForecastLab();
+}
+function renderForecastLab(){
+  const D = _fl.data;
+  if(!D) return;
+  const now = Date.now(), H = _fl.horizon;
+  flSeg('flHorizons', [[12, '12 h'], [24, '24 h']], H, k => { _fl.horizon = Number(k); renderForecastLab(); });
+  flSeg('flPeriods', FL_PERIODS.map(p => [p[0], p[1]]), _fl.period, k => { _fl.period = k; renderForecastLab(); });
+  const src = [];
+  src.push((D.t12.ok && D.t24.ok) ? `TimesFM: ${D.timesfm.length} post-seal forecasts (D1 experiment_4_timesfm)` : 'TimesFM: could not be loaded');
+  src.push(D.led.ok ? `Chronos-2: ${D.chronos.length} forecasts (ledger built ${fmtUtc(D.led.data.generated_ts)})` : 'Chronos-2: ledger not available (' + esc(D.led.error || 'error') + ')');
+  document.getElementById('flStatus').textContent = src.join(' · ');
+  renderFlCards(now);
+  renderFlMain(now, H);
+  renderFlPerformance(now, H);
+  renderFlAgreement();
+  renderFlSentiment(now);
+  renderFlLedger();
+}
+function renderFlCards(now){
+  const D = _fl.data;
+  const card = (m) => {
+    const rows = m === 'timesfm' ? D.timesfm : D.chronos;
+    const loadFailed = m === 'timesfm' ? !(D.t12.ok && D.t24.ok) : !D.led.ok;
+    if(loadFailed) return `<section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4"><div class="flex items-center justify-between"><h3 class="text-sm font-semibold" style="color:${FL_MODELS[m].color}">${FL_MODELS[m].label}</h3>${chip('UNAVAILABLE', 'bad')}</div><p class="text-xs text-[#BAC9CD] mt-2">Its persisted results could not be loaded right now. Nothing is shown in their place.</p></section>`;
+    const c = flModelCard(m, rows, now, m === 'chronos' ? D.runs : null);
+    const L = c.latest, R = c.latestResolved;
+    const line = (k, v) => `<div class="flex justify-between gap-3 py-0.5"><dt class="text-[#8A9599]">${k}</dt><dd class="text-right font-mono-data text-[#E1E2E7] min-w-0 break-words">${v}</dd></div>`;
+    const prog = [12, 24].map(h => `<div class="flex-1"><div class="flex justify-between text-[10px] text-[#8A9599]"><span>${h} h prospective</span><span class="font-mono-data">${c.progress[h] || 0} / ${FL_CHECKPOINT}</span></div><div class="h-1.5 rounded bg-[#0B0E11] mt-0.5"><div class="h-1.5 rounded" style="width:${Math.min(100, (c.progress[h] || 0) / FL_CHECKPOINT * 100)}%;background:${FL_MODELS[m].color}"></div></div></div>`).join('');
+    return `<section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4" style="border-top:3px solid ${FL_MODELS[m].color}">
+      <div class="flex items-center justify-between gap-2"><h3 class="text-sm font-semibold" style="color:${FL_MODELS[m].color}">${c.label}</h3>${chip(c.status, c.tone)}</div>
+      ${L ? `<div class="mt-3 flex items-baseline gap-3 flex-wrap"><span class="text-2xl font-bold ${L.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${L.direction === 'UP' ? '▲' : '▼'} ${esc(L.direction)}</span><span class="font-mono-data text-sm">${flPp(L.predRet)}</span><span class="text-[11px] text-[#8A9599]">${L.horizon} h from ${fmtUtc(L.originTs)}</span></div>
+      <dl class="mt-2 text-[11px]">${line('Forecast price', flUsd(L.forecastPrice) + (L.q10 !== null ? ` <span class="text-[#8A9599]">(q10–q90 ${flUsd(L.q10)}–${flUsd(L.q90)})</span>` : ''))}${line('Price at origin', flUsd(L.p0))}${line('Target', fmtUtc(L.targetTs))}${line('Outcome', L.status === 'resolved' ? `${esc(L.actualDir)} ${flPp(L.actualRet)} · ${L.correct === 1 ? 'right' : 'wrong'}` : 'pending')}
+      ${line('Latest resolved', R ? `${R.horizon} h ${fmtUtc(R.originTs)}: called ${esc(R.direction)}, actual ${esc(R.actualDir)} (${R.correct === 1 ? 'right' : 'wrong'})` : '—')}${line('Last execution', c.lastRunTs ? fmtUtc(c.lastRunTs) : fmtUtc(L.issuedTs))}${line('Pending outcomes', String(c.pending))}${line('Model', esc(L.modelVersion || '—'))}</dl>` : '<p class="text-xs text-[#BAC9CD] mt-2">No persisted forecasts after the seal.</p>'}
+      <div class="flex gap-3 mt-3">${prog}</div>
+      <p class="text-[10px] text-[#8A9599] mt-2">${c.evaluated ? 'Checkpoint reached: see the frozen analysis.' : 'Collecting toward the frozen checkpoint; no verdict yet.'}</p></section>`;
+  };
+  document.getElementById('flCards').innerHTML = card('timesfm') + card('chronos');
+}
+function renderFlMain(now, H){
+  const D = _fl.data;
+  const per = FL_PERIODS.find(p => p[0] === _fl.period);
+  const from = Math.max(FL_SEAL_END, per[2] === Infinity ? -Infinity : now - per[2]);
+  const prices = D.prices.ok && Array.isArray(D.prices.data.prices) ? D.prices.data.prices.filter(p => p.ts >= from && typeof p.btc_price === 'number') : [];
+  const inRange = (r) => r.horizon === H && (r.targetTs >= from || r.originTs >= from);
+  const ds = [{ label: 'BTC actual', data: prices.map(p => ({ x: p.ts, y: p.btc_price })), borderColor: '#E1E2E7', backgroundColor: '#E1E2E7', borderWidth: 1.5, pointRadius: 0, tension: 0, spanGaps: false, order: 3 }];
+  for(const m of ['timesfm', 'chronos']){
+    const rows = (m === 'timesfm' ? D.timesfm : D.chronos).filter(inRange).filter(r => r.forecastPrice !== null && r.targetTs !== null);
+    const seg = [];
+    for(const r of rows){ seg.push({ x: r.originTs, y: r.p0, r, part: 'origin' }, { x: r.targetTs, y: r.forecastPrice, r, part: 'forecast' }, { x: r.targetTs, y: null }); }
+    ds.push({ label: FL_MODELS[m].label, data: seg, borderColor: FL_MODELS[m].color, backgroundColor: FL_MODELS[m].color, borderWidth: 2, borderDash: [5, 4],
+      pointRadius: c => (c.raw && c.raw.part === 'origin' ? 3 : 2.5), pointStyle: c => (c.raw && c.raw.part === 'origin' ? 'circle' : 'rectRot'),
+      pointBackgroundColor: c => (c.raw && c.raw.part === 'origin' ? 'transparent' : FL_MODELS[m].color), tension: 0, spanGaps: false, order: 2 });
+    if(m === 'chronos'){
+      const band = [];
+      for(const r of rows) if(r.q10 !== null && r.q90 !== null) band.push({ x: r.targetTs, y: r.q10, r }, { x: r.targetTs, y: r.q90, r }, { x: r.targetTs, y: null });
+      ds.push({ label: 'Chronos-2 q10–q90', data: band, borderColor: 'rgba(244,114,182,0.45)', borderWidth: 6, pointRadius: 0, spanGaps: false, order: 4 });
+    }
+  }
+  const actual = [...D.timesfm, ...D.chronos].filter(inRange).filter(r => r.status === 'resolved' && r.actualPrice);
+  const seen = new Set(), act = [];
+  for(const r of actual){ const k = r.originTs + ':' + r.horizon; if(seen.has(k)) continue; seen.add(k); act.push({ x: r.targetTs, y: r.actualPrice, r }); }
+  ds.push({ label: 'Actual at target', type: 'scatter', data: act, backgroundColor: '#FBBF24', borderColor: '#FBBF24', pointStyle: 'rectRot', pointRadius: 4, order: 1 });
+  const empty = document.getElementById('flMainEmpty');
+  const nF = ds.slice(1, -1).reduce((s, d) => s + d.data.filter(p => p.part === 'origin').length, 0);
+  empty.classList.toggle('hidden', nF > 0 || prices.length > 0); empty.classList.toggle('flex', !(nF > 0 || prices.length > 0));
+  empty.textContent = 'No price data or forecasts in this period.';
+  document.getElementById('flMainNote').textContent = `${H} h forecasts in view: ${nF}. Each dashed line runs from the forecast origin (price fed to the model) to the forecast price at the target time; the diamond is the actual price recorded at the target. ${per[0] === 'all' ? 'ALL starts at the seal end (9 Oct 2026 21:00 UTC).' : ''}`;
+  flChart('flMainChart', { type: 'line', data: { datasets: ds }, options: { responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
+    interaction: { mode: 'nearest', intersect: false },
+    scales: { x: { type: 'time', min: per[2] === Infinity ? undefined : from, max: now + H * 3600000, ticks: { ...FL_TICK, maxRotation: 0, autoSkipPadding: 16, maxTicksLimit: window.innerWidth < 640 ? 4 : 8 }, grid: FL_GRID },
+      y: { ticks: { ...FL_TICK, callback: v => '$' + Number(v).toLocaleString('en-US') }, grid: FL_GRID } },
+    plugins: { legend: { display: false }, tooltip: { ...FL_TOOLTIP, filter: i => i.raw && i.raw.y !== null,
+      callbacks: { title: items => (items.length ? fmtUtc(items[0].parsed.x) : ''),
+        label: i => { const r = i.raw && i.raw.r; if(!r) return i.dataset.label + ': ' + flUsd(i.parsed.y);
+          if(i.dataset.label === 'Actual at target') return `Actual at ${r.horizon} h target: ${flUsd(r.actualPrice)} (${flPp(r.actualRet)})`;
+          if(i.dataset.label === 'Chronos-2 q10–q90') return `Chronos-2 q10–q90: ${flUsd(r.q10)}–${flUsd(r.q90)}`;
+          return i.raw.part === 'origin' ? `${FL_MODELS[r.model].label} origin ${flUsd(r.p0)} · ${r.horizon} h`
+            : [`${FL_MODELS[r.model].label} ${r.horizon} h: ${flUsd(r.forecastPrice)} (${flPp(r.predRet)}, ${r.direction})`, r.status === 'resolved' ? `actual ${flUsd(r.actualPrice)} (${flPp(r.actualRet)}) · ${r.correct === 1 ? 'right' : 'wrong'}` : 'outcome pending'];
+        } } } } } });
+}
+function renderFlPerformance(now, H){
+  const D = _fl.data;
+  const P = flPairs(D.timesfm, D.chronos, H, 'prospective');
+  const all = flPairs(D.timesfm, D.chronos, H, null);
+  const ds = flDirectionStats(P);
+  document.getElementById('flPerfNote').innerHTML = `${H} h · prospective paired origins (both models, same origin and outcome): <span class="font-mono-data text-[#E1E2E7]">n = ${P.pairs.length}</span> of ${FL_CHECKPOINT} needed for the frozen checkpoint. ${P.excludedDisagreeing ? P.excludedDisagreeing + ' pair(s) excluded: stored outcomes disagree. ' : ''}Descriptive only: no significance test is run before the checkpoint.`;
+  const colors = { timesfm: FL_MODELS.timesfm.color, chronos: FL_MODELS.chronos.color, always_up: '#64748B', persistence: '#94A3B8' };
+  const rows = ds.rows;
+  flChart('flDirChart', { type: 'bar', data: { labels: rows.map(r => r.label), datasets: [{ data: rows.map(r => (r.rate === null ? null : r.rate * 100)), backgroundColor: rows.map(r => colors[r.key]), borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, indexAxis: 'y',
+      scales: { x: { min: 0, max: 100, ticks: { ...FL_TICK, callback: v => v + '%' }, grid: FL_GRID }, y: { ticks: { ...FL_TICK }, grid: { display: false } } },
+      plugins: { legend: { display: false }, tooltip: { ...FL_TOOLTIP, callbacks: { label: i => { const r = rows[i.dataIndex]; return r.rate === null ? 'not available' : `${r.k}/${r.n} = ${flPct(r.rate)} · 95% CI ${flPct(r.ci[0], 0)}–${flPct(r.ci[1], 0)}`; } } } } },
+    plugins: [{ id: 'flCi', afterDatasetsDraw(chart){ const { ctx, scales: { x, y } } = chart; ctx.save(); ctx.strokeStyle = '#E1E2E7'; ctx.lineWidth = 1.5;
+      rows.forEach((r, i) => { if(!r.ci) return; const yy = y.getPixelForValue(i); ctx.beginPath(); ctx.moveTo(x.getPixelForValue(r.ci[0] * 100), yy); ctx.lineTo(x.getPixelForValue(r.ci[1] * 100), yy);
+        ctx.moveTo(x.getPixelForValue(r.ci[0] * 100), yy - 4); ctx.lineTo(x.getPixelForValue(r.ci[0] * 100), yy + 4); ctx.moveTo(x.getPixelForValue(r.ci[1] * 100), yy - 4); ctx.lineTo(x.getPixelForValue(r.ci[1] * 100), yy + 4); ctx.stroke(); });
+      ctx.restore(); } }] });
+  document.getElementById('flDirTable').innerHTML = P.pairs.length ? rows.map(r => `<span class="inline-block mr-3"><span class="text-[#8A9599]">${esc(r.label)}:</span> <span class="font-mono-data">${r.rate === null ? '—' : `${r.k}/${r.n} (${flPct(r.rate, 0)}, CI ${flPct(r.ci[0], 0)}–${flPct(r.ci[1], 0)})`}</span></span>`).join('')
+    : '<span class="text-[#BAC9CD]">No resolved prospective pairs yet.</span>';
+  const errs = ['timesfm', 'chronos'].map(m => flErrorStats(P, m));
+  flChart('flErrChart', { type: 'bar', data: { labels: ['MAE', 'RMSE'], datasets: errs.map(e => ({ label: FL_MODELS[e.model].label, data: [e.mae, e.rmse], backgroundColor: FL_MODELS[e.model].color, borderRadius: 4 })) },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { beginAtZero: true, ticks: { ...FL_TICK, callback: v => v + ' pp' }, grid: FL_GRID }, x: { ticks: FL_TICK, grid: { display: false } } },
+      plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 } } }, tooltip: { ...FL_TOOLTIP, callbacks: { label: i => `${i.dataset.label}: ${i.parsed.y === null ? '—' : i.parsed.y.toFixed(3)} pp (n = ${errs[i.datasetIndex].n})` } } } } });
+  document.getElementById('flErrTable').innerHTML = errs.map(e => `<div><span style="color:${FL_MODELS[e.model].color}">${FL_MODELS[e.model].label}</span> <span class="font-mono-data">n ${e.n} · MAE ${e.mae === null ? '—' : e.mae.toFixed(3)} pp · RMSE ${e.rmse === null ? '—' : e.rmse.toFixed(3)} pp · bias ${e.bias === null ? '—' : (e.bias > 0 ? '+' : '') + e.bias.toFixed(3)} pp · MAPE (price) ${e.mape === null ? '—' : e.mape.toFixed(3) + '%'}</span></div>`).join('') + '<p class="text-[10px] text-[#8A9599] mt-1">Error = predicted − realised return over the horizon. MAPE compares the forecast price with the price recorded at the target.</p>';
+  const sc = ['timesfm', 'chronos'].map(m => { const pts = flScatterPoints(P.pairs.map(p => p[m])); return { label: FL_MODELS[m].label, data: pts, borderColor: FL_MODELS[m].color, pointBackgroundColor: pts.map(p => (p.correct ? FL_MODELS[m].color : 'transparent')), pointRadius: 4, pointBorderWidth: 1.5 }; });
+  const lim = Math.max(1, ...sc.flatMap(d => d.data.flatMap(p => [Math.abs(p.x), Math.abs(p.y)]))) * 1.1;
+  sc.push({ label: 'y = x', type: 'line', data: [{ x: -lim, y: -lim }, { x: lim, y: lim }], borderColor: '#475569', borderDash: [4, 4], borderWidth: 1, pointRadius: 0 });
+  flChart('flScatter', { type: 'scatter', data: { datasets: sc }, options: { responsive: true, maintainAspectRatio: false, animation: false,
+    scales: { x: { min: -lim, max: lim, title: { display: true, text: 'predicted return %', color: '#8A9599', font: { size: 10 } }, ticks: FL_TICK, grid: FL_GRID }, y: { min: -lim, max: lim, title: { display: true, text: 'realised %', color: '#8A9599', font: { size: 10 } }, ticks: FL_TICK, grid: FL_GRID } },
+    plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 }, filter: l => l.text !== 'y = x' } }, tooltip: { ...FL_TOOLTIP, callbacks: { label: i => (i.raw && i.raw.kind ? `${i.dataset.label} ${fmtUtc(i.raw.originTs)}: predicted ${flPp(i.raw.x)}, realised ${flPp(i.raw.y)} · ${i.raw.kind}` : '') } } } } });
+  const cum = flCumulative(P);
+  flChart('flTimeChart', { type: 'line', data: { datasets: ['timesfm', 'chronos'].map(m => ({ label: FL_MODELS[m].label, data: cum.map(c => ({ x: c.originTs, y: c[m] * 100, n: c.n })), borderColor: FL_MODELS[m].color, backgroundColor: FL_MODELS[m].color, pointRadius: 2.5, tension: 0, borderWidth: 2 })) },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { type: 'time', ticks: { ...FL_TICK, maxRotation: 0, maxTicksLimit: 5 }, grid: FL_GRID }, y: { min: 0, max: 100, ticks: { ...FL_TICK, callback: v => v + '%' }, grid: FL_GRID } },
+      plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 } } }, tooltip: { ...FL_TOOLTIP, callbacks: { label: i => `${i.dataset.label}: ${i.parsed.y.toFixed(1)}% after ${i.raw.n} origins` } } } } });
+  const win = [['7D', 7 * 86400000], ['30D', 30 * 86400000], ['90D', 90 * 86400000]].map(([l, ms]) => { const w = flWindowStats(P, ms, now);
+    return `<span class="inline-block mr-3"><span class="text-[#8A9599]">${l}:</span> <span class="font-mono-data">${w.sufficient ? `TimesFM ${flPct(w.timesfm, 0)} · Chronos ${flPct(w.chronos, 0)} (n ${w.n})` : `insufficient (n ${w.n} < ${FL_MIN_WINDOW_N})`}</span></span>`; });
+  document.getElementById('flWindows').innerHTML = win.join('') + (all.pairs.length > P.pairs.length ? `<p class="text-[10px] text-[#8A9599] mt-1">${all.pairs.length - P.pairs.length} earlier post-seal pair(s) (10–31 Oct) are excluded from these figures and shown in the ledger as descriptive.</p>` : '');
+}
+function renderFlAgreement(){
+  const D = _fl.data;
+  const stateChip = { agree: chip('AGREE', 'good'), disagree: chip('DISAGREE', 'warn'), missing: chip('MISSING FORECAST', 'neutral') };
+  const dir = (r) => (r ? `<span class="${r.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'} font-semibold">${r.direction === 'UP' ? '▲' : '▼'} ${esc(r.direction)}</span> <span class="font-mono-data text-[#8A9599]">${flPp(r.predRet)}</span>` : '<span class="text-[#8A9599]">no forecast at this origin</span>');
+  document.getElementById('flAgree').innerHTML = [12, 24].map(h => { const a = flAgreement(D.timesfm, D.chronos, h);
+    return `<div class="rounded-xl border border-[#3B494C] p-3"><div class="flex items-center justify-between mb-2"><span class="font-semibold">${h} h · origin ${a.latestOrigin ? fmtUtc(a.latestOrigin) : '—'}</span>${stateChip[a.state]}</div>
+      <div class="flex justify-between py-0.5"><span style="color:${FL_MODELS.timesfm.color}">TimesFM 2.5</span>${dir(a.timesfm)}</div>
+      <div class="flex justify-between py-0.5"><span style="color:${FL_MODELS.chronos.color}">Chronos-2</span>${dir(a.chronos)}</div>
+      <div class="flex justify-between py-0.5"><span class="text-[#BAC9CD]">Persistence (baseline)</span><span>${a.persistence ? esc(a.persistence) : '—'}</span></div>
+      <p class="text-[10px] text-[#8A9599] mt-1">Same direction at ${a.agreed} of ${a.shared} shared origins (same origin and horizon only).</p></div>`; }).join('');
+}
+function renderFlSentiment(now){
+  const D = _fl.data;
+  const pts = D.sent.ok && D.sent.data && Array.isArray((D.sent.data.data || D.sent.data).points) ? (D.sent.data.data || D.sent.data).points : [];
+  const from = now - 30 * 86400000;
+  const calls = (m) => (m === 'timesfm' ? D.timesfm : D.chronos).filter(r => r.horizon === _fl.horizon && r.originTs >= from).map(r => ({ x: r.originTs, y: r.p0, r }));
+  const ds = [
+    { label: 'V1 sentiment', data: pts.filter(p => typeof p.v1 === 'number').map(p => ({ x: p.ts, y: p.v1 })), borderColor: '#3B82F6', backgroundColor: '#3B82F6', yAxisID: 'ys', pointRadius: 1.5, borderWidth: 1.5, tension: 0, spanGaps: false },
+    { label: 'V2 sentiment', data: pts.filter(p => typeof p.v2 === 'number').map(p => ({ x: p.ts, y: p.v2 })), borderColor: '#22C55E', backgroundColor: '#22C55E', yAxisID: 'ys', pointRadius: 2.5, borderWidth: 1.5, tension: 0 },
+    { label: 'BTC', data: pts.filter(p => typeof p.btc === 'number').map(p => ({ x: p.ts, y: p.btc })), borderColor: '#F59E0B', backgroundColor: '#F59E0B', yAxisID: 'yp', pointRadius: 0, borderWidth: 1.5, tension: 0 },
+    ...['timesfm', 'chronos'].map(m => ({ label: FL_MODELS[m].label + ' call', type: 'scatter', data: calls(m), yAxisID: 'yp', backgroundColor: FL_MODELS[m].color, borderColor: FL_MODELS[m].color,
+      pointStyle: 'triangle', rotation: calls(m).map(c => (c.r.direction === 'UP' ? 0 : 180)), pointRadius: 6 })),
+  ];
+  flChart('flSentChart', { type: 'line', data: { datasets: ds }, options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'nearest', intersect: false },
+    scales: { x: { type: 'time', min: from, max: now, ticks: { ...FL_TICK, maxRotation: 0, maxTicksLimit: window.innerWidth < 640 ? 4 : 8 }, grid: FL_GRID },
+      ys: { position: 'left', min: 0, max: 100, title: { display: true, text: 'Sentiment', color: '#8A9599', font: { size: 10 } }, ticks: FL_TICK, grid: FL_GRID },
+      yp: { position: 'right', ticks: { ...FL_TICK, callback: v => '$' + Number(v).toLocaleString('en-US') }, grid: { drawOnChartArea: false } } },
+    plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 } } }, tooltip: { ...FL_TOOLTIP, callbacks: { title: items => (items.length ? fmtUtc(items[0].parsed.x) : ''),
+      label: i => (i.raw && i.raw.r ? `${i.dataset.label}: ${i.raw.r.direction} ${flPp(i.raw.r.predRet)} (${i.raw.r.horizon} h)` : `${i.dataset.label}: ${i.dataset.yAxisID === 'yp' ? flUsd(i.parsed.y) : i.parsed.y}`) } } } } });
+  const P = D.pev1.ok ? flPev1Model(D.pev1.data, 'BTC') : null;
+  const host = document.getElementById('flPev1');
+  if(!P){ host.innerHTML = '<p class="text-[#BAC9CD]">The PEV-1 report could not be loaded right now.</p>'; return; }
+  const ci = (c) => (c ? ` <span class="text-[#8A9599]">[${c[0].toFixed(2)}, ${c[1].toFixed(2)}]</span>` : '');
+  host.innerHTML = `<p class="text-[#BAC9CD] mb-2">Pre-registered evaluation PEV-1 (frozen 2026-11-01, one run on its post-seal TEST period, BTC): does adding V1 sentiment to the k-NN direction model help? Balanced accuracy 0.5 = no skill.</p>` +
+    P.horizons.map(h => `<div class="overflow-x-auto mb-3"><table class="w-full text-left min-w-[420px]"><thead class="text-[#8A9599]"><tr><th class="py-1 pr-2 font-normal">${h.horizon} · n = ${h.n} units</th><th class="pr-2 font-normal">Balanced accuracy [95% CI]</th><th class="font-normal">Brier [95% CI]</th></tr></thead><tbody>` +
+      h.models.map(m => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 pr-2">${esc(m.label)}</td><td class="pr-2 font-mono-data">${m.ba === null ? '—' : m.ba.toFixed(3)}${ci(m.baCi)}</td><td class="font-mono-data">${m.brier === null ? '—' : m.brier.toFixed(3)}${ci(m.brierCi)}</td></tr>`).join('') +
+      `</tbody></table><p class="mt-1">${chip(String(h.decision.C || 'NOT EVALUATED'), 'warn')} <span class="text-[#BAC9CD]">Sentiment effect (C − B): ${h.cMinusB ? `Brier ${h.cMinusB.dBrier > 0 ? '+' : ''}${h.cMinusB.dBrier.toFixed(3)}${ci(h.cMinusB.dBrierCi)}, balanced accuracy ${h.cMinusB.dBa > 0 ? '+' : ''}${h.cMinusB.dBa.toFixed(3)}${ci(h.cMinusB.dBaCi)}` : 'not reported'}. ${Object.entries(h.excluded).map(([k, v]) => `${v} excluded (${k.replace(/_/g, ' ')})`).join(', ')}.</span></p></div>`).join('') +
+    `<p class="text-[#BAC9CD]"><b class="text-[#E1E2E7]">Result: sentiment has not been shown to improve prediction.</b> V1 sentiment was available for few units because V1 records only while its app is open. A combined sentiment + TimesFM/Chronos-2 evaluation has not been registered or run, so no result exists for it yet.</p>`;
+}
+function renderFlLedger(){
+  const D = _fl.data, f = _fl.ledger;
+  const host = document.getElementById('flLedgerFilters');
+  if(!host.dataset.built){
+    host.dataset.built = '1';
+    const sel = (id, label, opts) => `<label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">${label}</span><select id="${id}" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1 text-xs min-w-0">${opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>`;
+    host.innerHTML = sel('flfModel', 'Model', [['', 'All'], ['timesfm', 'TimesFM 2.5'], ['chronos', 'Chronos-2']]) + sel('flfH', 'Horizon', [['', 'All'], ['12', '12 h'], ['24', '24 h']]) +
+      sel('flfStatus', 'Status', [['', 'All'], ['resolved', 'Resolved'], ['pending', 'Pending']]) + sel('flfPop', 'Sample', [['', 'All'], ['prospective', 'Prospective'], ['post_seal_descriptive', 'Descriptive (10–31 Oct)']]) +
+      `<label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">From</span><input id="flfFrom" type="date" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1 text-xs min-w-0"></label>` +
+      `<label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">To</span><input id="flfTo" type="date" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1 text-xs min-w-0"></label>` +
+      `<label class="flex flex-col gap-0.5 min-w-0 col-span-2 sm:col-span-1"><span class="text-[10px] text-[#8A9599]">Search id / source</span><input id="flfText" type="search" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1 text-xs min-w-0"></label>`;
+    const upd = () => { f.model = document.getElementById('flfModel').value; f.horizon = document.getElementById('flfH').value; f.status = document.getElementById('flfStatus').value;
+      f.population = document.getElementById('flfPop').value; const a = document.getElementById('flfFrom').value, b = document.getElementById('flfTo').value;
+      f.from = a ? Date.parse(a + 'T00:00:00Z') : null; f.to = b ? Date.parse(b + 'T23:59:59Z') : null; f.text = document.getElementById('flfText').value; renderFlLedger(); };
+    host.querySelectorAll('select,input').forEach(el => { el.addEventListener('input', upd); el.addEventListener('change', upd); });
+  }
+  const rows = flLedgerFilter([...D.timesfm, ...D.chronos], f).sort((a, b) => b.originTs - a.originTs);
+  document.getElementById('flLedgerCount').textContent = `${rows.length} forecast${rows.length === 1 ? '' : 's'} · each row names its persisted source (D1 row id or data-branch file)`;
+  // Phones: one stacked card per forecast (no sideways scrolling); wider screens: the table below.
+  const status = (r) => (r.status === 'resolved' ? chip(r.correct === 1 ? 'RIGHT' : 'WRONG', r.correct === 1 ? 'good' : 'bad') : chip(r.status.toUpperCase(), 'neutral')) + (r.population === 'post_seal_descriptive' ? ' ' + chip('DESCRIPTIVE', 'neutral') : '');
+  document.getElementById('flLedgerCards').innerHTML = rows.map(r => `<li class="rounded-lg border border-[#3B494C] p-2.5 text-[11px]"><div class="flex justify-between gap-2"><span style="color:${FL_MODELS[r.model].color}" class="font-semibold">${FL_MODELS[r.model].label} · ${r.horizon} h</span><span>${status(r)}</span></div>
+    <div class="font-mono-data mt-1">${fmtUtc(r.originTs)} · <span class="${r.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${esc(r.direction || '—')}</span></div>
+    <div class="font-mono-data">forecast ${flUsd(r.forecastPrice)} (${flPp(r.predRet)})${r.status === 'resolved' ? ` · actual ${flUsd(r.actualPrice)} (${flPp(r.actualRet)})` : ''}</div>
+    <div class="text-[10px] text-[#8A9599] break-all mt-0.5">${esc(r.id)} · ${esc(r.source)}</div></li>`).join('') || '<li class="text-[#BAC9CD]">No forecasts match these filters.</li>';
+  document.getElementById('flLedgerBody').innerHTML = rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top"><td class="py-1 px-2"><span class="font-mono-data">${esc(r.id)}</span><br><span class="text-[10px] text-[#8A9599] break-all">${esc(r.source)}</span></td>
+    <td class="px-2" style="color:${FL_MODELS[r.model].color}">${FL_MODELS[r.model].label}</td><td class="px-2 font-mono-data whitespace-nowrap">${fmtUtc(r.originTs)}</td><td class="px-2">${r.horizon} h</td>
+    <td class="px-2 ${r.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${esc(r.direction || '—')}</td><td class="px-2 font-mono-data whitespace-nowrap">${flUsd(r.forecastPrice)}<br><span class="text-[#8A9599]">${flPp(r.predRet)}</span></td>
+    <td class="px-2 font-mono-data whitespace-nowrap">${r.status === 'resolved' ? `${flUsd(r.actualPrice)}<br><span class="text-[#8A9599]">${flPp(r.actualRet)}</span>` : '—'}</td>
+    <td class="px-2 font-mono-data">${r.status === 'resolved' && r.predRet !== null ? (r.predRet - r.actualRet > 0 ? '+' : '') + (r.predRet - r.actualRet).toFixed(2) : '—'}</td>
+    <td class="px-2">${r.status === 'resolved' ? chip(r.correct === 1 ? 'RIGHT' : 'WRONG', r.correct === 1 ? 'good' : 'bad') : chip(r.status.toUpperCase(), 'neutral')}${r.population === 'post_seal_descriptive' ? '<br>' + chip('DESCRIPTIVE', 'neutral') : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="py-3 px-2 text-[#BAC9CD]">No forecasts match these filters.</td></tr>';
 }
 buildSv2Periods();
 document.getElementById('sv2Details').addEventListener('toggle', () => loadSv2DetailsIfOpen());

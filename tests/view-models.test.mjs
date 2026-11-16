@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, sv2StatusModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -458,4 +458,128 @@ test('sentiment v2 AI panel: structured fields only; no summary, uncertainty, co
   const body = SRC.slice(a, b);
   assert.doesNotMatch(body, /\.summary|\.uncertainty|\.confidence|\.note\b|Uncertainty:/);
   assert.match(body, /sv2AiAnnotationModel\(l\)/);
+});
+
+// ---- Forecasting Lab (TimesFM EXP-004, Chronos-2 EXP-008) ----
+const NOV = Date.UTC(2026, 10, 5, 12), OCT = Date.UTC(2026, 9, 20, 12), SEALED = Date.UTC(2026, 8, 7, 12);
+const tfmRow = (origin, h, over = {}) => ({ id: origin % 1000 + h, coin: 'BTC', horizon_hours: h, ts: origin + 300000, target_ts: origin + h * HOUR, input_end_ts: origin,
+  price_at_prediction: 100000, forecast_price: 101000, predicted_return_pct: 1, direction: 'UP', model_version: 'timesfm-2.5-200m',
+  actual_return_pct: -2, actual_direction: 'DOWN', correct: 0, resolved_ts: origin + h * HOUR + 60000, ...over });
+const chrRow = (origin, h, over = {}) => ({ id: `BTC_${h}h_${origin}`, coin: 'BTC', horizon_hours: h, issued_ts: origin + 60000, input_end_ts: origin, target_ts: origin + h * HOUR,
+  price_at_prediction: 100000, forecast_median: 99000, forecast_q10: 97000, forecast_q90: 101000, predicted_return_pct: -1, direction: 'DOWN',
+  persistence_direction: 'DOWN', model_version: 'chronos-2', forecast_file: `forecasts/BTC/${h}h/x.json`, resolution_file: `resolutions/BTC/${h}h/x.json`,
+  status: 'resolved', actual_price: 98000, actual_return_pct: -2, actual_direction: 'DOWN', correct: 1, persistence_correct: 1, resolved_ts: origin + h * HOUR + 60000, ...over });
+const T = (rows) => H.flTimesfmRows({ ok: true, data: { forecasts: rows } });
+const C = (rows) => H.flChronosRows({ ok: true, data: { forecasts: rows } });
+
+test('forecasting lab: sealed origins are never read; populations follow the frozen plan; values are the stored ones', () => {
+  assert.equal(H.FL_SEAL_END, Date.UTC(2026, 9, 9, 21));
+  assert.equal(H.FL_PROSPECTIVE_START, Date.UTC(2026, 10, 1));
+  const t = T([tfmRow(SEALED, 24), tfmRow(OCT, 24), tfmRow(NOV, 24), tfmRow(NOV + 6 * HOUR, 24, { actual_return_pct: null, actual_direction: null, correct: null, resolved_ts: null })]);
+  assert.deepEqual(plain(t.map(r => [r.originTs, r.population, r.status])), [[OCT, 'post_seal_descriptive', 'resolved'], [NOV, 'prospective', 'resolved'], [NOV + 6 * HOUR, 'prospective', 'pending']]);
+  assert.equal(t[1].actualPrice, 98000);                       // 100000 x (1 - 2%) from the stored realised return
+  assert.equal(t[2].actualPrice, null);
+  assert.equal(t[1].q10, null);                                // TimesFM persists no quantiles: no band is drawn
+  const c = C([chrRow(SEALED, 12), chrRow(NOV, 12), chrRow(NOV + HOUR, 12, { status: 'pending', actual_price: undefined, actual_return_pct: undefined })]);
+  assert.deepEqual(plain(c.map(r => [r.originTs, r.status, r.q10, r.q90])), [[NOV, 'resolved', 97000, 101000], [NOV + HOUR, 'pending', 97000, 101000]]);
+  assert.match(c[0].source, /forecasts\/BTC\/12h\/x\.json \+ resolutions/);
+  assert.deepEqual(plain(H.flTimesfmRows({ ok: false })), []);
+  assert.deepEqual(plain(H.flChronosRows(null)), []);
+});
+
+test('forecasting lab: pairs share origin and horizon; disagreeing outcomes are excluded and counted; stats use one n', () => {
+  const origins = Array.from({ length: 13 }, (_, i) => NOV + i * 12 * HOUR);
+  const t = T(origins.map((o, i) => tfmRow(o, 24, { direction: i < 4 ? 'DOWN' : 'UP', predicted_return_pct: i < 4 ? -1 : 1 })));
+  const c = C(origins.map((o, i) => chrRow(o, 24, { direction: i < 4 ? 'DOWN' : 'UP', persistence_correct: i < 7 ? 1 : 0, actual_direction: 'DOWN' })));
+  const P = H.flPairs(t, c, 24, 'prospective');
+  assert.equal(P.pairs.length, 13);
+  const s = H.flDirectionStats(P);
+  assert.deepEqual(plain(s.rows.map(r => [r.key, r.k, r.n])), [['timesfm', 4, 13], ['chronos', 4, 13], ['always_up', 0, 13], ['persistence', 7, 13]]);
+  const ci = s.rows[0].ci;
+  assert.ok(Math.abs(ci[0] - 0.1268) < 0.001 && Math.abs(ci[1] - 0.5765) < 0.001, 'Wilson 95% as in evaluate.py');
+  // A pair whose two stored outcomes disagree is excluded; a Chronos row without a resolved TimesFM partner is unpaired.
+  const c2 = C([chrRow(origins[0], 24, { actual_direction: 'UP' }), chrRow(origins[1], 24), chrRow(NOV + 999 * HOUR, 24)]);
+  const P2 = H.flPairs(T([tfmRow(origins[0], 24), tfmRow(origins[1], 24)]), c2, 24, null);
+  assert.deepEqual([P2.pairs.length, P2.excludedDisagreeing, P2.unpaired], [1, 1, 1]);
+  // Other horizon and descriptive population stay out of the prospective sample.
+  assert.equal(H.flPairs(T([tfmRow(OCT, 24)]), C([chrRow(OCT, 24)]), 24, 'prospective').pairs.length, 0);
+  assert.equal(H.flPairs(T([tfmRow(NOV, 12)]), C([chrRow(NOV, 12)]), 24, null).pairs.length, 0);
+  // Persistence is reported only when recorded for every pair.
+  const P3 = H.flPairs(T([tfmRow(NOV, 24)]), C([chrRow(NOV, 24, { persistence_correct: null })]), 24, null);
+  assert.equal(H.flDirectionStats(P3).rows[3].rate, null);
+});
+
+test('forecasting lab: error metrics, scatter classes, windows and cumulative hit rate', () => {
+  const P = H.flPairs(T([tfmRow(NOV, 24, { predicted_return_pct: 1, forecast_price: 101000 }), tfmRow(NOV + 24 * HOUR, 24, { predicted_return_pct: -3, forecast_price: 97000, direction: 'DOWN' })]),
+    C([chrRow(NOV, 24), chrRow(NOV + 24 * HOUR, 24)]), 24, null);
+  const e = H.flErrorStats(P, 'timesfm');
+  assert.equal(e.n, 2);
+  assert.equal(e.mae, (3 + 1) / 2);                            // |1 - (-2)| and |-3 - (-2)|
+  assert.equal(e.rmse, Math.sqrt((9 + 1) / 2));
+  assert.equal(e.bias, (3 - 1) / 2);
+  assert.ok(Math.abs(e.mape - ((3000 / 98000 + 1000 / 98000) / 2 * 100)) < 1e-9);
+  assert.deepEqual(plain(H.flErrorStats({ pairs: [] }, 'chronos')), { model: 'chronos', n: 0, mae: null, rmse: null, mape: null, bias: null });
+  const sc = H.flScatterPoints(P.pairs.map(p => p.timesfm));
+  assert.deepEqual(plain(sc.map(p => p.kind)), ['wrong direction', 'right direction, overestimated']);
+  assert.deepEqual(plain(H.flScatterPoints(C([chrRow(NOV, 24, { predicted_return_pct: -1 })]))).map(p => p.kind), ['right direction, underestimated']);
+  assert.deepEqual(plain(H.flWindowStats(P, 7 * 24 * HOUR, NOV + 2 * 24 * HOUR)), { n: 2, sufficient: false });
+  const many = Array.from({ length: 10 }, (_, i) => NOV + i * 24 * HOUR);
+  const PM = H.flPairs(T(many.map(o => tfmRow(o, 24, { direction: 'DOWN' }))), C(many.map(o => chrRow(o, 24))), 24, null);
+  assert.deepEqual(plain(H.flWindowStats(PM, Infinity, NOV)), { n: 10, sufficient: true, timesfm: 1, chronos: 1 });
+  assert.deepEqual(plain(H.flCumulative(P).map(c => [c.n, c.timesfm, c.chronos])), [[1, 0, 1], [2, 0.5, 1]]);
+});
+
+test('forecasting lab: agreement only at a shared origin and horizon; missing is never a consensus', () => {
+  const a = H.flAgreement(T([tfmRow(NOV, 12, { direction: 'UP' })]), C([chrRow(NOV, 12, { direction: 'DOWN' })]), 12);
+  assert.deepEqual([a.state, a.shared, a.agreed, a.persistence], ['disagree', 1, 0, 'DOWN']);
+  const b = H.flAgreement(T([tfmRow(NOV, 12, { direction: 'DOWN' })]), C([chrRow(NOV, 12)]), 12);
+  assert.equal(b.state, 'agree');
+  const m = H.flAgreement(T([tfmRow(NOV + 12 * HOUR, 12)]), C([chrRow(NOV, 12)]), 12);
+  assert.deepEqual([m.state, m.shared, m.chronos], ['missing', 0, null]);
+  assert.equal(H.flAgreement([], [], 24).state, 'missing');
+});
+
+test('forecasting lab: model status comes from persisted rows, never from a workflow existing', () => {
+  assert.equal(H.flModelCard('timesfm', [], NOV, null).status, 'NO PERSISTED RESULTS');
+  const rows = T([tfmRow(NOV, 12), tfmRow(NOV, 24), tfmRow(OCT, 12), tfmRow(NOV + 12 * HOUR, 12, { actual_return_pct: null, resolved_ts: null })]);
+  const fresh = H.flModelCard('timesfm', rows, NOV + 13 * HOUR, null);
+  assert.deepEqual([fresh.status, fresh.tone, fresh.pending, fresh.progress[12], fresh.progress[24], fresh.evaluated], ['PRODUCING FORECASTS', 'good', 1, 1, 1, false]);
+  assert.equal(H.flModelCard('timesfm', rows, NOV + 60 * HOUR, null).status, 'STALE');
+  const failed = H.flModelCard('chronos', C([chrRow(NOV, 12)]), NOV + HOUR, [{ run_ts: NOV + HOUR, errors: 1 }]);
+  assert.deepEqual([failed.status, failed.tone], ['LAST RUN FAILED', 'bad']);
+});
+
+test('forecasting lab: PEV-1 sentiment evaluation is read from the frozen report, decisions passed through', () => {
+  const rep = { protocol: 'PEV-1', generated_at: 1793503668639, coins: { BTC: { '12h': { test: { n_units: 21, excluded: { unresolved: 1 },
+    models: { always_up: { balanced_accuracy: 0.5, ba_ci95: [0.5, 0.5], brier: 0.5714, brier_ci95: [0.381, 0.7619] }, B: { balanced_accuracy: 0.4444, ba_ci95: [0.24, 0.67], brier: 0.316 }, C: { balanced_accuracy: 0.3889, ba_ci95: [0.1786, 0.6058], brier: 0.2861 } },
+    paired: { 'C-B': { d_brier: -0.03, d_brier_ci95: [-0.13, 0.07], d_balanced_accuracy: -0.056, d_ba_ci95: [-0.34, 0.23] } }, decision: { C: 'NOT DEMONSTRATED' } } } } } };
+  const m = H.flPev1Model(rep, 'BTC');
+  assert.equal(m.horizons.length, 1);
+  const h = m.horizons[0];
+  assert.deepEqual([h.horizon, h.n, h.decision.C], ['12h', 21, 'NOT DEMONSTRATED']);
+  assert.deepEqual(plain(h.models.map(x => x.key)), ['always_up', 'B', 'C']);   // only what the report holds
+  assert.deepEqual(plain(h.cMinusB), { dBrier: -0.03, dBrierCi: [-0.13, 0.07], dBa: -0.056, dBaCi: [-0.34, 0.23] });
+  assert.equal(H.flPev1Model(rep, 'ETH'), null);
+  assert.equal(H.flPev1Model(null, 'BTC'), null);
+});
+
+test('forecasting lab: ledger filters by model, horizon, status, sample, date and text', () => {
+  const rows = [...T([tfmRow(NOV, 12), tfmRow(OCT, 24)]), ...C([chrRow(NOV, 24, { status: 'pending', actual_return_pct: undefined })])];
+  const f = (o) => H.flLedgerFilter(rows, { model: '', horizon: '', status: '', population: '', from: null, to: null, text: '', ...o }).map(r => r.model + r.horizon);
+  assert.deepEqual(plain(f({})), ['timesfm24', 'timesfm12', 'chronos24']);   // TimesFM rows sorted by origin (OCT before NOV)
+  assert.deepEqual(plain(f({ model: 'chronos' })), ['chronos24']);
+  assert.deepEqual(plain(f({ horizon: '24' })), ['timesfm24', 'chronos24']);
+  assert.deepEqual(plain(f({ status: 'pending' })), ['chronos24']);
+  assert.deepEqual(plain(f({ population: 'post_seal_descriptive' })), ['timesfm24']);
+  assert.deepEqual(plain(f({ from: NOV - HOUR })), ['timesfm12', 'chronos24']);
+  assert.deepEqual(plain(f({ text: 'forecasts/btc/24h' })), ['chronos24']);
+});
+
+test('page source: Forecasting Lab reads persisted research results only', () => {
+  assert.match(SRC, /FL_LEDGER_URL = 'https:\/\/raw\.githubusercontent\.com\/quiquandon-oss\/PulseWorkerV2\/refs\/heads\/research-data\/exp008-chronos\/exp008_chronos\/derived\/ledger\.json'/);
+  assert.match(SRC, /\/research\/timesfm-recent\?horizon=12&limit=100/);
+  const a = SRC.indexOf('// ---- Forecasting Lab: loading and rendering'), b = SRC.indexOf('buildSv2Periods();', a);
+  assert.ok(a > 0 && b > a);
+  assert.doesNotMatch(SRC.slice(a, b), /Math\.random|\.fill\(|interpolat/i, 'no generated values');
+  assert.match(SRC, /data-view="forecast"/);
 });

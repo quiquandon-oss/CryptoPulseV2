@@ -672,7 +672,7 @@
         <div id="sv2Periods" role="group" aria-label="Period" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div>
       </div>
       <div class="flex items-center gap-4 flex-wrap text-[11px] text-[#BAC9CD] mb-2" aria-hidden="true">
-        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#3B82F6"></span>V1 sentiment</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#3B82F6"></span>V1 sentiment <span class="text-[#8A9599]">(hollow = hourly server reading)</span></span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#22C55E"></span>V2 sentiment <span class="text-[#8A9599]">(hollow = earlier method)</span></span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:#F59E0B"></span>BTC price</span>
       </div>
@@ -1118,7 +1118,7 @@ function sentimentV2Model(res, now){
     return { state: 'error', rows: [], notices: [{ tone: 'bad', text: 'Comparison data could not be loaded' + (res && res.error ? ' (' + res.error + ')' : '') + '.' }], status: '' };
   }
   const d = res.data, ss = d.series_status || {};
-  const rows = d.points.filter((p) => p && num(p.ts) !== null).map((p) => ({ ts: p.ts, v1: num(p.v1), v2: num(p.v2), btc: num(p.btc), v2Status: p.v2_status || null, v2Version: p.v2_version || null }))
+  const rows = d.points.filter((p) => p && num(p.ts) !== null).map((p) => ({ ts: p.ts, v1: num(p.v1), v2: num(p.v2), btc: num(p.btc), v2Status: p.v2_status || null, v2Version: p.v2_version || null, v1Origin: p.v1_origin === 'server' ? 'server' : p.v1_origin ? 'browser' : null }))
     .sort((a, b) => a.ts - b.ts);
   const v2 = ss.v2 || {};
   const notices = [];
@@ -1152,7 +1152,12 @@ function sentimentV2Model(res, now){
   const breakMs = sv2LineBreakMs(rows, windowMs);
   let lineBreaks = 0;
   for(let i = 1; i < rows.length; i++) if(rows[i].ts - rows[i - 1].ts > breakMs) lineBreaks++;
-  if(lineBreaks) notices.push({ tone: 'neutral', text: 'Lines break where readings are more than ' + Math.round(breakMs / 3600000) + ' h apart (' + lineBreaks + ' gap' + (lineBreaks === 1 ? '' : 's') + '): V1 is only recorded while the V1 app is open.' });
+  // Hourly V1 server readings (Worker-side V1 composite, scomp-v1) next to the app's own readings: drawn hollow.
+  const srv = d.v1_server_input || null;
+  const nServer = rows.filter((r) => r.v1Origin === 'server' && r.v1 !== null).length;
+  if(nServer) notices.push({ tone: 'info', text: nServer + ' V1 point' + (nServer === 1 ? ' is an hourly server reading' : 's are hourly server readings') + ' (recorded by the Worker whether or not the V1 app is open; default weights, only Worker-reachable sources), drawn hollow. V2 scores up to one of them per hourly run.' });
+  else if(srv && srv.enabled && srv.error) notices.push({ tone: 'warn', text: 'Hourly V1 server readings could not be read; only V1 app readings are shown.' });
+  if(lineBreaks) notices.push({ tone: 'neutral', text: 'Lines break where readings are more than ' + Math.round(breakMs / 3600000) + ' h apart (' + lineBreaks + ' gap' + (lineBreaks === 1 ? '' : 's') + ')' + (srv && srv.enabled ? '.' : ': V1 is only recorded while the V1 app is open.') });
   const lastV1 = ss.v1 && num(ss.v1.last_ts);
   const parts = [];
   parts.push(lastV1 !== null ? 'Last V1 update ' + ago(lastV1) + ' ago' : 'No V1 update in this period');
@@ -2514,6 +2519,9 @@ function renderSentimentV2(res){
   // Earlier-method V2 values (sv2-1.0.0) are drawn hollow; the current method's points are filled.
   datasets[1].pointBackgroundColor = rows.map(r => r.v2Version === 'sv2-1.0.0' ? 'rgba(0,0,0,0)' : '#22C55E');
   datasets[1].pointBorderColor = '#22C55E';
+  // V1 hourly server readings are drawn hollow; the V1 app's own readings are filled.
+  datasets[0].pointBackgroundColor = rows.map(r => r.v1Origin === 'server' ? 'rgba(0,0,0,0)' : '#3B82F6');
+  datasets[0].pointBorderColor = '#3B82F6';
   if(_sv2Chart){ _sv2Chart.$rows = rows; _sv2Chart.data.datasets = datasets; _sv2Chart.update(); return; }
   const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
   _sv2Chart = new Chart(document.getElementById('sv2Chart').getContext('2d'), {
@@ -2531,7 +2539,7 @@ function renderSentimentV2(res){
             title: items => items.length ? fmtUtc(items[0].parsed.x) : '',
             label: item => { const r = (_sv2Chart.$rows || [])[item.dataIndex]; if(!r) return '';
               const f = v => v === null ? 'missing' : String(v);
-              return ['V1:  ' + f(r.v1), 'V2:  ' + (r.v2Pre ? 'not started' : r.v2 === null ? 'missing' : r.v2 + (r.v2Status && r.v2Status !== 'OK' ? ' (incomplete inputs)' : '') + (r.v2Version ? '  [' + r.v2Version + ']' : '')), 'BTC: ' + (r.btc === null ? 'missing' : '$' + r.btc.toLocaleString())]; },
+              return ['V1:  ' + f(r.v1) + (r.v1 !== null && r.v1Origin === 'server' ? '  (server, hourly)' : ''), 'V2:  ' + (r.v2Pre ? 'not started' : r.v2 === null ? 'missing' : r.v2 + (r.v2Status && r.v2Status !== 'OK' ? ' (incomplete inputs)' : '') + (r.v2Version ? '  [' + r.v2Version + ']' : '')), 'BTC: ' + (r.btc === null ? 'missing' : '$' + r.btc.toLocaleString())]; },
           } } } },
   });
   _sv2Chart.$rows = rows;

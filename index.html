@@ -2565,7 +2565,7 @@ async function loadForecastLabIfNeeded(force){
   _fl.loadedAt = Date.now();
   document.getElementById('flStatus').textContent = 'Loading persisted forecasts…';
   const [t12, t24, led, prices, pev1, sent] = await Promise.all([
-    getJson(WORKER_URL + '/research/timesfm-recent?horizon=12&limit=100'), getJson(WORKER_URL + '/research/timesfm-recent?horizon=24&limit=100'),
+    getJson(WORKER_URL + '/research/timesfm-recent?horizon=12&limit=500'), getJson(WORKER_URL + '/research/timesfm-recent?horizon=24&limit=500'),
     getJson(FL_LEDGER_URL), getJson(WORKER_URL + COIN_CONFIG.BTC.chart), getJson(FL_PEV1_URL),
     getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=30d')]);
   _fl.data = { t12, t24, led, prices, pev1, sent,

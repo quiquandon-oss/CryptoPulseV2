@@ -577,7 +577,7 @@ test('forecasting lab: ledger filters by model, horizon, status, sample, date an
 
 test('page source: Forecasting Lab reads persisted research results only', () => {
   assert.match(SRC, /FL_LEDGER_URL = 'https:\/\/raw\.githubusercontent\.com\/quiquandon-oss\/PulseWorkerV2\/refs\/heads\/research-data\/exp008-chronos\/exp008_chronos\/derived\/ledger\.json'/);
-  assert.match(SRC, /\/research\/timesfm-recent\?horizon=12&limit=100/);
+  assert.match(SRC, /\/research\/timesfm-recent\?horizon=12&limit=500/);
   const a = SRC.indexOf('// ---- Forecasting Lab: loading and rendering'), b = SRC.indexOf('buildSv2Periods();', a);
   assert.ok(a > 0 && b > a);
   assert.doesNotMatch(SRC.slice(a, b), /Math\.random|\.fill\(|interpolat/i, 'no generated values');

@@ -2581,7 +2581,7 @@ function renderForecastLab(){
   flSeg('flPeriods', FL_PERIODS.map(p => [p[0], p[1]]), _fl.period, k => { _fl.period = k; renderForecastLab(); });
   const src = [];
   src.push((D.t12.ok && D.t24.ok) ? `TimesFM: ${D.timesfm.length} post-seal forecasts (D1 experiment_4_timesfm)` : 'TimesFM: could not be loaded');
-  src.push(D.led.ok ? `Chronos-2: ${D.chronos.length} forecasts (ledger built ${fmtUtc(D.led.data.generated_ts)})` : 'Chronos-2: ledger not available (' + esc(D.led.error || 'error') + ')');
+  src.push(D.led.ok ? `Chronos-2: ${D.chronos.length} forecasts (ledger built ${fmtUtc(D.led.data.generated_ts)})` : 'Chronos-2: ledger not available (' + (D.led.error || 'error') + ')');
   document.getElementById('flStatus').textContent = src.join(' · ');
   renderFlCards(now);
   renderFlMain(now, H);
@@ -2604,7 +2604,7 @@ function renderFlCards(now){
       <div class="flex items-center justify-between gap-2"><h3 class="text-sm font-semibold" style="color:${FL_MODELS[m].color}">${c.label}</h3>${chip(c.status, c.tone)}</div>
       ${L ? `<div class="mt-3 flex items-baseline gap-3 flex-wrap"><span class="text-2xl font-bold ${L.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${L.direction === 'UP' ? '▲' : '▼'} ${esc(L.direction)}</span><span class="font-mono-data text-sm">${flPp(L.predRet)}</span><span class="text-[11px] text-[#8A9599]">${L.horizon} h from ${fmtUtc(L.originTs)}</span></div>
       <dl class="mt-2 text-[11px]">${line('Forecast price', flUsd(L.forecastPrice) + (L.q10 !== null ? ` <span class="text-[#8A9599]">(q10–q90 ${flUsd(L.q10)}–${flUsd(L.q90)})</span>` : ''))}${line('Price at origin', flUsd(L.p0))}${line('Target', fmtUtc(L.targetTs))}${line('Outcome', L.status === 'resolved' ? `${esc(L.actualDir)} ${flPp(L.actualRet)} · ${L.correct === 1 ? 'right' : 'wrong'}` : 'pending')}
-      ${line('Latest resolved', R ? `${R.horizon} h ${fmtUtc(R.originTs)}: called ${esc(R.direction)}, actual ${esc(R.actualDir)} (${R.correct === 1 ? 'right' : 'wrong'})` : '—')}${line('Last execution', c.lastRunTs ? fmtUtc(c.lastRunTs) : fmtUtc(L.issuedTs))}${line('Pending outcomes', String(c.pending))}${line('Model', esc(L.modelVersion || '—'))}</dl>` : '<p class="text-xs text-[#BAC9CD] mt-2">No persisted forecasts after the seal.</p>'}
+      ${line('Latest resolved', R ? `${R.horizon} h ${fmtUtc(R.originTs)}: called ${esc(R.direction)}, actual ${esc(R.actualDir)} (${R.correct === 1 ? 'right' : 'wrong'})` : '—')}${c.lastRunTs ? line('Last run', fmtUtc(c.lastRunTs)) : line('Latest forecast issued', fmtUtc(L.issuedTs))}${line('Pending outcomes', String(c.pending))}${line('Model', esc(L.modelVersion || '—'))}</dl>` : '<p class="text-xs text-[#BAC9CD] mt-2">No persisted forecasts after the seal.</p>'}
       <div class="flex gap-3 mt-3">${prog}</div>
       <p class="text-[10px] text-[#8A9599] mt-2">${c.evaluated ? 'Checkpoint reached: see the frozen analysis.' : 'Collecting toward the frozen checkpoint; no verdict yet.'}</p></section>`;
   };
@@ -2725,7 +2725,7 @@ function renderFlSentiment(now){
   host.innerHTML = `<p class="text-[#BAC9CD] mb-2">Pre-registered evaluation PEV-1 (frozen 2026-11-01, one run on its post-seal TEST period, BTC): does adding V1 sentiment to the k-NN direction model help? Balanced accuracy 0.5 = no skill.</p>` +
     P.horizons.map(h => `<div class="overflow-x-auto mb-3"><table class="w-full text-left min-w-[420px]"><thead class="text-[#8A9599]"><tr><th class="py-1 pr-2 font-normal">${h.horizon} · n = ${h.n} units</th><th class="pr-2 font-normal">Balanced accuracy [95% CI]</th><th class="font-normal">Brier [95% CI]</th></tr></thead><tbody>` +
       h.models.map(m => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 pr-2">${esc(m.label)}</td><td class="pr-2 font-mono-data">${m.ba === null ? '—' : m.ba.toFixed(3)}${ci(m.baCi)}</td><td class="font-mono-data">${m.brier === null ? '—' : m.brier.toFixed(3)}${ci(m.brierCi)}</td></tr>`).join('') +
-      `</tbody></table><p class="mt-1">${chip(String(h.decision.C || 'NOT EVALUATED'), 'warn')} <span class="text-[#BAC9CD]">Sentiment effect (C − B): ${h.cMinusB ? `Brier ${h.cMinusB.dBrier > 0 ? '+' : ''}${h.cMinusB.dBrier.toFixed(3)}${ci(h.cMinusB.dBrierCi)}, balanced accuracy ${h.cMinusB.dBa > 0 ? '+' : ''}${h.cMinusB.dBa.toFixed(3)}${ci(h.cMinusB.dBaCi)}` : 'not reported'}. ${Object.entries(h.excluded).map(([k, v]) => `${v} excluded (${k.replace(/_/g, ' ')})`).join(', ')}.</span></p></div>`).join('') +
+      `</tbody></table><p class="mt-1">${chip(String(h.decision.C || 'NOT EVALUATED'), 'warn')} <span class="text-[#BAC9CD]">Sentiment effect (C − B): ${h.cMinusB ? `Brier ${h.cMinusB.dBrier > 0 ? '+' : ''}${h.cMinusB.dBrier.toFixed(3)}${ci(h.cMinusB.dBrierCi)}, balanced accuracy ${h.cMinusB.dBa > 0 ? '+' : ''}${h.cMinusB.dBa.toFixed(3)}${ci(h.cMinusB.dBaCi)}` : 'not reported'}. ${Object.entries(h.excluded).map(([k, v]) => `${esc(v)} excluded (${esc(String(k).replace(/_/g, ' '))})`).join(', ')}.</span></p></div>`).join('') +
     `<p class="text-[#BAC9CD]"><b class="text-[#E1E2E7]">Result: sentiment has not been shown to improve prediction.</b> V1 sentiment was available for few units because V1 records only while its app is open. A combined sentiment + TimesFM/Chronos-2 evaluation has not been registered or run, so no result exists for it yet.</p>`;
 }
 function renderFlLedger(){

@@ -582,4 +582,6 @@ test('page source: Forecasting Lab reads persisted research results only', () =>
   assert.ok(a > 0 && b > a);
   assert.doesNotMatch(SRC.slice(a, b), /Math\.random|\.fill\(|interpolat/i, 'no generated values');
   assert.match(SRC, /data-view="forecast"/);
+  // Every report-derived string in the PEV-1 table is escaped (review finding).
+  assert.match(SRC, /\$\{esc\(v\)\} excluded \(\$\{esc\(String\(k\)/);
 });

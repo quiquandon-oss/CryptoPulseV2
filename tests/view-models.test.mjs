@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2EvidenceModel, sv2StatusModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2EvidenceModel, sv2StatusModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -318,7 +318,8 @@ test('sentiment v2: the line breaks across gaps longer than max(6 h, 3x median s
 
 test('sentiment v2: the chart draws no segment across a break (static check of renderSentimentV2)', () => {
   assert.match(SRC, /segment: \{ borderColor: c => \(c\.p1\.parsed\.x - c\.p0\.parsed\.x > breakMs \? 'transparent' : undefined\) \}/);
-  assert.match(SRC, /spanGaps: false,\s*\n\s*segment:/, 'missing values still show as gaps');
+  assert.match(SRC, /spanGaps: st\.spanGaps,\s*\n\s*segment:/, 'missing values still show as gaps');
+  assert.equal(H.sv2SeriesStyle(10).spanGaps, false);
 });
 
 // ---- Sentiment V2 evidence, sources and AI budget (scope lock 2026-11-14) ----
@@ -377,4 +378,37 @@ test('page source: evidence panel is collapsed below the graph and loads only wh
   assert.ok(/addEventListener\('toggle', \(\) => loadSv2DetailsIfOpen\(\)\)/.test(SRC));
   assert.ok(/rel="noopener noreferrer nofollow"/.test(SRC), 'external evidence links are isolated');
   assert.ok(/if\(!res \|\| !res\.ok \|\| !res\.data\)\{ host\.innerHTML = '<p class="text-\[#BAC9CD\]">V2 data is unavailable right now/.test(SRC), 'a failed load is not shown as "no V2 result yet"');
+});
+
+test('sentiment v2 chart: straight trend lines, a marker on every reading, no line across missing values', () => {
+  for (const n of [5, 60, 61, 500]) {
+    const st = plain(H.sv2SeriesStyle(n));
+    assert.equal(st.tension, 0, 'no curve smoothing that could overshoot a reading');
+    assert.equal(st.spanGaps, false, 'missing values are gaps, never bridged');
+    for (const k of ['v1Radius', 'v2Radius', 'btcRadius']) assert.ok(st[k] > 0, k + ' keeps a visible marker at n=' + n);
+  }
+  assert.ok(/tension: st\.tension, spanGaps: st\.spanGaps/.test(SRC), 'the chart uses the tested style');
+  assert.ok(!/tension: 0\.2, spanGaps: false/.test(SRC), 'the old smoothed style is gone');
+  // Long gaps still break the line (V1 is recorded only while the V1 app is open).
+  const rows = [0, 1, 2, 3, 30].map((h) => ({ ts: NOW + h * HOUR }));
+  const br = H.sv2LineBreakMs(rows);
+  assert.ok(br < 27 * HOUR, 'a 27 h gap is not bridged');
+});
+
+test('sentiment v2 chart: on longer ranges short gaps keep the trend line; gaps over a day always break it', () => {
+  const D = 24 * HOUR;
+  // 7D window: the limit is 14 h, so 8-12 h overnight gaps (V1 app closed) are connected; a 30 h gap is not.
+  const r7 = [0, 2, 4, 14, 16, 18, 30, 32, 34, 36, 66, 68].map((h) => ({ ts: h * HOUR }));
+  assert.equal(H.sv2LineBreakMs(r7, 7 * D), 14 * HOUR);
+  // Without a window the old rule applies unchanged (6 h floor, 3x median).
+  assert.equal(H.sv2LineBreakMs(r7), 6 * HOUR);
+  // The window term is capped at 24 h on 90D/ALL, so multi-day outages still break the line.
+  assert.equal(H.sv2LineBreakMs(r7, 90 * D), 24 * HOUR);
+  assert.equal(H.sv2LineBreakMs([{ ts: 0 }], 365 * D), 24 * HOUR);
+  // The model passes the requested window from the API (from_ts..to_ts), and the notice reports the breaks.
+  const pts = r7.map((r, i) => ({ ts: NOW - 7 * D + r.ts, v1: 40 + i, btc: 66000, v2: null }));
+  const m = H.sentimentV2Model(sv2({ from_ts: NOW - 7 * D, to_ts: NOW, points: pts }), NOW);
+  assert.equal(m.breakMs, 14 * HOUR);
+  assert.match(texts(m), /more than 14 h apart \(1 gap\)/);
+  assert.deepEqual(plain(m.rows.map((r) => r.v1)), pts.map((p) => p.v1), 'values are unchanged');
 });

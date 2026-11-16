@@ -1012,13 +1012,26 @@ var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'],
 // with enough gaps (SV2_LINE_BREAK_MIN_GAPS): in a tiny sample it is dominated by the very gap being judged.
 var SV2_LINE_BREAK_MIN_MS = 6 * 3600000;
 var SV2_LINE_BREAK_MIN_GAPS = 10;
-function sv2LineBreakMs(rows){
+// On longer ranges a gap that is small next to the visible window does not hide the trend: the limit also grows to
+// 1/12 of the window (7D: 14 h, 30D: 60 h), but never above SV2_LINE_BREAK_MAX_WINDOW_MS, so a gap of more than a day
+// (an outage, the V1 app closed for days) always breaks the line. Each reading keeps its marker either way.
+var SV2_LINE_BREAK_WINDOW_FRACTION = 1 / 12;
+var SV2_LINE_BREAK_MAX_WINDOW_MS = 24 * 3600000;
+// Trend lines for the V1 / V2 / BTC comparison: straight segments between consecutive real readings (no curve
+// smoothing that could overshoot a reading), every reading keeps a visible marker (smaller on dense ranges), and
+// segments across gaps longer than breakMs or across missing values are not drawn (see sv2LineBreakMs, spanGaps).
+function sv2SeriesStyle(nRows){
+  const dense = nRows > 60;
+  return { tension: 0, spanGaps: false, v1Radius: dense ? 1.5 : 2.5, v2Radius: 3, btcRadius: dense ? 1.5 : 2.5 };
+}
+function sv2LineBreakMs(rows, windowMs){
   const gaps = [];
   for(let i = 1; i < rows.length; i++) gaps.push(rows[i].ts - rows[i - 1].ts);
-  if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return SV2_LINE_BREAK_MIN_MS;
+  const w = typeof windowMs === 'number' && isFinite(windowMs) && windowMs > 0 ? Math.min(windowMs * SV2_LINE_BREAK_WINDOW_FRACTION, SV2_LINE_BREAK_MAX_WINDOW_MS) : 0;
+  if(gaps.length < SV2_LINE_BREAK_MIN_GAPS) return Math.max(SV2_LINE_BREAK_MIN_MS, w);
   const s = gaps.slice().sort((a, b) => a - b), mid = Math.floor(s.length / 2);
   const median = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-  return Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median);
+  return Math.max(SV2_LINE_BREAK_MIN_MS, 3 * median, w);
 }
 function sentimentV2Model(res, now){
   const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
@@ -1055,7 +1068,10 @@ function sentimentV2Model(res, now){
   if(miss.length) notices.push({ tone: 'warn', text: 'Missing points: ' + miss.join(', ') + ' (shown as gaps).' });
   if(degraded) notices.push({ tone: 'warn', text: degraded + ' V2 point' + (degraded === 1 ? ' was' : 's were') + ' computed with incomplete inputs (marked in the tooltip).' });
   if(d.truncated || d.btc_truncated) notices.push({ tone: 'neutral', text: 'Only the most recent observations in this period are included.' });
-  const breakMs = sv2LineBreakMs(rows);
+  // The visible window: the requested period (from_ts..to_ts), or for ALL the span of the readings themselves.
+  const winFrom = num(d.from_ts), winTo = num(d.to_ts);
+  const windowMs = winFrom !== null && winTo !== null ? winTo - winFrom : rows.length > 1 ? rows[rows.length - 1].ts - rows[0].ts : 0;
+  const breakMs = sv2LineBreakMs(rows, windowMs);
   let lineBreaks = 0;
   for(let i = 1; i < rows.length; i++) if(rows[i].ts - rows[i - 1].ts > breakMs) lineBreaks++;
   if(lineBreaks) notices.push({ tone: 'neutral', text: 'Lines break where readings are more than ' + Math.round(breakMs / 3600000) + ' h apart (' + lineBreaks + ' gap' + (lineBreaks === 1 ? '' : 's') + '): V1 is only recorded while the V1 app is open.' });
@@ -2195,12 +2211,12 @@ function renderSentimentV2(res){
   empty.classList.toggle('hidden', m.state === 'ok');
   empty.classList.toggle('flex', m.state !== 'ok');
   empty.textContent = m.state === 'empty' ? 'No observations in this period.' : m.state === 'error' ? 'The comparison could not be loaded. Try again with the refresh button.' : '';
-  const rows = m.rows, dense = rows.length > 60, breakMs = m.breakMs;
+  const rows = m.rows, breakMs = m.breakMs, st = sv2SeriesStyle(rows.length);
   // A segment between two drawn points further apart than breakMs is not drawn (data, indices and tooltips unchanged).
   const ds = (label, key, color, axis, radius) => ({ label, data: rows.map(r => ({ x: r.ts, y: r[key] })), borderColor: color, backgroundColor: color,
-    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 4, tension: 0.2, spanGaps: false,
+    yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 5, tension: st.tension, spanGaps: st.spanGaps,
     segment: { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > breakMs ? 'transparent' : undefined) } });
-  const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', dense ? 0 : 2), ds('V2 sentiment', 'v2', '#22C55E', 'ys', 2.5), ds('BTC price', 'btc', '#F59E0B', 'yp', dense ? 0 : 2)];
+  const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', st.v1Radius), ds('V2 sentiment', 'v2', '#22C55E', 'ys', st.v2Radius), ds('BTC price', 'btc', '#F59E0B', 'yp', st.btcRadius)];
   // Earlier-method V2 values (sv2-1.0.0) are drawn hollow; the current method's points are filled.
   datasets[1].pointBackgroundColor = rows.map(r => r.v2Version === 'sv2-1.0.0' ? 'rgba(0,0,0,0)' : '#22C55E');
   datasets[1].pointBorderColor = '#22C55E';

@@ -1108,15 +1108,19 @@ function sv2StatusModel(res, now){
   }
   if(!res || !res.ok || !res.data) return { state: 'error', sources: [], ai: null, collector: null };
   const d = res.data;
+  // A source switched off in the Worker config (collector.disabled_sources) is shown as DISABLED, never as waiting to run.
+  const disabled = new Set(d.collector && Array.isArray(d.collector.disabled_sources) ? d.collector.disabled_sources : []);
   const sources = (d.sources || []).map(s => {
-    const ok = s.last_status === 'OK' || s.last_status === 'NOT_MODIFIED';
-    const tone = s.last_status === 'NEVER_RUN' || s.last_status === 'NOT_CONFIGURED' ? 'neutral' : ok ? (s.fresh ? 'good' : 'warn') : 'bad';
-    return { id: s.id, name: s.name, family: s.family, status: s.last_status, tone, fresh: !!s.fresh,
+    const off = disabled.has(s.id), status = off ? 'DISABLED' : s.last_status;
+    const ok = !off && (s.last_status === 'OK' || s.last_status === 'NOT_MODIFIED');
+    const tone = off || s.last_status === 'NEVER_RUN' || s.last_status === 'NOT_CONFIGURED' ? 'neutral' : ok ? (s.fresh ? 'good' : 'warn') : 'bad';
+    return { id: s.id, name: s.name, family: s.family, status, tone, fresh: !off && !!s.fresh,
       reliability: typeof s.reliability === 'number' ? Math.round(s.reliability * 100) + '%' : '—', attempts: s.attempts || 0,
       lastEvidenceTs: s.last_evidence_ts ?? null, error: s.last_error || null };
   });
   const ai = d.ai || null;
-  let aiLine = 'AI annotation off', aiTone = 'neutral';
+  // Configured is not enabled: without a model AND a positive daily budget no call is ever made.
+  let aiLine = ai && !ai.enabled ? 'AI annotation off · ' + (ai.model ? ai.model + ' configured but ' : 'no model configured, ') + 'daily budget ' + (Number(ai.daily_neuron_budget) || 0) + ' Neurons · no calls' : 'AI annotation off', aiTone = 'neutral';
   if(ai && ai.enabled){
     aiLine = `${ai.model} · ${ai.committed_neurons} of ${ai.daily_neuron_budget} Neurons today · ${ai.calls} call${ai.calls === 1 ? '' : 's'}`;
     aiTone = ai.account_limited_today ? 'bad' : ai.remaining_neurons <= 0 ? 'warn' : 'good';

@@ -353,7 +353,7 @@ test('sentiment v2 status: source tones, reliability, and the AI budget line say
   assert.deepEqual([used.tone, /daily budget used: stopped for today/.test(used.line)], ['warn', true]);
   const lim = H.sv2StatusModel(ai({ account_limited_today: true }), NOW).ai;
   assert.deepEqual([lim.tone, /account free allocation reached/.test(lim.line)], ['bad', true]);
-  assert.equal(H.sv2StatusModel({ ok: true, data: { ...base, ai: { enabled: false } } }, NOW).ai.line, 'AI annotation off');
+  assert.equal(H.sv2StatusModel({ ok: true, data: { ...base, ai: { enabled: false } } }, NOW).ai.line, 'AI annotation off · no model configured, daily budget 0 Neurons · no calls');
   assert.equal(H.sv2StatusModel(null, NOW).state, 'error');
   // Worker before migration 0029 (PulseWorkerV2 #141): ok:false with health 'schema_missing' is a setup state, not an error.
   const pending = H.sv2StatusModel({ ok: false, error: 'HTTP 200', data: { ok: false, health: 'schema_missing', calc_version: 'sv2-1.1.0', collector: { enabled: false } } }, NOW);
@@ -411,4 +411,21 @@ test('sentiment v2 chart: on longer ranges short gaps keep the trend line; gaps 
   assert.equal(m.breakMs, 14 * HOUR);
   assert.match(texts(m), /more than 14 h apart \(1 gap\)/);
   assert.deepEqual(plain(m.rows.map((r) => r.v1)), pts.map((p) => p.v1), 'values are unchanged');
+});
+
+test('sentiment v2 sources: a source disabled in config shows DISABLED (not NEVER_RUN); AI off states why', () => {
+  const res = { ok: true, data: { ok: true, health: 'ok', calc_version: 'sv2-1.1.0',
+    collector: { enabled: true, disabled_sources: ['bitcoinmagazine'] },
+    sources: [{ id: 'bitcoinmagazine', name: 'Bitcoin Magazine', family: 'market_sentiment_news', last_status: 'NEVER_RUN', fresh: false },
+      { id: 'decrypt', name: 'Decrypt', family: 'market_sentiment_news', last_status: 'OK', fresh: true, reliability: 1 },
+      { id: 'sec_press', name: 'SEC press releases', family: 'regulation_geopolitics', last_status: 'NOT_CONFIGURED', fresh: false }],
+    ai: { model: null, enabled: false, daily_neuron_budget: 0, calls: 0 } } };
+  const m = H.sv2StatusModel(res, NOW);
+  assert.deepEqual(plain(m.sources.map((s) => [s.id, s.status, s.tone, s.fresh])),
+    [['bitcoinmagazine', 'DISABLED', 'neutral', false], ['decrypt', 'OK', 'good', true], ['sec_press', 'NOT_CONFIGURED', 'neutral', false]]);
+  assert.equal(m.ai.line, 'AI annotation off · no model configured, daily budget 0 Neurons · no calls');
+  // A model in config with no budget is still off, and says so.
+  const cfg = H.sv2StatusModel({ ok: true, data: { ...res.data, ai: { model: '@cf/zai-org/glm-4.7-flash', enabled: false, daily_neuron_budget: 0, calls: 0 } } }, NOW);
+  assert.equal(cfg.ai.line, 'AI annotation off · @cf/zai-org/glm-4.7-flash configured but daily budget 0 Neurons · no calls');
+  assert.equal(cfg.ai.tone, 'neutral');
 });

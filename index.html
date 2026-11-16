@@ -1137,7 +1137,8 @@ function sentimentV2Model(res, now){
   const v2First = num(v2.first_ts);
   for(const r of rows) r.v2Pre = r.v2 === null && (v2First === null || r.ts < v2First);
   const missV1 = rows.filter((r) => r.v1 === null).length, missBtc = rows.filter((r) => r.btc === null).length;
-  const missV2 = v2First === null ? 0 : rows.filter((r) => r.ts >= v2First && r.v2 === null).length;
+  // V2 scores every V1 app reading but only up to one hourly server reading per run: an unscored server point is not missing.
+  const missV2 = v2First === null ? 0 : rows.filter((r) => r.ts >= v2First && r.v2 === null && r.v1Origin !== 'server').length;
   const degraded = rows.filter((r) => r.v2 !== null && r.v2Status && r.v2Status !== 'OK').length;
   const miss = [];
   if(missV1) miss.push(missV1 + ' V1');
@@ -1150,6 +1151,10 @@ function sentimentV2Model(res, now){
   const winFrom = num(d.from_ts), winTo = num(d.to_ts);
   const windowMs = winFrom !== null && winTo !== null ? winTo - winFrom : rows.length > 1 ? rows[rows.length - 1].ts - rows[0].ts : 0;
   const breakMs = sv2LineBreakMs(rows, windowMs);
+  // V2 is sparser than V1 (server points are scored at most one per run): its line joins consecutive V2 readings over
+  // the V1-only points in between, and breaks on its own gap scale.
+  const v2Rows = rows.filter((r) => r.v2 !== null);
+  const v2BreakMs = sv2LineBreakMs(v2Rows, windowMs);
   let lineBreaks = 0;
   for(let i = 1; i < rows.length; i++) if(rows[i].ts - rows[i - 1].ts > breakMs) lineBreaks++;
   // Hourly V1 server readings (Worker-side V1 composite, scomp-v1) next to the app's own readings: drawn hollow.
@@ -1164,7 +1169,7 @@ function sentimentV2Model(res, now){
   parts.push(d.v2_error ? 'V2 unavailable' : v2.available ? 'V2 available' + (num(v2.last_ts) !== null ? ', last ' + ago(v2.last_ts) + ' ago' : '') : 'V2 not started');
   if(d.downsampled) parts.push('sampled to ' + rows.length + ' points');
   if(d.current_calc_version) parts.push('method ' + d.current_calc_version + (num(d.current_version_since) !== null ? ' since ' + ago(d.current_version_since) + ' ago' : ''));
-  return { state: rows.length ? 'ok' : 'empty', rows, notices, status: parts.join(' · '), breakMs };
+  return { state: rows.length ? 'ok' : 'empty', rows, notices, status: parts.join(' · '), breakMs, v2BreakMs };
 }
 // Evidence list: only https links are rendered as links; times shown as age.
 function sv2EvidenceModel(res, now){
@@ -2516,6 +2521,10 @@ function renderSentimentV2(res){
     yAxisID: axis, borderWidth: 2, pointRadius: radius, pointHoverRadius: 5, tension: st.tension, spanGaps: st.spanGaps,
     segment: { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > breakMs ? 'transparent' : undefined) } });
   const datasets = [ds('V1 sentiment', 'v1', '#3B82F6', 'ys', st.v1Radius), ds('V2 sentiment', 'v2', '#22C55E', 'ys', st.v2Radius), ds('BTC price', 'btc', '#F59E0B', 'yp', st.btcRadius)];
+  // V2: draw across the V1-only points between two V2 readings (spanGaps), still broken across its own long gaps.
+  const v2Break = m.v2BreakMs || breakMs;
+  datasets[1].spanGaps = true;
+  datasets[1].segment = { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > v2Break ? 'transparent' : undefined) };
   // Earlier-method V2 values (sv2-1.0.0) are drawn hollow; the current method's points are filled.
   datasets[1].pointBackgroundColor = rows.map(r => r.v2Version === 'sv2-1.0.0' ? 'rgba(0,0,0,0)' : '#22C55E');
   datasets[1].pointBorderColor = '#22C55E';

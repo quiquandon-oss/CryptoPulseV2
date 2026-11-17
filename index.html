@@ -271,42 +271,14 @@
         <li>Variants started at different times and need different minimum histories, so they are <span class="text-[#E1E2E7]">not measured on the same sample or period</span>.</li>
         <li>A higher accuracy bar is not a statistically conclusive ranking. Only the selection gate (Selected Model) applies a significance bar, and falling back to Original k-NN is the normal outcome when nothing clears it.</li>
       </ul>
-      <details class="mt-2 text-xs text-[#BAC9CD]"><summary class="cursor-pointer text-[#00E0FF]">Terms</summary><ul class="list-disc pl-4 mt-1 space-y-0.5"><li><b>Challenger:</b> a separate model logged alongside k-NN for comparison.</li><li><b>Flat:</b> Challenger's unadjusted read; on anomaly days it uses trend persistence, otherwise k-NN p_up.</li><li><b>Tilted:</b> the flat read additionally nudged by a fresh mapped Foufi driver on anomaly days.</li><li><b>Regime anomaly:</b> the backend's tripwire for days whose setup is unusual versus history — the conditions in which the k-NN has been empirically weakest; on those days Challenger switches to trend-persistence mode.</li><li><b>Trend-persistence mode:</b> a simple trend continuation read used on anomaly days.</li><li><b>Calibrated model:</b> a probability adjustment built from that model's own resolved history using decile bucket recalibration, rebuilt daily.</li><li><b>Local edge:</b> How often a variant was right, above a 50% coin flip, at historical moments that looked like today when it made the same directional call (shown as the LCA / selection score).</li><li><b>Significance threshold:</b> The bar a variant's local edge must clear before it is selected; it gets stricter the more variants are compared (shown as Corrected Threshold). If nothing clears it, the system falls back to Original k-NN.</li></ul></details>
+      <details class="mt-2 text-xs text-[#BAC9CD]"><summary class="cursor-pointer text-[#00E0FF]">Terms</summary><ul class="list-disc pl-4 mt-1 space-y-0.5"><li><b>Flat:</b> Challenger's unadjusted read; on anomaly days it uses trend persistence, otherwise k-NN p_up.</li><li><b>Tilted:</b> the flat read additionally nudged by a fresh mapped Foufi driver on anomaly days.</li><li><b>Regime anomaly:</b> the backend's tripwire for days whose setup is unusual versus history — the conditions in which the k-NN has been empirically weakest; on those days Challenger switches to trend-persistence mode.</li><li><b>Trend-persistence mode:</b> a simple trend continuation read used on anomaly days.</li><li><b>Calibrated model:</b> a probability adjustment built from that model's own resolved history using decile bucket recalibration, rebuilt daily.</li><li><b>Local edge:</b> How often a variant was right, above a 50% coin flip, at historical moments that looked like today when it made the same directional call (shown as the LCA / selection score).</li><li><b>Significance threshold:</b> The bar a variant's local edge must clear before it is selected; it gets stricter the more variants are compared (shown as Corrected Threshold). If nothing clears it, the system falls back to Original k-NN.</li></ul></details>
     </section>
-    <!-- ---- Challenger — a real, stable, currently-deployed model, NOT
-         an undecided experiment. Deliberately kept visually distinct from
-         the "Experimental" section below via the colored label, so
-         merging tabs doesn't accidentally read as "we're not sure this
-         one's staying." Fully isolated from the k-NN above (does not
-         touch, import, or affect it in any way) -- logged in parallel for
-         comparison, motivated by a confirmed finding: the k-NN scored
-         22.9% accuracy on regime-anomalous days against a 97.1% naive
-         trend-continuation baseline in the same window. See
-         PulseWorkerV2's runChallengerPrediction for the full reasoning. ---- -->
-    <p class="text-[10px] uppercase tracking-wide text-[#00E0A0] font-bold mb-2 mt-8">Challenger — Stable Model</p>
-    <section id="challengerLiveCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger — Live Read</p>
-        <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'challengerNote')">ⓘ Info</button>
-      </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="challengerNote">A separate model, NOT a variant of the k-NN above. When today is regime-anomalous (the same tripwire the k-NN itself flags), this defers to a simple, transparent trend-persistence read instead of trusting the k-NN's own number in exactly the conditions it's been empirically bad in. When NOT anomalous, it defers to the k-NN's own p_up — on the theory that when today DOES resemble history well, the k-NN's own logic is the more trustworthy read. The "Tilted" variant additionally nudges the flat read using Foufi's daily short-term driver tag (macro/tradfi only) and his stated lean for that category, when a fresh (≤30h) digest has one. The trend-strength bar below is a separate guardrail (dampens, never flips, a call that disagrees with a strong MA-slope trend) — shown for transparency on what nudged this specific read, not a forecast itself. Pure comparison logging — this does not feed the Dashboard prediction above, the Regime Scorecard, or anything else.</p>
-      <div id="challengerLiveBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
-    <section id="challengerCalibCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <h2 class="text-sm font-semibold mb-3">Challenger vs. Baselines</h2>
-      <div id="challengerCalibBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
-    <section id="challengerRecapCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <h2 class="text-sm font-semibold mb-3">Recent Predictions</h2>
-      <div id="challengerRecapBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-    </section>
-
+    <!-- Challenger cards removed 2026-11-17 (owner decision: challenger paused / taken out of the V2 frontend). Its
+         stored predictions stay in the backend and remain reachable through the API. -->
     <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-bold mb-2 mt-8">Model comparison — every variant, resolved outcomes only</p>
     <section id="labCompareCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Challenger vs. every other model — <span id="labCompareCoinLabel"></span></p>
+        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model comparison — <span id="labCompareCoinLabel"></span></p>
         <div class="flex items-center gap-2">
           <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'labCompareNote')">ⓘ Info</button>
           <button id="labCompareFullscreenBtn" aria-label="Toggle full-screen chart" title="Full screen chart" class="text-[#BAC9CD] hover:text-[#E1E2E7] p-1.5 rounded-md hover:bg-[#0B0E11] transition-colors">
@@ -314,7 +286,7 @@
           </button>
         </div>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCompareNote">Up to 8 bars now (was 6) — added k-NN Calibrated and Challenger Calibrated, sourced from the same expanding-history data the chart below already uses, not a new fetch. These are NOT computed on identical sample sizes (Challenger started later, Experimental and the Calibrated variants each need their own minimum resolved count before they exist) — each bar's own n is printed underneath for that reason. Uses whichever coin/horizon is selected above.</p>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCompareNote">Accuracy of the k-NN variants (Original, Experimental, Calibrated) on resolved predictions. The challenger bars and the naive / MA-crossover baselines that came with them were removed on 2026-11-17 (challenger taken out of this page).</p>
       <div style="height:260px" id="labCompareChartContainer"><canvas id="labCompareChart"></canvas></div>
       <p class="text-xs text-[#BAC9CD] mt-2 text-center" id="labCompareCountNote"></p>
     </section>
@@ -335,7 +307,7 @@
           </button>
         </div>
       </div>
-      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCombinedHistoryNote">The one canonical benchmark chart — every model variant that exists (Original k-NN, Experimental, k-NN Calibrated, Challenger Flat, Challenger Tilted, Challenger Calibrated), always compared together, on one time axis, since V2's actual beginning. Standing rule: a younger variant's line starts wherever its own data starts and is simply shorter — never padded, never hidden for having less history. Defaults to ALL; the range tabs zoom in from there, they don't change what's being compared.</p>
+      <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="labCombinedHistoryNote">The one canonical benchmark chart — the k-NN variants (Original k-NN, Experimental, k-NN Calibrated; challenger lines removed 2026-11-17), always compared together, on one time axis, since V2's actual beginning. Standing rule: a younger variant's line starts wherever its own data starts and is simply shorter — never padded, never hidden for having less history. Defaults to ALL; the range tabs zoom in from there, they don't change what's being compared.</p>
       <div class="flex items-center justify-between mb-2">
         <div id="labCombinedHistoryRangeTabs" class="flex gap-1"></div>
       </div>
@@ -431,28 +403,16 @@
       <p class="text-[10px] text-[#BAC9CD] mt-2">Updated <span id="expLoadedAt" class="font-mono-data">—</span> · <button type="button" id="expRefreshBtn" class="underline hover:text-[#00E0FF]">Reload</button></p>
     </section>
 
-    <!-- Goal A and Goal B are different questions and are never combined. -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <!-- Goal A (Event Detection). Goal B (EXP-023) was taken out 2026-11-17: EXP-023 paused, its data preserved. -->
+    <div class="grid grid-cols-1 gap-4 mb-6">
       <section id="goalACard" aria-labelledby="goalATitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
         <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">Goal A</p>
         <h3 id="goalATitle" class="text-sm font-semibold mt-0.5">Early detection of significant market moves</h3>
         <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">Event Detection: can liquidation, options and macro detectors flag a significant move early? Derived events only — not an input to any prediction.</p>
         <div id="goalABody" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
       </section>
-      <section id="goalBCard" aria-labelledby="goalBTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
-        <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">Goal B</p>
-        <h3 id="goalBTitle" class="text-sm font-semibold mt-0.5">Prediction of significant moves before they start</h3>
-        <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">EXP-023: can price, open interest and funding warn of a &gt;3% BTC move 12–36 h before onset, better than chance? Evaluated on a sealed, pre-registered holdout.</p>
-        <div id="goalBBody" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
-      </section>
     </div>
 
-    <section id="exp002Card" aria-labelledby="exp002Title" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-      <p class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">EXP-002</p>
-      <h3 id="exp002Title" class="text-sm font-semibold mt-0.5">Anomaly gate: softened selection bar on anomaly days</h3>
-      <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">A logged-only shadow of the selection layer for BTC. It never changes what production serves. A prospective plan is frozen; this card shows where collection stands against it.</p>
-      <div id="exp002Body" class="mt-3 text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
-    </section>
 
     <section id="registryCard" aria-labelledby="registryTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
       <div class="flex items-center justify-between gap-2 flex-wrap mb-1">
@@ -660,7 +620,7 @@
       </div>
     </section>
 
-    <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are under Experiments → Learning loop &amp; model selection. Challenger's own recent calls are in the Lab.</p>
+    <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are under Experiments → Learning loop &amp; model selection.</p>
   </div>
 
   <!-- Sentiment V2: one graph comparing V1 sentiment, V2 sentiment and BTC price at the same timestamps
@@ -904,7 +864,7 @@ function predictionRunsModel(fr, now){
   let total = 0, fresh = 0, onSchedule = 0, lastCron = null; const versions = new Set();
   for(const coin of Object.keys(d.coins)){
     const hs = (d.coins[coin] && d.coins[coin].horizons) || {};
-    for(const h of Object.keys(hs)) for(const path of ['core', 'challenger']){
+    for(const h of Object.keys(hs)) for(const path of ['core']){   // production series only (challenger removed 2026-11-17)
       const s = hs[h] && hs[h][path]; if(!s) continue;
       total++;
       if(s.status === 'FRESH') fresh++;
@@ -970,12 +930,15 @@ var VARIANT_LOW_N = 10; // display rule only: marks a small local sample; the se
 function variantCycleRows(d){
   if(!d || d.ok === false || d.status !== 'ok') return [];
   const ch = d.challenger && d.challenger.ok !== false ? d.challenger : null;
+  // Challenger variants are production selection candidates while the challenger runs; once the backend reports it
+  // paused (CHALLENGER_ENABLED = "0", PulseWorkerV2 #166) they are no longer candidates and are not listed.
+  const chPaused = !!(d.challenger && d.challenger.status === 'paused');
   const sel = d.selection && d.selection.ok ? d.selection : null;
   const scores = {}; for(const s of (sel && Array.isArray(sel.scores) ? sel.scores : [])) scores[s.variant] = s;
   const cycle = {
     original: d.p_up, experimental: d.experimental ? d.experimental.p_up : null, calibrated: d.calibrated_p_up,
-    challenger_flat: ch ? ch.p_up_flat : null, challenger_tilted: ch ? ch.p_up_tilted : null, challenger_calibrated: ch ? ch.calibrated_p_up_flat : null,
   };
+  if(!chPaused) Object.assign(cycle, { challenger_flat: ch ? ch.p_up_flat : null, challenger_tilted: ch ? ch.p_up_tilted : null, challenger_calibrated: ch ? ch.calibrated_p_up_flat : null });
   const chosen = sel ? sel.chosen_variant : null;
   const rows = Object.keys(cycle).map(v => {
     const s = scores[v] || null; const p = typeof cycle[v] === 'number' ? cycle[v] : null;
@@ -984,23 +947,8 @@ function variantCycleRows(d){
       localAccuracy: s && typeof s.lca === 'number' ? s.lca : null, localN: s && typeof s.n_matched === 'number' ? s.n_matched : null,
       lowN: !!(s && typeof s.n_matched === 'number' && s.n_matched < VARIANT_LOW_N), scored: !!s };
   });
-  if(ch && typeof ch.p_up_momentum === 'number') rows.push({ variant: 'challenger_momentum', pUp: ch.p_up_momentum, direction: ch.p_up_momentum >= 0.5 ? 'UP' : 'DOWN',
-    role: 'SHADOW', localAccuracy: null, localN: null, lowN: false, scored: false, triggered: ch.momentum_triggered === true });
+  // The EXP-003 momentum shadow row was removed 2026-11-17 (EXP-003 stopped).
   return rows;
-}
-// EXP-002 as the registry reports it: counts and plan facts only, never a performance figure.
-function exp002Model(e){
-  if(!e) return null;
-  const evals = Array.isArray(e.standalone_evaluations) ? e.standalone_evaluations : [];
-  const plan = evals.find(x => x && x.evaluation_version === 'exp002-prospective-v1') || null;
-  const m = e.current_measured_result || {};
-  return { status: e.status || null, maturity: e.confidence_evidence_maturity || null,
-    loggedRows: typeof m.logged_rows === 'number' ? m.logged_rows : (typeof e.current_sample_size === 'number' ? e.current_sample_size : null),
-    latestRowTs: m.latest_row_ts || e.data_last_updated || null,
-    plan: plan ? { required: plan.sample && typeof plan.sample.required === 'number' ? plan.sample.required : null,
-      count: plan.sample && typeof plan.sample.count === 'number' ? plan.sample.count : null,
-      meaning: plan.sample && plan.sample.meaning || null, evaluationStatus: plan.evaluation_status || null,
-      specRef: plan.spec_ref || null, reason: plan.reason || null, limitations: Array.isArray(plan.limitations) ? plan.limitations : [] } : null };
 }
 // Database (D1) read consumption for the current UTC day, from /d1-usage ({ ok, data } wrapper). Same rules as the
 // backend's alert (PulseWorkerV2 ops/d1_usage_alert.py, documented in ops/ALERTING.md): WARNING above 60% of the
@@ -1564,7 +1512,7 @@ var VARIANT_ROLE_CHIP = {
   SELECTED: ['PRODUCTION · SELECTED', 'good'], SERVED_FALLBACK: ['PRODUCTION · FALLBACK', 'info'],
   CANDIDATE: ['CANDIDATE · NOT SERVED', 'neutral'], SHADOW: ['SHADOW · LOGGED ONLY', 'neutral'], UNKNOWN: ['ROLE NOT REPORTED', 'neutral'],
 };
-var VARIANT_EXTRA_LABELS = { challenger_momentum: 'Challenger Momentum (EXP-003)' };
+var VARIANT_EXTRA_LABELS = {};
 async function loadVariantCycle(){
   const host = document.getElementById('variantCycleBody');
   if(!host) return;
@@ -1602,35 +1550,6 @@ async function loadVariantCycle(){
 }
 
 // ---- Experiments: EXP-002 prospective comparison (counts and plan facts only) ----
-function renderExp002(){
-  const host = document.getElementById('exp002Body');
-  if(!host) return;
-  if(!_registry || !_registry.ok){
-    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Experiment registry could not be read (${esc(_registry ? _registry.error : 'not loaded')}).</span></p>`;
-    return;
-  }
-  const e = findExperiment('EXP-002');
-  const m = exp002Model(e);
-  if(!m){
-    host.innerHTML = `<p>${chip('NOT IN REGISTRY','neutral')} <span class="text-[#BAC9CD]">EXP-002 is not listed in the registry response.</span></p>`;
-    return;
-  }
-  const plan = m.plan;
-  host.innerHTML = `
-    <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(m.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(m.maturity)} <span class="text-[#BAC9CD] ml-1">Decision state</span> ${decisionChip(e)} <span class="text-[#BAC9CD] ml-1">Analysis</span> ${plan ? statusChipFor(plan.evaluationStatus) : chip('PLAN NOT REPORTED','neutral')}</p>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
-      <div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">Checkpoint (per horizon)</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${plan && plan.required != null ? plan.required + ' informative pairs' : 'not defined'}</p><p class="text-[10px] text-[#BAC9CD] mt-0.5">${plan && plan.meaning ? esc(plan.meaning) : ''}</p></div>
-      <div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">Progress toward checkpoint</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${plan && plan.count != null ? plan.count + (plan.required != null ? ' / ' + plan.required : '') : 'not reported by the API'}</p><p class="text-[10px] text-[#BAC9CD] mt-0.5">${plan && plan.count != null ? '' : 'The count of kept informative pairs is computed offline by the committed evaluator, not by the Worker.'}</p></div>
-      <div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">Shadow rows logged (all time)</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${m.loggedRows != null ? m.loggedRows : 'not reported'}</p><p class="text-[10px] text-[#BAC9CD] mt-0.5">${m.latestRowTs ? 'latest ' + esc(fmtUtc(m.latestRowTs)) + ' (' + esc(ageStr(m.latestRowTs)) + ')' : ''}</p></div>
-    </div>
-    <dl>
-      ${plan ? field('Frozen plan', plan.reason) : ''}
-      ${plan ? field('Plan reference', plan.specRef) : ''}
-      ${plan && plan.limitations.length ? field('Current limitation', plan.limitations.join(' ')) : ''}
-      ${field('Next action', e.next_action)}
-    </dl>
-    <p class="text-[10px] text-[#8A9599] mt-2">Counts only. The plan allows a single analysis at the checkpoint, so no accuracy or comparison figure is shown before it. Logged rows include rows from before the plan's start date, which the plan excludes.</p>`;
-}
 
 const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
 
@@ -1647,11 +1566,11 @@ const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
 // right place for whichever coin is active. ----
 const COIN_CONFIG = {
   BTC: {
-    label: 'BTC', predict: '/predict', calib: '/calibration', calibHistory: '/calibration-history', chart: '/chart-data', analysis: '/gemini-analysis',
+    label: 'BTC', predict: '/predict', calib: '/calibration', calibHistory: '/calibration-history', chart: '/chart-data',
     priceNowField: 'btc_price_now', priceHistField: 'btc_price', predPriceField: 'btc_price_at_prediction',
   },
   LINK: {
-    label: 'LINK', predict: '/link-predict', calib: '/link-calibration', calibHistory: '/link-calibration-history', chart: '/link-chart-data', analysis: '/link-gemini-analysis',
+    label: 'LINK', predict: '/link-predict', calib: '/link-calibration', calibHistory: '/link-calibration-history', chart: '/link-chart-data',
     priceNowField: 'link_price_now', priceHistField: 'link_price', predPriceField: 'link_price_at_prediction',
   },
   // ETH's own model, deliberately narrower feature set (technical_score +
@@ -1660,7 +1579,7 @@ const COIN_CONFIG = {
   // same honest gap as the model itself: newer, less proven, shown as such
   // rather than papered over.
   ETH: {
-    label: 'ETH', predict: '/eth-predict', calib: '/eth-calibration', calibHistory: '/eth-calibration-history', chart: '/eth-chart-data', analysis: null,
+    label: 'ETH', predict: '/eth-predict', calib: '/eth-calibration', calibHistory: '/eth-calibration-history', chart: '/eth-chart-data',
     priceNowField: 'eth_price_now', priceHistField: 'eth_price', predPriceField: 'eth_price_at_prediction',
   },
 };
@@ -2303,7 +2222,6 @@ function renderDataQuality(){
          </div>`;
     rows.push(`<p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Logged prediction series · ${coin} ${h}h <span class="normal-case tracking-normal font-normal">(freshness · scheduled writes in 24 h)</span></p>`);
     rows.push(line('Core model', hz && hz.core));
-    rows.push(line('Challenger', hz && hz.challenger));
     const pd = coinFr && coinFr.price_data;
     rows.push(pd && pd.latest_ts
       ? `<div class="flex items-center justify-between gap-2"><span class="text-[#BAC9CD]">Price data <span class="font-mono-data text-[10px]">newest ${fmtUtc(pd.latest_ts)} · ${ageStr(pd.latest_ts)}</span></span></div>`
@@ -2314,7 +2232,7 @@ function renderDataQuality(){
     let total = 0;
     for(const c of Object.keys(fr.coins || {})){
       for(const hh of Object.keys(fr.coins[c].horizons || {})){
-        for(const m of ['core','challenger']){
+        for(const m of ['core']){
           const s = fr.coins[c].horizons[hh][m];
           if(!s) continue;
           total++;
@@ -2415,7 +2333,6 @@ function loadLabIfNeeded(){
   const key = comboKey();
   if (_labLoadedFor === key) return;
   _labLoadedFor = key;
-  loadChallenger();
   loadLab();
 }
 
@@ -2920,148 +2837,9 @@ async function loadRegimeSplitHistory(){
 loadRegimeSplitHistory();
 
 // ---- Challenger view ----
-function loadChallenger(){
-  loadChallengerLive();
-  loadChallengerCalib();
-  loadChallengerRecap();
-}
+// loadChallenger / loadChallengerLive / loadChallengerCalib / loadChallengerRecap removed 2026-11-17 (challenger taken out
+// of the V2 frontend; no more /challenger-recent or /challenger-calibration requests from this page).
 
-async function loadChallengerLive(){
-  const host = document.getElementById('challengerLiveBody');
-  if(!host) return;
-  host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-  try{
-    const r = await apiFetch(WORKER_URL + '/challenger-recent?limit=30');
-    const d = await r.json();
-    const rows = (d.predictions || []).filter(p => p.coin === currentCoin && p.horizon_hours === currentHorizon);
-    if(!rows.length){
-      host.innerHTML = '<p class="text-xs text-[#BAC9CD]">No challenger predictions logged yet for '+currentCoin+' · '+currentHorizon+'h — starts accumulating on the next 3h cron cycle.</p>';
-      return;
-    }
-    const p = rows[0]; // most recent, already ts DESC from the API
-    const pctFlat = Math.round(p.p_up_flat * 100);
-    const pctTilted = Math.round(p.p_up_tilted * 100);
-    const anomalyBadge = p.is_regime_anomaly
-      ? '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(255,180,171,0.15);color:#FFB4AB">Regime anomaly — trend-persistence mode</span>'
-      : '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" style="background:rgba(74,225,118,0.15);color:#4AE176">Normal regime — defers to k-NN</span>';
-    const driverLine = p.driver_used
-      ? `<p class="text-xs text-[#BAC9CD] mt-2">Foufi driver applied: <span class="text-[#E1E2E7] font-mono-data">${p.driver_used}</span> (${p.driver_agreement || 'n/a'})</p>`
-      : `<p class="text-xs text-[#BAC9CD] mt-2">No Foufi driver applied this cycle${p.is_regime_anomaly ? ' — none fresh/mapped right now' : ' — not anomalous, driver tilt only applies on anomaly days'}.</p>`;
-    const trailingStr = p.trailing_return_pct != null ? (p.trailing_return_pct > 0 ? '+' : '') + p.trailing_return_pct.toFixed(2) + '%' : '—';
-    host.innerHTML = `
-      ${anomalyBadge}
-      <div class="grid grid-cols-2 gap-3 mt-3">
-        <div>
-          <p class="text-[10px] uppercase text-[#BAC9CD]">Flat</p>
-          <p class="text-2xl font-bold font-mono-data text-[#00E0FF]">${pctFlat}%</p>
-        </div>
-        <div>
-          <p class="text-[10px] uppercase text-[#BAC9CD]">Tilted</p>
-          <p class="text-2xl font-bold font-mono-data text-[#00E0FF]">${pctTilted}%</p>
-          <p class="text-[10px] text-[#BAC9CD]">Flat is the unadjusted read; Tilted also applies the mapped Foufi driver lean, only on regime-anomaly days and only when a fresh driver is available.</p>
-        </div>
-      </div>
-      <p class="text-xs text-[#BAC9CD] mt-3 font-mono-data">Trailing ${p.horizon_hours}h return: ${trailingStr}</p>
-      ${driverLine}
-      ${renderTrendBar(p.trend_strength)}
-      <p class="text-[10px] text-[#8A9599] mt-2">As of ${fmtUtc(p.ts)}</p>
-    `;
-  }catch(e){
-    host.innerHTML = '<p class="text-xs text-[#FFB4AB]">Could not load — '+e.message+'</p>';
-  }
-}
-
-async function loadChallengerCalib(){
-  const host = document.getElementById('challengerCalibBody');
-  if(!host) return;
-  host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-  try{
-    const r = await apiFetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon);
-    const d = await r.json();
-    if(!d.ok || (d.n_resolved || 0) < 5){
-      host.innerHTML = `<p class="text-xs text-[#BAC9CD]">Only ${d.n_resolved || 0} resolved challenger prediction${(d.n_resolved||0)===1?'':'s'} so far for ${currentCoin} · ${currentHorizon}h — need at least 5 before this comparison means anything.</p>`;
-      return;
-    }
-    const fmt = v => v == null ? '—' : (v*100).toFixed(1) + '%';
-    const beatBadge = beats => beats == null ? '<span class="text-[#BAC9CD]">n/a</span>' : (beats ? '<span style="color:#4AE176" class="font-semibold">beats</span>' : '<span style="color:#FFB4AB" class="font-semibold">does not beat</span>');
-    host.innerHTML = `
-      <table class="w-full text-xs">
-        <thead><tr class="text-[#BAC9CD] text-left">
-          <th class="py-1 pr-2 font-normal">Metric</th>
-          <th class="py-1 pr-2 font-normal">Flat</th>
-          <th class="py-1 font-normal">Tilted</th>
-        </tr></thead>
-        <tbody>
-          <tr class="border-t border-[#3B494C]"><td class="py-1.5 pr-2 text-[#BAC9CD]">Accuracy</td><td class="py-1.5 pr-2 font-mono-data">${fmt(d.accuracy_flat)}</td><td class="py-1.5 font-mono-data">${fmt(d.accuracy_tilted)}</td></tr>
-          <tr class="border-t border-[#3B494C]"><td class="py-1.5 pr-2 text-[#BAC9CD]">Brier score</td><td class="py-1.5 pr-2 font-mono-data">${d.brier_flat}</td><td class="py-1.5 font-mono-data">${d.brier_tilted}</td></tr>
-          <tr class="border-t border-[#3B494C]"><td class="py-1.5 pr-2 text-[#BAC9CD]">vs. naive (${fmt(d.naive_baseline_accuracy)})</td><td class="py-1.5 pr-2">${beatBadge(d.beats_naive_flat)}</td><td class="py-1.5">${beatBadge(d.beats_naive_tilted)}</td></tr>
-          <tr class="border-t border-[#3B494C]"><td class="py-1.5 pr-2 text-[#BAC9CD]">vs. MA-crossover (${d.ma_crossover_baseline && d.ma_crossover_baseline.accuracy != null ? fmt(d.ma_crossover_baseline.accuracy) : 'n/a'})</td><td class="py-1.5 pr-2">${beatBadge(d.beats_ma_crossover_flat)}</td><td class="py-1.5">${beatBadge(d.beats_ma_crossover_tilted)}</td></tr>
-        </tbody>
-      </table>
-      <p class="text-[10px] text-[#BAC9CD] mt-3 leading-relaxed">n=${d.n_resolved} resolved. Beating naive alone is a low bar; beating MA-crossover is the more meaningful claim. Driver usage: ${d.driver_usage.agree} agree, ${d.driver_usage.disagree} disagree, ${d.driver_usage.uncovered} uncovered (micro), ${d.driver_usage.no_driver_applied} none applied.</p>
-    `;
-  }catch(e){
-    host.innerHTML = '<p class="text-xs text-[#FFB4AB]">Could not load — '+e.message+'</p>';
-  }
-}
-
-async function loadChallengerRecap(){
-  const host = document.getElementById('challengerRecapBody');
-  if(!host) return;
-  host.innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-  try{
-    const r = await apiFetch(WORKER_URL + '/challenger-recent?limit=50');
-    const d = await r.json();
-    const rows = (d.predictions || []).filter(p => p.coin === currentCoin && p.horizon_hours === currentHorizon);
-    if(!rows.length){ host.innerHTML = '<p class="text-xs text-[#BAC9CD]">None yet.</p>'; return; }
-    host.innerHTML = rows.map(p => {
-      const resolved = p.resolved_ts != null;
-      const correct = resolved ? ((p.p_up_flat > 0.5) === (p.realized_up === 1)) : null;
-      const dateStr = fmtUtc(p.ts);
-      const statusBadge = !resolved
-        ? '<span class="text-[10px] text-[#BAC9CD]">pending</span>'
-        : correct
-          ? '<span class="text-[10px]" style="color:#4AE176">✓ correct</span>'
-          : '<span class="text-[10px]" style="color:#FFB4AB">✗ miss</span>';
-      return `<div class="flex items-center justify-between border-t border-[#3B494C] py-1.5 text-xs">
-        <span class="text-[#BAC9CD] font-mono-data">${dateStr}</span>
-        <span class="font-mono-data">${Math.round(p.p_up_flat*100)}% / ${Math.round(p.p_up_tilted*100)}%</span>
-        ${statusBadge}
-      </div>`;
-    }).join('');
-  }catch(e){
-    host.innerHTML = '<p class="text-xs text-[#FFB4AB]">Could not load — '+e.message+'</p>';
-  }
-}
-
-// Manual refresh — same purpose as V1's header refresh button: force a
-// fresh fetch of everything for the currently selected coin/horizon rather
-// than waiting for the next cron tick or a full page reload.
-document.getElementById('refreshBtn').onclick = async () => {
-  const icon = document.getElementById('refreshIcon');
-  icon.classList.add('spinning');
-  try{
-    // loadDashboardIfNeeded/loadLabIfNeeded (called via refreshAll below)
-    // normally skip reloading when the coin/horizon combo is unchanged --
-    // correct for toggle clicks and tab switches, but an explicit refresh
-    // click should always actually refresh regardless. Resetting these
-    // forces that.
-    _dashboardLoadedFor = null;
-    _labLoadedFor = null;
-    _chartLoadedFor = null;
-    apiCacheClear();
-    loadFreshness(true);
-    if (activeView === 'dashboard') { loadOverview(true); loadSystemStatus(true); } else { _overviewLoadedAt = 0; _sysLoadedAt = 0; }
-    if (activeView === 'experiments') { _experimentsLoaded = false; loadExperimentsIfNeeded(); }
-    _sv2LoadedAt = {};
-    if (activeView === 'sentiment') { loadSentimentV2IfNeeded(true); loadSv2DetailsIfOpen(true); }
-    await refreshAll();
-  } finally {
-    icon.classList.remove('spinning');
-  }
-};
-
-// ═══ LAB TAB ═══
 function loadLab(){
   loadVariantCycle();
   loadLabWeightingAndHero();
@@ -3179,15 +2957,15 @@ async function loadLabCompareChart(){
   if(!countNote) return;
   wireFullscreenToggle('labCompareFullscreenBtn', 'labCompareCard', 'labCompareChartContainer', () => labCompareChartInstance, '260px');
   try{
-    const [core, challenger, knnHistory, challengerHistory] = await Promise.all([
+    // Challenger bars (and the naive / MA-crossover baselines, which only came from the challenger endpoint) removed
+    // 2026-11-17: the challenger is taken out of the V2 frontend.
+    const [core, knnHistory] = await Promise.all([
       apiFetch(WORKER_URL + cfg.calib + '?horizon=' + currentHorizon).then(r=>r.json()),
-      apiFetch(WORKER_URL + '/challenger-calibration?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
       // Calibrated variants' overall accuracy isn't on the snapshot
       // endpoints above yet — reusing the -history endpoints' own latest
       // point instead of adding a new backend computation, since that
       // data's already being fetched elsewhere in this same tab.
       apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
-      apiFetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()).catch(()=>null),
     ]);
     const bars = [];
     if(core && core.n_resolved > 0){
@@ -3198,18 +2976,6 @@ async function loadLabCompareChart(){
       const knnLast = knnHistory && knnHistory.points && knnHistory.points.length ? knnHistory.points[knnHistory.points.length-1] : null;
       if(knnLast && knnLast.accuracy_calibrated != null){
         bars.push({ label: 'k-NN Calibrated', acc: knnLast.accuracy_calibrated, n: knnLast.n_calibrated, color: '#7DD3FC' });
-      }
-    }
-    if(challenger && challenger.n_resolved > 0){
-      bars.push({ label: 'Challenger Flat', acc: challenger.accuracy_flat, n: challenger.n_resolved, color: '#DDB7FF' });
-      bars.push({ label: 'Challenger Tilted', acc: challenger.accuracy_tilted, n: challenger.n_resolved, color: '#9A6FD1' });
-      const chLast = challengerHistory && challengerHistory.ok && challengerHistory.points && challengerHistory.points.length ? challengerHistory.points[challengerHistory.points.length-1] : null;
-      if(chLast && chLast.accuracy_calibrated_flat != null){
-        bars.push({ label: 'Challenger Calibrated', acc: chLast.accuracy_calibrated_flat, n: chLast.n_calibrated, color: '#C4B5FD' });
-      }
-      bars.push({ label: 'Naive baseline', acc: challenger.naive_baseline_accuracy, n: challenger.n_resolved, color: '#BAC9CD' });
-      if(challenger.ma_crossover_baseline && challenger.ma_crossover_baseline.accuracy != null){
-        bars.push({ label: 'MA-crossover', acc: challenger.ma_crossover_baseline.accuracy, n: challenger.ma_crossover_baseline.n, color: '#8A93A6' });
       }
     }
     if(!bars.length){
@@ -3332,13 +3098,10 @@ async function loadLabCombinedHistoryChart(){
   buildLabRangeTabs('labCombinedHistoryRangeTabs', 'combinedHistory', loadLabCombinedHistoryChart);
   wireFullscreenToggle('labCombinedHistoryFullscreenBtn', 'labCombinedHistoryCard', 'labCombinedHistoryChartContainer', () => labCombinedHistoryChartInstance, '280px');
   try{
-    const [knnRes, challengerRes] = await Promise.all([
-      apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json()),
-      apiFetch(WORKER_URL + '/challenger-calibration-history?coin=' + currentCoin + '&horizon=' + currentHorizon).then(r=>r.json()),
-    ]);
+    // Challenger series removed 2026-11-17 (challenger taken out of the V2 frontend).
+    const knnRes = await apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + currentHorizon).then(r=>r.json());
     const knnPointsAll = (knnRes && knnRes.points) || [];
-    const challengerPointsAll = (challengerRes && challengerRes.ok && challengerRes.points) || [];
-    if(!knnPointsAll.length && !challengerPointsAll.length){
+    if(!knnPointsAll.length){
       countNote.textContent = 'No resolved predictions yet for this coin/horizon.';
       if(labCombinedHistoryChartInstance){ labCombinedHistoryChartInstance.destroy(); labCombinedHistoryChartInstance = null; }
       return;
@@ -3346,7 +3109,6 @@ async function loadLabCombinedHistoryChart(){
     // Range clipping applied after fetch, same principle as the price
     // chart — one full fetch, clip client-side, no re-fetch on tab switch.
     const knnPoints = clipToLabRange(knnPointsAll, 'ts', 'combinedHistory');
-    const challengerPoints = clipToLabRange(challengerPointsAll, 'ts', 'combinedHistory');
     const datasets = [];
     if(knnPoints.length){
       datasets.push({ label: 'Original k-NN', data: knnPoints.map(p => ({ x: p.ts, y: p.accuracy_original * 100 })), borderColor: '#00E0FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 });
@@ -3361,14 +3123,6 @@ async function loadLabCombinedHistoryChart(){
       const calPoints = knnPoints.filter(p => p.accuracy_calibrated != null);
       if(calPoints.length){
         datasets.push({ label: 'k-NN Calibrated', data: calPoints.map(p => ({ x: p.ts, y: p.accuracy_calibrated * 100 })), borderColor: '#7DD3FC', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [1,4] });
-      }
-    }
-    if(challengerPoints.length){
-      datasets.push({ label: 'Challenger Flat', data: challengerPoints.map(p => ({ x: p.ts, y: p.accuracy_flat * 100 })), borderColor: '#DDB7FF', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.15 });
-      datasets.push({ label: 'Challenger Tilted', data: challengerPoints.map(p => ({ x: p.ts, y: p.accuracy_tilted * 100 })), borderColor: '#9A6FD1', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [5,3] });
-      const chCalPoints = challengerPoints.filter(p => p.accuracy_calibrated_flat != null);
-      if(chCalPoints.length){
-        datasets.push({ label: 'Challenger Calibrated', data: chCalPoints.map(p => ({ x: p.ts, y: p.accuracy_calibrated_flat * 100 })), borderColor: '#C4B5FD', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.15, borderDash: [1,4] });
       }
     }
     const ctx = document.getElementById('labCombinedHistoryChart').getContext('2d');
@@ -3397,10 +3151,8 @@ async function loadLabCombinedHistoryChart(){
       });
     }
     const knnLast = knnPoints[knnPoints.length-1];
-    const chLast = challengerPoints[challengerPoints.length-1];
     const parts = [];
     if(knnLast) parts.push(`k-NN n=${knnLast.n_original}`);
-    if(chLast) parts.push(`Challenger n=${chLast.n}`);
     countNote.textContent = parts.length ? parts.join(' · ') + ' — different sample sizes, expected' : '';
   }catch(e){
     countNote.textContent = 'Could not load combined history.';
@@ -3561,12 +3313,10 @@ async function loadLabModelHealth(){
     ];
     const results = await Promise.all(combos.map(async ({coin, horizon}) => {
       const cfg = COIN_CONFIG[coin];
-      const [knnRes, chRes] = await Promise.all([
-        apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + horizon).then(r=>r.json()).catch(()=>null),
-        apiFetch(WORKER_URL + '/challenger-calibration-history?coin=' + coin + '&horizon=' + horizon).then(r=>r.json()).catch(()=>null),
-      ]);
+      // Challenger history is no longer fetched (2026-11-17); its rows render as absent ("not enough history").
+      const knnRes = await apiFetch(WORKER_URL + cfg.calibHistory + '?horizon=' + horizon).then(r=>r.json()).catch(()=>null);
       const knnPoints = (knnRes && knnRes.points) || [];
-      const chPoints = (chRes && chRes.ok && chRes.points) || [];
+      const chPoints = [];
       return {
         coin, horizon,
         knn: computeRecentVsPrior(knnPoints, 'n_original', 'accuracy_original', MODEL_HEALTH_RECENT_N),
@@ -4360,7 +4110,6 @@ async function fetchJson(path){
 
 async function loadExperiments(){
   document.getElementById('goalABody').innerHTML = '<p class="text-[#BAC9CD]">Loading…</p>';
-  document.getElementById('goalBBody').innerHTML = '<p class="text-[#BAC9CD]">Loading…</p>';
   document.getElementById('registryBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
   const [reg, health, events] = await Promise.all([
     fetchJson('/api/research-lab/registry'),
@@ -4372,8 +4121,6 @@ async function loadExperiments(){
   _eventsRecent = events.ok && typeof events.data.count === 'number' ? { ok: true, count: events.data.count, since: events.data.since_ts } : (events.ok ? { ok: false, error: 'count not reported' } : events);
   document.getElementById('expLoadedAt').textContent = fmtUtc(Date.now());
   renderGoalA();
-  renderGoalB();
-  renderExp002();
   renderRegistry();
 }
 
@@ -4466,33 +4213,7 @@ function findExperiment(id){
   return _registry && _registry.ok ? (_registry.data.experiments || []).find(e => e.experiment_id === id) : null;
 }
 
-function renderGoalB(){
-  const host = document.getElementById('goalBBody');
-  if(!_registry || !_registry.ok){
-    host.innerHTML = `<p>${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Experiment registry could not be read (${esc(_registry ? _registry.error : 'not loaded')}).</span></p>`;
-    return;
-  }
-  const e = findExperiment('EXP-023');
-  if(!e){
-    host.innerHTML = `<p>${chip('NOT IN REGISTRY','neutral')} <span class="text-[#BAC9CD]">EXP-023 is not listed in the registry response.</span></p>`;
-    return;
-  }
-  host.innerHTML = `
-    <p class="flex items-center gap-1 flex-wrap"><span class="text-[#BAC9CD]">Status</span> ${statusChipFor(e.status)} <span class="text-[#BAC9CD] ml-1">Evidence</span> ${statusChipFor(e.confidence_evidence_maturity)} <span class="text-[#BAC9CD] ml-1">Decision state</span> ${decisionChip(e)}</p>
-    <p class="mt-2 text-[#BAC9CD]">Registry sample: <span class="font-mono-data text-[#E1E2E7]">${sampleText(e)}</span> · required <span class="font-mono-data text-[#E1E2E7]">${e.required_sample ?? 'not defined'}</span></p>
-    ${progressBar(e)}
-    <dl>
-      ${field('Projected checkpoint', etaText(e))}
-      ${field('Data last updated', e.data_last_updated ? fmtUtc(e.data_last_updated) + ' (' + ageStr(e.data_last_updated) + ')' : null)}
-      ${field('Success criterion', e.success_criterion)}
-      ${field('Next action', e.next_action)}
-      <div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Blocker</dt><dd class="text-[11px] text-[#BAC9CD]">${e.blocker ? esc(typeof e.blocker === 'object' ? JSON.stringify(e.blocker) : e.blocker) : 'none reported'}</dd></div>
-    </dl>
-    <p class="text-[10px] text-[#8A9599] mt-2">Status and sample are the registry's own. Holdout outcomes are not shown here.</p>`;
-}
 
-// Decision state comes from the registry API (`decision`, decision-state-v1), never derived here.
-// A proposal is shown as a proposal; production use without a recorded owner decision is flagged; registry conflicts are listed.
 var DECISION_TONE = { COLLECTING: 'neutral', READY_FOR_EVALUATION: 'info', BLOCKED: 'bad', EVALUATED_DECISION_PENDING: 'warn',
   REJECTED: 'bad', IMPLEMENTED_RESEARCH_ONLY: 'info', IMPLEMENTED_PRODUCTION: 'good', PROPOSED: 'neutral', STAGING_ONLY: 'neutral', ON_DEMAND: 'neutral' };
 var REGISTRY_STALE_MS = 30 * 60 * 1000;
@@ -4515,6 +4236,10 @@ function decisionDetail(e){
     ${Array.isArray(d.conflicts) && d.conflicts.length ? `<div class="mt-1.5"><dt class="text-[10px] uppercase tracking-wide text-[#8A9599]">Registry conflicts</dt><dd class="text-[11px] text-[#BAC9CD]">${d.conflicts.map(c => `<div>${chip('CONFLICT', 'warn')} ${esc(typeof c === 'string' ? c : (c.detail || c.field || JSON.stringify(c)))}</div>`).join('')}</dd></div>` : ''}`;
 }
 
+// Paused or stopped by owner decision 2026-11-17 and taken out of the V2 frontend. Their data, code and frozen plans are
+// preserved in the backend; only this page no longer lists them.
+var REGISTRY_HIDDEN_IDS = ['EXP-002', 'EXP-003', 'EXP-012', 'EXP-023'];
+function registryVisibleEntries(entries){ return (entries || []).filter(e => !REGISTRY_HIDDEN_IDS.includes(e && e.experiment_id)); }
 function renderRegistry(){
   const body = document.getElementById('registryBody');
   const filters = document.getElementById('registryFilters');
@@ -4523,7 +4248,7 @@ function renderRegistry(){
     body.innerHTML = `<p class="text-xs">${chip('UNAVAILABLE','neutral')} <span class="text-[#BAC9CD]">Registry could not be read (${esc(_registry ? _registry.error : 'not loaded')}). No experiment status is shown rather than a stale or guessed one.</span></p>`;
     return;
   }
-  const list = _registry.data.experiments || [];
+  const list = registryVisibleEntries(_registry.data.experiments);
   const statuses = ['ALL', ...Array.from(new Set(list.map(e => e.status).filter(Boolean)))];
   if(!statuses.includes(registryFilter)) registryFilter = 'ALL';
   filters.innerHTML = statuses.map(st => {
@@ -4532,7 +4257,7 @@ function renderRegistry(){
     return `<button type="button" data-st="${esc(st)}" aria-pressed="${on}" class="px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors ${on ? 'bg-[#00E0FF] text-[#0B0E11] border-[#00E0FF]' : 'text-[#BAC9CD] border-[#3B494C] hover:text-[#E1E2E7]'}">${esc(st.replace(/_/g,' '))} <span class="font-mono-data">${n}</span></button>`;
   }).join('');
   filters.querySelectorAll('button').forEach(b => { b.onclick = () => { registryFilter = b.dataset.st; renderRegistry(); }; });
-  const FEATURED = { 'EXP-004': 'TimesFM', 'EXP-011': 'Experiment 5', 'EXP-023': 'Goal B' };
+  const FEATURED = { 'EXP-004': 'TimesFM', 'EXP-011': 'Experiment 5' };
   const shown = list.filter(e => registryFilter === 'ALL' || e.status === registryFilter);
   if(!document.getElementById('registryStatusMeanings')) filters.insertAdjacentHTML('afterend', `<details id="registryStatusMeanings" class="mt-2 mb-3 text-[10px] text-[#BAC9CD]"><summary class="cursor-pointer text-[#00E0FF]">Status meanings</summary><p class="mt-1 leading-relaxed">Accumulating: gathering observations toward the registered sample. Insufficient sample/evidence: the available set has not met the stated minimum. Collecting: data collection is ongoing. Proposed: a suggested action awaiting an owner decision. Staging only: limited to staging use. Disabled: collection or detector is switched off. Blocked: progress has a reported blocker. On-demand audit: run only when requested.</p></details>`);
   body.innerHTML = shown.map(e => `

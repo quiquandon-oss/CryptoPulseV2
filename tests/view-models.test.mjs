@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, exp002Model, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -59,7 +59,10 @@ test('forecast tile: loading, request failure, model unavailable, live read', ()
 test('scheduled predictions: on schedule, missed runs, stale, unknown, outdated report', () => {
   const report = (coins, gen = NOW) => ({ ok: true, data: { generated_ts: gen, expected_cron_ticks_24h: 8, coins } });
   const ok = H.predictionRunsModel(report({ BTC: freshCoin(), ETH: freshCoin() }), NOW);
-  assert.deepEqual([ok.label, ok.tone, ok.total, ok.fresh, ok.onSchedule, plain(ok.versions)], ['ON SCHEDULE', 'good', 4, 4, 4, ['e0a174e']]);
+  // Production series only (challenger series removed 2026-11-17): 2 coins x 1 horizon x core = 2.
+  assert.deepEqual([ok.label, ok.tone, ok.total, ok.fresh, ok.onSchedule, plain(ok.versions)], ['ON SCHEDULE', 'good', 2, 2, 2, ['e0a174e']]);
+  const chStale = freshCoin(); chStale.horizons[24].challenger.status = 'STALE';   // a stale (paused) challenger no longer turns production red
+  assert.equal(H.predictionRunsModel(report({ BTC: chStale }), NOW).label, 'ON SCHEDULE');
   assert.equal(ok.nextDue, Date.UTC(2026, 10, 13, 15, 0, 0));
   const missed = freshCoin(); missed.horizons[24].core.cron_rows_24h = 6;
   assert.deepEqual([H.predictionRunsModel(report({ BTC: missed }), NOW).label, H.predictionRunsModel(report({ BTC: missed }), NOW).tone], ['MISSED RUNS', 'warn']);
@@ -97,31 +100,32 @@ test('funding collector: running, failures, stale, unknown', () => {
 
 test('variant rows: this cycle\'s own values, roles, low-n flag, shadow row', () => {
   const rows = plain(H.variantCycleRows(predict()));
-  assert.deepEqual(rows.map((r) => r.variant), ['original', 'experimental', 'calibrated', 'challenger_flat', 'challenger_tilted', 'challenger_calibrated', 'challenger_momentum']);
+  // EXP-003 momentum shadow row removed 2026-11-17; challenger variants stay while they are live selection candidates.
+  assert.deepEqual(rows.map((r) => r.variant), ['original', 'experimental', 'calibrated', 'challenger_flat', 'challenger_tilted', 'challenger_calibrated']);
   const by = Object.fromEntries(rows.map((r) => [r.variant, r]));
   assert.deepEqual([by.original.pUp, by.original.role, by.original.localN, by.original.lowN], [0.867, 'SERVED_FALLBACK', 13, false]);
   assert.deepEqual([by.experimental.pUp, by.experimental.role, by.experimental.lowN], [0.73, 'CANDIDATE', true]); // 0.73 is the cycle value, not scores[].p_up (0.487)
   assert.deepEqual([by.calibrated.pUp, by.calibrated.scored], [0.515, false]);
-  assert.deepEqual([by.challenger_calibrated.pUp, by.challenger_momentum.role, by.challenger_momentum.localAccuracy], [0.55, 'SHADOW', null]);
+  assert.equal(by.challenger_calibrated.pUp, 0.55);
+  // Once the backend reports the challenger paused (PulseWorkerV2 #166), its variants are no longer candidates: not listed.
+  assert.deepEqual(plain(H.variantCycleRows(predict({ challenger: { ok: true, status: 'paused' } }))).map((r) => r.variant), ['original', 'experimental', 'calibrated']);
   const sel = plain(H.variantCycleRows(predict({ selection: { ok: true, chosen_variant: 'calibrated', cleared_gate: true, scores: [] } })));
   assert.equal(sel.find((r) => r.variant === 'calibrated').role, 'SELECTED');
   assert.equal(sel.filter((r) => r.role === 'SELECTED' || r.role === 'SERVED_FALLBACK').length, 1); // exactly one production row
-  assert.ok(plain(H.variantCycleRows(predict({ selection: null }))).every((r) => r.role === 'UNKNOWN' || r.role === 'SHADOW'));
+  assert.ok(plain(H.variantCycleRows(predict({ selection: null }))).every((r) => r.role === 'UNKNOWN'));
   assert.equal(H.variantCycleRows({ ok: false }).length, 0);
   assert.equal(plain(H.variantCycleRows(predict({ challenger: null }))).find((r) => r.variant === 'challenger_flat').pUp, null);
 });
 
-test('EXP-002: counts and plan facts only', () => {
-  const e = { status: 'ACCUMULATING', confidence_evidence_maturity: 'INSUFFICIENT_SAMPLE', current_sample_size: 110,
-    current_measured_result: { logged_rows: 110, latest_row_ts: 123 },
-    standalone_evaluations: [{ evaluation_version: 'exp002-standalone-v1', evaluation_status: 'BLOCKED' },
-      { evaluation_version: 'exp002-prospective-v1', evaluation_status: 'NOT_RUN', spec_ref: 'plan.md', reason: 'frozen', limitations: ['x'],
-        metrics: { accuracy: 0.9 }, sample: { count: null, required: 111, meaning: 'pairs' } }] };
-  const m = plain(H.exp002Model(e));
-  assert.deepEqual([m.loggedRows, m.plan.required, m.plan.count, m.plan.evaluationStatus], [110, 111, null, 'NOT_RUN']);
-  assert.ok(!JSON.stringify(m).includes('accuracy'), 'no performance field is carried into the view model');
-  assert.equal(H.exp002Model(null), null);
-  assert.equal(plain(H.exp002Model({ status: 'X' })).plan, null);
+test('paused experiments taken out of the page (2026-11-17): no EXP-002/EXP-023 cards, no challenger requests, registry hides them', () => {
+  for (const id of ['exp002Card', 'exp002Body', 'goalBCard', 'goalBBody', 'challengerLiveCard', 'challengerCalibCard', 'challengerRecapCard'])
+    assert.ok(!SRC.includes(`id="${id}"`), id + ' removed');
+  for (const route of ['/challenger-recent', '/challenger-calibration?', '/challenger-calibration-history', '/gemini-analysis', '/link-gemini-analysis'])
+    assert.ok(!SRC.includes(`'${route}`) && !SRC.includes(`+ '${route}`), route + ' no longer requested');
+  assert.ok(!/renderGoalB\(|renderExp002\(|loadChallenger\(\)/.test(SRC.replace(/\/\/.*$/gm, '')), 'no call to removed renderers');
+  const m = SRC.match(/var REGISTRY_HIDDEN_IDS = (\[[^\]]*\]);/);
+  assert.deepEqual(JSON.parse(m[1].replace(/'/g, '"')), ['EXP-002', 'EXP-003', 'EXP-012', 'EXP-023']);
+  assert.match(SRC, /const list = registryVisibleEntries\(_registry\.data\.experiments\);/);
 });
 
 const hourly = (runs, lastTs) => ({ kind: 'scheduled', key: '0 * * * *', invocations: runs, last_ts: lastTs });

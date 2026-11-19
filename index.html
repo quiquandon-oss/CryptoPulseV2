@@ -1400,7 +1400,7 @@ function flLedgerFilter(rows, f){
 // (TimesFM, Chronos-2), the GLM interpretation and its directional signal (never a price forecast), and the V2
 // production prediction (baseline -> bounded GLM adjustment -> final). Unknown or missing is never shown as fine.
 var GLM_CLASS_LABELS = {
-  original_source: 'Original source', gemini_interpretation: 'V1 Gemini interpretation', v1_ai_interpretation: 'V1 model interpretation',
+  original_source: 'Original source', gemini_interpretation: 'Existing Gemini interpretation (stored)', v1_ai_interpretation: 'Other AI interpretation (V1)',
   v1_aggregate: 'V1 calculation', collector_evidence: 'Evidence collector', market_data: 'Market data', v2_prediction: 'V2 prediction record',
   v2_sentiment: 'V2 sentiment', forecast_timesfm: 'TimesFM 2.5 forecast', forecast_chronos: 'Chronos-2 forecast',
 };
@@ -1476,7 +1476,8 @@ function glmEvidenceGroups(run){
   return GLM_CLASS_ORDER.concat(Object.keys(by).filter(c => GLM_CLASS_ORDER.indexOf(c) < 0)).filter(c => by[c]).map(c => ({
     cls: c, label: GLM_CLASS_LABELS[c] || c, interpretation: c === 'gemini_interpretation' || c === 'v1_ai_interpretation',
     items: by[c].map(r => ({ ref: r.ref, table: r.table, id: r.id, family: r.family, fa: flNum(r.fa), basis: r.basis || null,
-      sharedKey: keyCount[r.key] > 1, duplicateOf: r.dup || null, derivedFrom: Array.isArray(r.derived_from) ? r.derived_from : [] })),
+      sharedKey: keyCount[r.key] > 1, duplicateOf: r.dup || null, derivedFrom: Array.isArray(r.derived_from) ? r.derived_from : [],
+      verification: r.verification || null })),
   }));
 }
 // API base: production by default; ?api=staging switches to the staging Worker (testing only; never persisted).
@@ -2684,8 +2685,8 @@ function renderGlmPanel(now){
   const out = run && run.output ? run.output : null;
   document.getElementById('glmEvidence').innerHTML = !run ? `<p class="text-[#BAC9CD]">${esc(G.run.error || 'No run detail available.')}</p>` :
     groups.map(g => `<div class="mt-2"><div class="font-semibold ${g.interpretation ? 'text-[#FBBF24]' : 'text-[#E1E2E7]'}">${esc(g.label)} <span class="text-[#8A9599] font-normal">(${g.items.length})</span>${g.interpretation ? ' <span class="text-[#8A9599] font-normal">— model interpretation, not original evidence</span>' : ''}</div>
-      <ul class="mt-1 space-y-0.5">${g.items.map(it => `<li class="flex justify-between gap-2 flex-wrap"><span class="font-mono-data break-all">${esc(it.ref)}</span><span class="text-[#8A9599]">${esc(it.table)} · ${esc(fmtUtc(it.fa))} (${esc(it.basis || '?')})${it.sharedKey ? ' · same story as another item' : ''}${it.derivedFrom.length ? ' · from ' + esc(it.derivedFrom.join(', ')) : ''}${it.duplicateOf ? ' · duplicate of ' + esc(it.duplicateOf) : ''}</span></li>`).join('')}</ul></div>`).join('') +
-    (out && Array.isArray(out.gemini_vs_original) && out.gemini_vs_original.length ? `<div class="mt-3"><div class="font-semibold text-[#E1E2E7]">Gemini summary vs original</div><ul class="mt-1">${out.gemini_vs_original.map(g => `<li>${esc(g.gemini_ref)} ↔ ${esc(g.original_ref || 'no original')}: ${esc(g.relation)}</li>`).join('')}</ul></div>` : '') +
+      <ul class="mt-1 space-y-0.5">${g.items.map(it => `<li class="flex justify-between gap-2 flex-wrap"><span class="font-mono-data break-all">${esc(it.ref)}</span><span class="text-[#8A9599]">${esc(it.table)} · ${esc(fmtUtc(it.fa))} (${esc(it.basis || '?')})${it.sharedKey ? ' · same story as another item' : ''}${it.derivedFrom.length ? ' · from ' + esc(it.derivedFrom.join(', ')) : ''}${it.duplicateOf ? ' · duplicate of ' + esc(it.duplicateOf) : ''}${it.verification ? ' · ' + esc(it.verification) : ''}</span></li>`).join('')}</ul></div>`).join('') +
+    (out && Array.isArray(out.gemini_vs_original) && out.gemini_vs_original.length ? `<div class="mt-3"><div class="font-semibold text-[#E1E2E7]">Gemini summary vs original</div><ul class="mt-1">${out.gemini_vs_original.map(g => `<li>${esc(g.gemini_ref)} ↔ ${esc(g.original_ref || 'no original')}: ${esc(g.relation)}${g.assessment ? ' · ' + chip(g.assessment, g.assessment === 'included' ? 'neutral' : 'warn') : ''}${g.reason ? ' <span class="text-[#8A9599]">' + esc(g.reason) + '</span>' : ''}</li>`).join('')}</ul></div>` : '') +
     (out && Array.isArray(out.findings) ? `<div class="mt-3"><div class="font-semibold text-[#E1E2E7]">Findings</div><ul class="mt-1 space-y-0.5">${out.findings.map(f => `<li>${chip(f.type, 'neutral')} ${esc(f.claim)} <span class="text-[#8A9599]">[${(f.refs || []).map(esc).join(', ')}]</span></li>`).join('')}</ul></div>` : '');
   // history
   document.getElementById('glmHistory').innerHTML = sigs === null ? '<p class="text-[#BAC9CD]">Unavailable.</p>' : (!sigs.length ? '<p class="text-[#BAC9CD]">No signals yet.</p>' :

@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -615,4 +615,83 @@ test('sentiment v2: unscored hourly server points are not "missing V2"; V2 gets 
     { v2: { first_ts: NOW - 12 * HOUR, last_ts: NOW - 4 * HOUR, points_in_period: 3, available: true, stale: false, insufficient_history: false } }), NOW);
   assert.match(texts(m), /Missing points: 1 V2/);            // only the app reading counts
   assert.ok(m.v2BreakMs >= 4 * HOUR, 'V2 readings 4 h apart stay connected');
+});
+
+
+// ---- GLM evidence layer ----
+const glmStatusRes = (over = {}) => ({ ok: true, data: { ok: true, flags: { signal_enabled: true, inference_enabled: false, tick_hook_enabled: false, influence_cap: 0, mode: 'shadow' },
+  blockers: ['inference disabled'], adjustment: { thresholds: 'provisional, not calibrated' },
+  last_run: { run_id: 'glm_abc_1', decision_cutoff_ts: NOW - 7 * HOUR, finished_ts: NOW - 7 * HOUR + 3000, status: 'model_disabled', n_items: 61, n_excluded: 4, package_bytes: 22000, model: null },
+  counts: { NO_SIGNAL: 3 }, ...over } });
+
+test('GLM status: shadow by default, blockers and last run surfaced; failure is UNAVAILABLE, never OK', () => {
+  const m = H.glmStatusModel(glmStatusRes());
+  assert.deepEqual([m.state, m.mode, m.label, m.inferenceEnabled, m.tickHook], ['ok', 'shadow', 'SHADOW', false, false]);
+  assert.equal(m.lastRun.statusText, 'GLM inference is switched off (no model call)');
+  assert.deepEqual(plain(m.blockers), ['inference disabled']);
+  assert.equal(H.glmStatusModel({ ok: false, error: 'HTTP 404' }).label, 'UNAVAILABLE');
+  assert.equal(H.glmStatusModel(null).state, 'unavailable');
+  const act = H.glmStatusModel({ ok: true, data: { ...glmStatusRes().data, flags: { mode: 'active', influence_cap: 0.05 } } });
+  assert.equal(act.label, 'ACTIVE (cap 0.05)');
+});
+
+test('GLM signal: NO_SIGNAL is never shown as a direction; validity window and expiry; reasons in words', () => {
+  const none = H.glmSignalModel(null, NOW);
+  assert.deepEqual([none.direction, none.label], ['NO_SIGNAL', 'NO SIGNAL']);
+  const sig = { signal_id: 's', run_id: 'r', horizon_hours: 24, direction: 'DOWN', strength: 'moderate', eligibility: 'CANDIDATE', decision_cutoff_ts: NOW - 7 * HOUR,
+    valid_from_ts: NOW - 7 * HOUR, valid_until_ts: NOW + 17 * HOUR, reasons: ['first_day_candidate'], supporting_families: ['model_forecast', 'news'], would_apply: -0.0333, models_live: 1 };
+  const m = H.glmSignalModel(sig, NOW);
+  assert.deepEqual([m.direction, m.label, m.valid, m.expired], ['DOWN', 'DOWN · CANDIDATE', true, false]);
+  assert.deepEqual(plain(m.reasons), ['first day in this direction (needs 2 consecutive days)']);
+  assert.equal(H.glmSignalModel({ ...sig, valid_until_ts: NOW - 1 }, NOW).label, 'DOWN · CANDIDATE · EXPIRED');
+  const ns = H.glmSignalModel({ ...sig, direction: 'NO_SIGNAL', eligibility: 'NO_SIGNAL', reasons: ['model_disabled'] }, NOW);
+  assert.deepEqual([ns.label, ns.tone], ['NO SIGNAL', 'neutral']);
+  assert.equal(H.glmReasonText('unknown_code'), 'unknown_code');
+});
+
+test('GLM adjustments: baseline, shadow and final kept apart; hits computed only for resolved rows', () => {
+  const res = { ok: true, data: { adjustments: [
+    { prediction_ts: NOW - 30 * HOUR, baseline_p_up: 0.52, baseline_source: 'cycle_p_up', would_apply: -0.05, applied: 0, final_p_up: 0.52, mode: 'shadow', signal_status: 'ELIGIBLE', reason: 'shadow_cap_0', realized_up: 0 },
+    { prediction_ts: NOW - 3 * HOUR, baseline_p_up: 0.6, baseline_source: 'p_up', would_apply: 0, applied: 0, final_p_up: 0.6, mode: 'shadow', signal_status: 'NO_SIGNAL', reason: 'no_signal', realized_up: null },
+  ] } };
+  const rows = H.glmAdjustmentRows(res);
+  assert.equal(rows.length, 2);
+  assert.deepEqual([rows[0].base, rows[0].final, rows[0].shadow, rows[0].hitBase, rows[0].hitShadow], [0.52, 0.52, 0.47, false, true]);
+  assert.deepEqual([rows[1].resolved, rows[1].hitBase, rows[1].reason], [false, null, 'no signal']);
+  assert.equal(H.glmAdjustmentRows({ ok: false }), null);
+});
+
+test('GLM evidence drill-down: grouped by class in fixed order; Gemini marked as interpretation; shared story keys flagged', () => {
+  const run = { input_refs: [
+    { ref: 'ev:1', class: 'collector_evidence', table: 'sv2_evidence', id: '1', family: 'news', key: 'url:https://a.com/x', fa: NOW - 5 * HOUR, basis: 'retrieved_ts' },
+    { ref: 'cat:2', class: 'gemini_interpretation', table: 'coin_catalyst_log', id: '2', family: 'news', key: 'url:https://a.com/x', fa: NOW - 6 * HOUR, basis: 'created_ts', derived_from: ['src:url:2'] },
+    { ref: 'tfm:9', class: 'forecast_timesfm', table: 'experiment_4_timesfm', id: '9', family: 'model_forecast', key: 'model:timesfm', fa: NOW - 14 * HOUR, basis: 'created_ts' },
+  ] };
+  const g = H.glmEvidenceGroups(run);
+  assert.deepEqual(plain(g.map(x => x.cls)), ['forecast_timesfm', 'gemini_interpretation', 'collector_evidence']);
+  assert.equal(g[1].interpretation, true);
+  assert.equal(g[1].label, 'V1 Gemini interpretation');
+  assert.deepEqual(plain(g[1].items[0].derivedFrom), ['src:url:2']);
+  assert.equal(g[1].items[0].sharedKey, true);
+  assert.equal(g[0].items[0].sharedKey, false);
+  assert.deepEqual(plain(H.glmEvidenceGroups(null)), []);
+});
+
+test('API base: production by default, staging only with ?api=staging', () => {
+  assert.equal(H.apiBaseFor(''), 'https://pulseworker-v2.quiquandon.workers.dev');
+  assert.equal(H.apiBaseFor('?view=forecast&api=staging'), 'https://pulseworker-v2-staging.quiquandon.workers.dev');
+  assert.equal(H.apiBaseFor('?api=stagingx'), 'https://pulseworker-v2.quiquandon.workers.dev');
+});
+
+test('GLM panel: three separate blocks; GLM labelled as not a forecast; escaped output; no Gemini API call added', () => {
+  for (const id of ['glmForecasts', 'glmSignal', 'glmAdjust', 'glmEvidence', 'glmHistory']) assert.ok(SRC.includes(`id="${id}"`), id);
+  assert.match(SRC, /1 · Numerical forecasts/);
+  assert.match(SRC, /2 · GLM interpretation &amp; signal/);
+  assert.match(SRC, /3 · V2 production: baseline → adjustment → final/);
+  assert.match(SRC, /it is not a price forecast/);
+  const panel = SRC.slice(SRC.indexOf('function renderGlmPanel('), SRC.indexOf('function renderFlCards('));
+  assert.ok(panel.length > 1000);
+  assert.ok(!/generativelanguage|gemini-[0-9]/i.test(panel), 'no Gemini endpoint in the GLM panel');
+  // every interpolated API string in the panel goes through esc() or a numeric formatter
+  for (const m of panel.matchAll(/\$\{(it|g|x|f|r)\.(ref|table|claim|relation|label|gemini_ref|original_ref|run_status|baseSource)\b/g)) assert.fail('unescaped ' + m[0]);
 });

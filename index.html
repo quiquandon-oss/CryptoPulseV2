@@ -664,7 +664,7 @@
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div class="min-w-0">
           <h2 class="text-lg font-bold tracking-tight">Forecasting Lab</h2>
-          <p class="text-xs text-[#BAC9CD] mt-1 leading-relaxed">TimesFM 2.5 and Chronos-2 forecast BTC from price history alone, at 12 h and 24 h, on GitHub Actions (research only, never a production input). Every number below comes from a persisted forecast and its recorded outcome.</p>
+          <p class="text-xs text-[#BAC9CD] mt-1 leading-relaxed">TimesFM 2.5 and Chronos-2 forecast BTC from price history alone, at 12 h and 24 h, on GitHub Actions. They are numerical research forecasts; they are also inputs to the GLM evidence layer below, which runs in shadow mode (it does not change V2 predictions). Every number below comes from a persisted forecast and its recorded outcome.</p>
         </div>
         <div id="flHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 shrink-0"></div>
       </div>
@@ -676,6 +676,30 @@
     </section>
 
     <div id="flCards" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
+
+    <section id="glmPanel" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="glmTitle">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h3 id="glmTitle" class="text-sm font-semibold">GLM evidence layer <span class="text-[#8A9599] font-normal">(BTC 24 h, daily at 07:00 UTC)</span></h3>
+          <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">GLM reads V1 sources (including V1's existing Gemini summaries, labelled as interpretations next to their originals), the evidence collector, market and V2 records, and the TimesFM / Chronos-2 forecasts. It returns an interpretation and at most a directional signal: <span class="text-[#E1E2E7]">it is not a price forecast</span>. Independence is counted in code: a summary and its original count once.</p>
+        </div>
+        <span id="glmModeChip"></span>
+      </div>
+      <p id="glmStatus" class="text-[11px] text-[#8A9599] mt-2" aria-live="polite">Loading…</p>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-3">
+        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #A78BFA"><h4 class="text-xs font-semibold text-[#E1E2E7]">1 · Numerical forecasts</h4><div id="glmForecasts" class="text-[11px] mt-2"></div></div>
+        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #FBBF24"><h4 class="text-xs font-semibold text-[#E1E2E7]">2 · GLM interpretation &amp; signal</h4><div id="glmSignal" class="text-[11px] mt-2"></div></div>
+        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #4AE176"><h4 class="text-xs font-semibold text-[#E1E2E7]">3 · V2 production: baseline → adjustment → final</h4><div id="glmAdjust" class="text-[11px] mt-2"></div></div>
+      </div>
+      <details class="mt-4 group" id="glmEvidenceBox">
+        <summary class="cursor-pointer text-xs font-semibold text-[#E1E2E7]">Evidence supplied to GLM (last run)</summary>
+        <div id="glmEvidence" class="mt-2 text-[11px]"></div>
+      </details>
+      <details class="mt-2">
+        <summary class="cursor-pointer text-xs font-semibold text-[#E1E2E7]">Signal history</summary>
+        <div id="glmHistory" class="mt-2 text-[11px] overflow-x-auto"></div>
+      </details>
+    </section>
 
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flMainTitle">
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
@@ -1372,6 +1396,94 @@ function flLedgerFilter(rows, f){
     && (f.from == null || r.originTs >= f.from) && (f.to == null || r.originTs <= f.to)
     && (!q || String(r.id).toLowerCase().includes(q) || String(r.source).toLowerCase().includes(q)));
 }
+// ---- GLM evidence layer (PulseWorkerV2 /api/glm/*). Three things are kept apart on purpose: numerical forecasts
+// (TimesFM, Chronos-2), the GLM interpretation and its directional signal (never a price forecast), and the V2
+// production prediction (baseline -> bounded GLM adjustment -> final). Unknown or missing is never shown as fine.
+var GLM_CLASS_LABELS = {
+  original_source: 'Original source', gemini_interpretation: 'V1 Gemini interpretation', v1_ai_interpretation: 'V1 model interpretation',
+  v1_aggregate: 'V1 calculation', collector_evidence: 'Evidence collector', market_data: 'Market data', v2_prediction: 'V2 prediction record',
+  v2_sentiment: 'V2 sentiment', forecast_timesfm: 'TimesFM 2.5 forecast', forecast_chronos: 'Chronos-2 forecast',
+};
+var GLM_CLASS_ORDER = ['forecast_timesfm', 'forecast_chronos', 'market_data', 'v2_prediction', 'v2_sentiment', 'gemini_interpretation',
+  'original_source', 'v1_ai_interpretation', 'collector_evidence', 'v1_aggregate'];
+var GLM_REASON_TEXT = {
+  model_disabled: 'GLM inference is switched off (no model call)', skipped_budget: 'no Neuron budget available', quota_exhausted: 'free Neuron allocation exhausted',
+  model_unavailable: 'model unavailable', timeout: 'model did not answer in time', invalid_output: 'model output failed validation', failed: 'run failed',
+  duplicate_package: 'identical inputs already analysed', inputs_degraded: 'inputs degraded', no_conclusion: 'GLM reached no conclusion',
+  insufficient_evidence: 'GLM: insufficient evidence', neutral: 'GLM saw no directional case', no_live_model_forecast: 'no live TimesFM/Chronos forecast for this horizon',
+  corroboration_below_2_families: 'support from fewer than 2 independent evidence families', no_fresh_support: 'no supporting item from the last 24 h',
+  contradicted: 'contradicting evidence at least as broad as the support', models_oppose: 'both forecasting models point the other way',
+  models_oppose_downgraded: 'both models oppose: strength reduced', first_day_candidate: 'first day in this direction (needs 2 consecutive days)',
+  persistent_2_days: 'same direction 2 days in a row', expired_or_not_yet_valid: 'outside the signal validity window', shadow_cap_0: 'shadow mode: not applied',
+  candidate_not_applied: 'candidate: never applied', applied: 'applied within the cap', asset_out_of_scope: 'asset not in GLM scope', no_signal: 'no signal',
+};
+function glmReasonText(code){ return GLM_REASON_TEXT[code] || String(code || ''); }
+function glmStatusModel(res){
+  if(!res || !res.ok || !res.data) return { state: 'unavailable', tone: 'bad', label: 'UNAVAILABLE', note: 'GLM status could not be loaded. Nothing is shown in its place.', blockers: [] };
+  const d = res.data, f = d.flags || {};
+  const run = d.last_run || null;
+  const mode = f.mode === 'active' && f.influence_cap > 0 ? 'active' : 'shadow';
+  return {
+    state: 'ok', mode, tone: mode === 'active' ? 'warn' : 'neutral', label: mode === 'active' ? 'ACTIVE (cap ' + f.influence_cap + ')' : 'SHADOW',
+    signalEnabled: !!f.signal_enabled, inferenceEnabled: !!f.inference_enabled, tickHook: !!f.tick_hook_enabled,
+    blockers: Array.isArray(d.blockers) ? d.blockers : [],
+    lastRun: run ? { id: run.run_id, cutoff: flNum(run.decision_cutoff_ts), finished: flNum(run.finished_ts), status: run.status, statusText: glmReasonText(run.status),
+      items: flNum(run.n_items), excluded: flNum(run.n_excluded), bytes: flNum(run.package_bytes), model: run.model || null } : null,
+    counts: d.counts || {}, versions: d.versions || {}, thresholds: d.adjustment && d.adjustment.thresholds ? d.adjustment.thresholds : 'provisional',
+  };
+}
+function glmSignalModel(sig, now){
+  if(!sig) return { state: 'none', direction: 'NO_SIGNAL', tone: 'neutral', label: 'NO SIGNAL', reasons: ['no signal recorded yet'] };
+  const dir = sig.direction === 'UP' || sig.direction === 'DOWN' ? sig.direction : 'NO_SIGNAL';
+  const valid = dir !== 'NO_SIGNAL' && now >= sig.valid_from_ts && now < sig.valid_until_ts;
+  const expired = dir !== 'NO_SIGNAL' && now >= sig.valid_until_ts;
+  return {
+    state: 'ok', id: sig.signal_id, runId: sig.run_id, horizon: sig.horizon_hours, direction: dir, strength: sig.strength || null, eligibility: sig.eligibility,
+    proposed: sig.proposed_direction ? sig.proposed_direction + (sig.proposed_strength ? ' (' + sig.proposed_strength + ')' : '') : null,
+    tone: dir === 'NO_SIGNAL' ? 'neutral' : (sig.eligibility === 'ELIGIBLE' ? 'warn' : 'neutral'),
+    label: dir === 'NO_SIGNAL' ? 'NO SIGNAL' : dir + ' · ' + sig.eligibility + (expired ? ' · EXPIRED' : ''),
+    valid, expired, cutoff: flNum(sig.decision_cutoff_ts), validUntil: flNum(sig.valid_until_ts),
+    reasons: (Array.isArray(sig.reasons) ? sig.reasons : []).map(glmReasonText),
+    supportingFamilies: Array.isArray(sig.supporting_families) ? sig.supporting_families : [],
+    contradictingFamilies: Array.isArray(sig.contradicting_families) ? sig.contradicting_families : [],
+    supportingRefs: Array.isArray(sig.supporting_refs) ? sig.supporting_refs : [], contradictingRefs: Array.isArray(sig.contradicting_refs) ? sig.contradicting_refs : [],
+    wouldApply: flNum(sig.would_apply), referenceCap: flNum(sig.reference_cap), modelsLive: !!sig.models_live, runStatus: sig.run_status || null,
+  };
+}
+// Baseline -> adjustment -> final per served BTC 24 h prediction, with the realized outcome once resolved. Each value is
+// what was recorded; nothing is recomputed here. `hitBase` / `hitShadow` compare the 0.5 side with the outcome.
+function glmAdjustmentRows(res){
+  if(!res || !res.ok || !res.data || !Array.isArray(res.data.adjustments)) return null;
+  return res.data.adjustments.map(a => {
+    const base = flNum(a.baseline_p_up), would = flNum(a.would_apply) || 0, fin = flNum(a.final_p_up);
+    const shadow = base === null ? null : Math.round(Math.min(Math.max(0.98, base), Math.max(Math.min(0.02, base), base + would)) * 1e6) / 1e6;
+    const resolved = a.realized_up === 0 || a.realized_up === 1;
+    return { ts: flNum(a.prediction_ts), base, baseSource: a.baseline_source || null, would, applied: flNum(a.applied) || 0, final: fin, shadow,
+      mode: a.mode, status: a.signal_status, reason: glmReasonText(a.reason), signalId: a.signal_id || null, resolved,
+      actualUp: resolved ? a.realized_up === 1 : null,
+      hitBase: resolved && base !== null ? (base >= 0.5) === (a.realized_up === 1) : null,
+      hitShadow: resolved && shadow !== null ? (shadow >= 0.5) === (a.realized_up === 1) : null };
+  });
+}
+// Evidence supplied to GLM, grouped by provenance class (fixed order), each item with its first-available time and
+// basis, independence key, and what it was derived from. Gemini interpretations stay separate from their originals.
+function glmEvidenceGroups(run){
+  if(!run || !Array.isArray(run.input_refs)) return [];
+  const by = {};
+  for(const r of run.input_refs){ (by[r.class] = by[r.class] || []).push(r); }
+  const keyCount = {};
+  for(const r of run.input_refs) keyCount[r.key] = (keyCount[r.key] || 0) + 1;
+  return GLM_CLASS_ORDER.concat(Object.keys(by).filter(c => GLM_CLASS_ORDER.indexOf(c) < 0)).filter(c => by[c]).map(c => ({
+    cls: c, label: GLM_CLASS_LABELS[c] || c, interpretation: c === 'gemini_interpretation' || c === 'v1_ai_interpretation',
+    items: by[c].map(r => ({ ref: r.ref, table: r.table, id: r.id, family: r.family, fa: flNum(r.fa), basis: r.basis || null,
+      sharedKey: keyCount[r.key] > 1, duplicateOf: r.dup || null, derivedFrom: Array.isArray(r.derived_from) ? r.derived_from : [] })),
+  }));
+}
+// API base: production by default; ?api=staging switches to the staging Worker (testing only; never persisted).
+function apiBaseFor(search){
+  const q = String(search || '');
+  return /(^|[?&])api=staging(&|$)/.test(q) ? 'https://pulseworker-v2-staging.quiquandon.workers.dev' : 'https://pulseworker-v2.quiquandon.workers.dev';
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -1551,7 +1663,7 @@ async function loadVariantCycle(){
 
 // ---- Experiments: EXP-002 prospective comparison (counts and plan facts only) ----
 
-const WORKER_URL = 'https://pulseworker-v2.quiquandon.workers.dev';
+const WORKER_URL = apiBaseFor(typeof location !== 'undefined' ? location.search : '');
 
 // setDot() removed along with its only callers (checkWorker/checkDb/the
 // modelStatus dots), which all went with the status pill.
@@ -2502,6 +2614,11 @@ async function loadForecastLabIfNeeded(force){
     getJson(WORKER_URL + '/research/timesfm-recent?horizon=12&limit=500'), getJson(WORKER_URL + '/research/timesfm-recent?horizon=24&limit=500'),
     getJson(FL_LEDGER_URL), getJson(WORKER_URL + COIN_CONFIG.BTC.chart), getJson(FL_PEV1_URL),
     getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=30d')]);
+  const [gStatus, gSignals, gAdj] = await Promise.all([getJson(WORKER_URL + '/api/glm/status'),
+    getJson(WORKER_URL + '/api/glm/signals?horizon=24&limit=14'), getJson(WORKER_URL + '/api/glm/adjustments?limit=24')]);
+  const lastRunId = gStatus.ok && gStatus.data && gStatus.data.last_run ? gStatus.data.last_run.run_id : null;
+  const gRun = lastRunId ? await getJson(WORKER_URL + '/api/glm/run?id=' + encodeURIComponent(lastRunId)) : { ok: false, error: 'no run yet' };
+  _fl.glm = { status: gStatus, signals: gSignals, adj: gAdj, run: gRun };
   _fl.data = { t12, t24, led, prices, pev1, sent,
     timesfm: [...flTimesfmRows(t12), ...flTimesfmRows(t24)].sort((a, b) => a.originTs - b.originTs),
     chronos: flChronosRows(led), runs: led.ok && led.data && Array.isArray(led.data.recent_runs) ? led.data.recent_runs : null };
@@ -2518,11 +2635,61 @@ function renderForecastLab(){
   src.push(D.led.ok ? `Chronos-2: ${D.chronos.length} forecasts (ledger built ${fmtUtc(D.led.data.generated_ts)})` : 'Chronos-2: ledger not available (' + (D.led.error || 'error') + ')');
   document.getElementById('flStatus').textContent = src.join(' · ');
   renderFlCards(now);
+  renderGlmPanel(now);
   renderFlMain(now, H);
   renderFlPerformance(now, H);
   renderFlAgreement();
   renderFlSentiment(now);
   renderFlLedger();
+}
+function renderGlmPanel(now){
+  const G = _fl.glm, D = _fl.data;
+  if(!G) return;
+  const st = glmStatusModel(G.status);
+  document.getElementById('glmModeChip').innerHTML = chip(st.label, st.tone);
+  const line = (k, v) => `<div class="flex justify-between gap-3 py-0.5"><dt class="text-[#8A9599]">${k}</dt><dd class="text-right font-mono-data text-[#E1E2E7] min-w-0 break-words">${v}</dd></div>`;
+  if(st.state !== 'ok'){
+    document.getElementById('glmStatus').textContent = st.note;
+    for(const id of ['glmForecasts', 'glmSignal', 'glmAdjust', 'glmEvidence', 'glmHistory']) document.getElementById(id).innerHTML = '<p class="text-[#BAC9CD]">Unavailable.</p>';
+    return;
+  }
+  const lr = st.lastRun;
+  document.getElementById('glmStatus').innerHTML = [
+    lr ? `Last run ${esc(fmtUtc(lr.cutoff))} cutoff · ${esc(lr.statusText)} · ${lr.items ?? '—'} inputs (${lr.excluded ?? 0} excluded) · ${lr.bytes ?? '—'} bytes` : 'No GLM run recorded yet.',
+    `inference ${st.inferenceEnabled ? 'on' : 'off'} · tick record ${st.tickHook ? 'on' : 'off'} · thresholds ${esc(st.thresholds)}`,
+  ].join(' · ') + (st.blockers.length ? `<ul class="list-disc pl-4 mt-1 text-[#FBBF24]">${st.blockers.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : '');
+  // 1. numerical forecasts: the same latest 24 h rows the cards above use (never re-derived from GLM)
+  const lastOf = rows => rows.filter(r => r.horizon === 24).sort((a, b) => b.originTs - a.originTs)[0] || null;
+  const tf = D && D.timesfm ? lastOf(D.timesfm) : null, ch = D && D.chronos ? lastOf(D.chronos) : null;
+  const fRow = (name, r) => r ? line(name, `${esc(r.direction)} ${flPp(r.predRet)} · target ${esc(fmtUtc(r.targetTs))}${r.q10 !== null && r.q10 !== undefined ? ` · q10–q90 ${flUsd(r.q10)}–${flUsd(r.q90)}` : ' · no interval supplied'}`) : line(name, 'missing');
+  document.getElementById('glmForecasts').innerHTML = `<dl>${fRow('TimesFM 2.5', tf)}${fRow('Chronos-2', ch)}</dl><p class="text-[10px] text-[#8A9599] mt-1">Numbers from the forecast models, unchanged. TimesFM supplies no uncertainty interval.</p>`;
+  // 2. signal
+  const sigs = G.signals.ok && G.signals.data && Array.isArray(G.signals.data.signals) ? G.signals.data.signals : null;
+  const sm = glmSignalModel(sigs && sigs[0], now);
+  document.getElementById('glmSignal').innerHTML = sigs === null ? '<p class="text-[#BAC9CD]">Signals unavailable.</p>' :
+    `<div class="flex items-center gap-2 flex-wrap">${chip(sm.label, sm.tone)}${sm.strength ? chip(sm.strength, 'neutral') : ''}</div>
+     <dl class="mt-2">${line('Cutoff', esc(fmtUtc(sm.cutoff)))}${line('Valid until', esc(fmtUtc(sm.validUntil)))}${sm.proposed ? line('GLM proposed', esc(sm.proposed)) : ''}
+     ${line('Supporting families', esc(sm.supportingFamilies.join(', ') || '—'))}${line('Contradicting families', esc(sm.contradictingFamilies.join(', ') || '—'))}
+     ${line('Live model forecast', sm.modelsLive ? 'yes' : 'no')}${line('Would apply (reference cap)', sm.wouldApply ? (sm.wouldApply > 0 ? '+' : '') + (sm.wouldApply * 100).toFixed(2) + ' pp' : '0')}</dl>
+     <ul class="list-disc pl-4 mt-1 text-[#BAC9CD]">${(sm.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+     <p class="text-[10px] text-[#8A9599] mt-1">An interpretation of the evidence, not a forecast. NO SIGNAL means no directional view, never bearish or bullish.</p>`;
+  // 3. V2 production
+  const rows = glmAdjustmentRows(G.adj);
+  document.getElementById('glmAdjust').innerHTML = rows === null ? '<p class="text-[#BAC9CD]">Adjustment record unavailable.</p>' : (!rows.length ? '<p class="text-[#BAC9CD]">No adjustment recorded yet (the per-tick record is off until it is measured on staging).</p>' :
+    `<ul class="space-y-1">${rows.slice(0, 8).map(r => `<li class="flex justify-between gap-2"><span class="text-[#8A9599]">${esc(fmtUtc(r.ts))}</span><span class="font-mono-data text-right">${flPct(r.base)} <span class="text-[#8A9599]">(${esc(r.baseSource || '')})</span> → ${(r.applied * 100).toFixed(2)} pp → <span class="text-[#E1E2E7]">${flPct(r.final)}</span>${r.mode === 'shadow' && r.would ? ` <span class="text-[#8A9599]">[shadow ${(r.would * 100).toFixed(2)} pp]</span>` : ''}${r.resolved ? ` · ${r.actualUp ? 'UP' : 'DOWN'}` : ''}</span></li>`).join('')}</ul>
+     <p class="text-[10px] text-[#8A9599] mt-1">Baseline is the value the dashboard shows. In shadow mode final = baseline; the shadow column is what the reference cap would have applied.</p>`);
+  // evidence drill-down
+  const run = G.run.ok && G.run.data ? G.run.data.run : null;
+  const groups = glmEvidenceGroups(run);
+  const out = run && run.output ? run.output : null;
+  document.getElementById('glmEvidence').innerHTML = !run ? `<p class="text-[#BAC9CD]">${esc(G.run.error || 'No run detail available.')}</p>` :
+    groups.map(g => `<div class="mt-2"><div class="font-semibold ${g.interpretation ? 'text-[#FBBF24]' : 'text-[#E1E2E7]'}">${esc(g.label)} <span class="text-[#8A9599] font-normal">(${g.items.length})</span>${g.interpretation ? ' <span class="text-[#8A9599] font-normal">— model interpretation, not original evidence</span>' : ''}</div>
+      <ul class="mt-1 space-y-0.5">${g.items.map(it => `<li class="flex justify-between gap-2 flex-wrap"><span class="font-mono-data break-all">${esc(it.ref)}</span><span class="text-[#8A9599]">${esc(it.table)} · ${esc(fmtUtc(it.fa))} (${esc(it.basis || '?')})${it.sharedKey ? ' · same story as another item' : ''}${it.derivedFrom.length ? ' · from ' + esc(it.derivedFrom.join(', ')) : ''}${it.duplicateOf ? ' · duplicate of ' + esc(it.duplicateOf) : ''}</span></li>`).join('')}</ul></div>`).join('') +
+    (out && Array.isArray(out.gemini_vs_original) && out.gemini_vs_original.length ? `<div class="mt-3"><div class="font-semibold text-[#E1E2E7]">Gemini summary vs original</div><ul class="mt-1">${out.gemini_vs_original.map(g => `<li>${esc(g.gemini_ref)} ↔ ${esc(g.original_ref || 'no original')}: ${esc(g.relation)}</li>`).join('')}</ul></div>` : '') +
+    (out && Array.isArray(out.findings) ? `<div class="mt-3"><div class="font-semibold text-[#E1E2E7]">Findings</div><ul class="mt-1 space-y-0.5">${out.findings.map(f => `<li>${chip(f.type, 'neutral')} ${esc(f.claim)} <span class="text-[#8A9599]">[${(f.refs || []).map(esc).join(', ')}]</span></li>`).join('')}</ul></div>` : '');
+  // history
+  document.getElementById('glmHistory').innerHTML = sigs === null ? '<p class="text-[#BAC9CD]">Unavailable.</p>' : (!sigs.length ? '<p class="text-[#BAC9CD]">No signals yet.</p>' :
+    `<table class="w-full text-left"><thead class="text-[#8A9599]"><tr><th class="pr-2">Cutoff</th><th class="pr-2">Signal</th><th class="pr-2">Run</th><th>Reasons</th></tr></thead><tbody>${sigs.map(x => { const m = glmSignalModel(x, now); return `<tr class="border-t border-[#3B494C]"><td class="pr-2 whitespace-nowrap">${esc(fmtUtc(m.cutoff))}</td><td class="pr-2 whitespace-nowrap">${esc(m.label)}</td><td class="pr-2">${esc(x.run_status || '—')}</td><td>${esc(m.reasons.join('; '))}</td></tr>`; }).join('')}</tbody></table>`);
 }
 function renderFlCards(now){
   const D = _fl.data;

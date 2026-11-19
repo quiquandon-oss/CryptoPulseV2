@@ -1,0 +1,83 @@
+# A2 audit: V1 source-level info + V2 evidence collector (read-only, PulseWorkerV2 main @ e7e10f4)
+Paths relative to /home/user/quiquandon-oss/pulseworkerv2. V1 repo (sentiment-ff75) is NOT in this clone; V1 facts below are inferred from V2 readers, migrations, tests.
+
+## A. How V2 reads V1
+| Channel | Where read | Fields visible | Granularity | Times | Raw text/URL? | Family |
+|---|---|---|---|---|---|---|
+| `history.sources_json` (V1 table, not in migrations; docs/SENTIMENT_V2_ARCHITECTURE_MAP.md:26) | worker.js:6581 (last 50), 13018 (archive sync), exp005 run_experiment.py:282, exp009 :295, exp010 :230 | `ts, score, sources_json, technical_score, gold_regime` | per-source scalar score 0-100 keyed by source id (derived/aggregated: already a per-source reading of V1 lexicon/indicator, no inputs) | `ts` = observation (reading) time only | NO | none in V1 data; V2 assigns (worker.js sv2Config().families 12247-12260) |
+| `research_sentiment_archive` (mig 0015) | worker.js:8626, 8653, 13191, 13364; written by sync worker.js:12966-13060 (48h window, 100 rows, INSERT OR IGNORE) and Python research/experiment5_pipeline.py | `observation_ts, sources_json, score, technical_score, btc_price (NULL when copied by Worker), gold_regime, source_weights_version ('v1-unversioned'), schema_version ('exp5-v1'), written_by, content_hash, archived_ts` | same as history (copy; append-only by convention, UNIQUE observation_ts) | observation_ts (reading), archived_ts (copy time). content_hash covers ts, sources_text, score etc. | NO | none |
+| `server_composite_readings.provenance_json.sources` (V1 table, hourly scomp-v1; worker.js:13070-13105, SQL 13090) | opt-in SV2_V1_SERVER_INPUT=1 | per slot: `slot_ts, computed_ts, version, weights_version, composite, composite_exact, completeness, below_floor, n_ok, n_missing, provenance_json`. provenance sources[] per fixture (tests/sv2-server-v1-input.test.js:~58): `{id, score, base_weight, confidence, boost, observed_at}`, plus `missing[{id, base_weight, reason}]`, `formula_version`, `collector` | per-source score + weight/confidence (derived); only id+score are consumed by V2 (json_group_object) | `slot_ts`, `computed_ts` (after all sources fetched), per-source `observed_at` (fixture shows observed_at = slot ts; real semantics unverified, likely fetch time not publication) | NO | none |
+| /api calls to sentiment-ff75 | none from worker.js code (grep ff75: only comments worker.js:3310, 6344, 11853; EVENT_DETECTION.md:265 curls /risk-regime, a doc step, not code) | - | - | - | - | - |
+| V1 headline lexicon | sentiment-v2/evidence-score.js:1-30 copies V1 SCOMP_SENT_LEXICON | scoring rule only | - | - | - | - |
+
+Known V1 source ids (research/source_intelligence.py:~24): fng, funding, longshort, global, cryptonews, macrogeo, geopolitics, regulatory, sosovalue, onchain, oil, yield10y, usd, nasdaq, sp500, ninemag, foufi, etfflows, hypefunding, gold, strc, hloi (+ riskregime per worker.js:8265, 22 vs 21 count inconsistent in docs). V2 families (worker.js:12247): market_sentiment_news[fng,cryptonews,foufi]; derivatives_positioning[funding,longshort,hypefunding,hloi]; institutional_flows_etf[etfflows,sosovalue]; onchain_activity[onchain]; macroeconomic[macrogeo,yield10y,usd,oil,gold]; cross_asset_equities[nasdaq,sp500,ninemag]; market_structure_breadth[global]; regulation_geopolitics[regulatory,geopolitics]; corporate_treasury_catalysts[strc]. Classification is V2-side, by hand; no family in V1 data; riskregime not in any family.
+
+NOT available from V1 data: raw headlines/excerpts/article URLs behind cryptonews/regulatory/geopolitics/macrogeo; publisher identity per reading (the BBC/Cointelegraph/CoinDesk/TheBlock/Investing feeds are known from collector comments collector.js:11 and research/evidence_collector.py:34-40, not recorded in readings); source publication time; fetch-vs-publication distinction; retrieval status/failures per reading in history/archive (server provenance has `missing[].reason` only); item counts/hits behind a score; raw values (funding rate, F&G raw) vs normalised score; browser-vs-server origin only inferable (archive=browser, server table = server); history capped at 500 rows by V1 DELETE (mig 0015 header) -> archive is the only long copy; archive rows are only ~6/day (browser-open only, worker.js:13071-13073); server readings 1/h.
+
+## B. Evidence collector (sentiment-v2/collector.js, SV2_COLLECTOR_VERSION 'sv2-collector-1', table mig 0029)
+Source registry (collector.js:19-32), RSS/Atom or official JSON only, no search/crawl/keys:
+| id | family | kind | URL | interval_min | freshness_h | notes |
+|---|---|---|---|---|---|---|
+| decrypt | market_sentiment_news | rss | decrypt.co/feed | 180 | 24 | |
+| bitcoinmagazine | market_sentiment_news | rss | bitcoinmagazine.com/.rss/full/ | 180 | 24 | DISABLED in wrangler.toml:44 and staging:55 (SV2_SOURCES_DISABLED) |
+| cryptoslate | market_sentiment_news | rss | cryptoslate.com/feed/ | 180 | 24 | |
+| sec_press | regulation_geopolitics | rss | sec.gov/news/pressreleases.rss | 480 | 168 | needs EVENT_SEC_USER_AGENT else NOT_CONFIGURED |
+| cftc_press | regulation_geopolitics | rss | cftc.gov/RSS/RSSGP/rssgp.xml | 480 | 168 | |
+| fed_press | macroeconomic | rss | federalreserve.gov/feeds/press_all.xml | 480 | 168 | |
+| ecb_press | macroeconomic | rss | ecb.europa.eu/rss/press.html | 480 | 168 | |
+| mstr_8k | corporate_treasury_catalysts | sec_submissions JSON | data.sec.gov/submissions/CIK0001050446.json (forms 8-K, 8-K/A) | 720 | 720 | max_bytes 384 KiB, runs alone |
+Freshness groups: 24h, 168h, 720h (worker.js:13224). Every entry has `v1_overlap: null`; V1 feeds (Cointelegraph, CoinDesk, The Block, BBC, Investing) are deliberately excluded (collector.js:11-13). No source reliability weight in registry; no regional/language/credibility metadata beyond family.
+
+Evidence record `sv2_evidence` (mig 0029, insert collector.js:~395): evidence_id = 'ev_'+sha256(canonical URL)[:32] (PK, INSERT OR IGNORE); source_id; family; canonical_url (https, no www, tracking params stripped, sorted query; sv2CanonicalUrl ~l.310); title (<=300); summary (<=600, tags stripped; SEC items synthesised from listed fields); published_ts (publisher time; NULL if absent or >now+5min); retrieved_ts (collector run time = point-in-time bound); title_hash = sha256(normalised title); content_hash = sha256(canon\ntitle\nsummary\npub); dup_of (cross-source same-title within 7 d, excluded from scoring); collector_version. NO: asset tag, sentiment score per item, raw body, language, author, feed/item GUID, ETag per item, first-available distinct from retrieved_ts, reliability per item. Asset relevance is not tagged (generic crypto/macro; scored by V1 lexicon on whole headline batch: evidence-score.js minHits 2).
+Dedup: URL hash PK; title-hash across sources (7 d); within-source same-title different URL not caught; content_hash not used for dedup, not unique.
+Run/status/failure: `sv2_source_state` (per source: last_attempt_ts, last_success_ts, last_status, last_error, consecutive_failures, ok_count, fail_count, last_new_items, etag, last_modified), `sv2_collection_runs` (run_ts PK, sources_json per-source status/items/new/dup/bytes/error, items_seen/new/duplicate, subrequests, bytes, errors_json). Statuses: OK, NOT_MODIFIED, NOT_CONFIGURED, BLOCKED_URL, BUDGET_EXHAUSTED, NETWORK_ERROR, HTTP_ERROR, RATE_LIMITED, TOO_LARGE, BAD_CONTENT_TYPE, PARSE_ERROR, STORE_ERROR, BAD_REDIRECT, TOO_MANY_REDIRECTS, FETCH_ERROR. Exponential backoff 2^min(fails,4) up to 16x. Run rows keep only last attempt state per source (no per-attempt history beyond runs table; runs PK run_ts so one row per ms).
+Bounds (collector.js:35-51): <=3 sources/run, <=8 subrequests, 256 KiB/response, 768 KiB/run (+extra for big source up to 1 MiB), 8 s timeout, 1 retry (not on 429), 2 redirects, 25 items/feed, title 300, summary 600; SSRF allowlist https/host registry; D1 query budget 2+3/feed; plus D1 daily usage guard (worker.js:11865-11897: stops at 50% of free reads/writes; stops if usage unreadable/stale).
+When: Worker hourly cron `0 * * * *` on non-tick hours only (hours not divisible by 3; wrangler.toml:86, worker.js:11733), SV2_COLLECTOR_ENABLED=1 in prod and staging; owner run route worker.js:10918. Capacity ~48 fetches/day. Flag-off => no evidence read, V2 V1-only. Written tables sv2_* only.
+Use downstream: sv2EvidenceReadings (evidence-score.js) per source at decision t: retrieved_ts<=t, not dup, evidence time = published_ts if <= retrieved_ts else retrieved_ts; states fresh/insufficient/stale/missing. Result stores `supporting_ids` as `evidence:<evidence_id>` and usage.evidence_rows (worker.js:13300-13320); AI package carries title, URL, published/retrieved (sv2EvidenceItemsForAi worker.js:12670). The scored evidence readings are ephemeral (in sentiment_v2_results.family_json, not stored per evidence item).
+
+Separate research evidence collection (duplication risk)
+| | research/evidence_collector.py + live-evidence-collection.yml | sentiment-v2/collector.js |
+|---|---|---|
+| Table | research_event_evidence (mig 0007): evidence_id INTEGER autoinc, event_id FK, feed_url, article_url (raw, not canonical), publisher, publication_ts NOT NULL, collection_ts, headline, keyword_score, evidence_relation (PRE/SAME/POST_EVENT), content_hash sha256(publisher, url, pub_ts, headline), UNIQUE(event_id, content_hash) | sv2_evidence |
+| Feeds | 5 fixed: Cointelegraph, Investing.com Economy (news_14), BBC World, CoinDesk, The Block (exactly V1's feeds) | 8 distinct sources, none of V1's |
+| Trigger | GitHub Actions every 6 h (`0 */6 * * *`), event-driven window [-48h,+24h] around research_events (PR3 events); needs pytest + D1 via wrangler | Worker hourly non-tick cron, continuous, not event-driven |
+| Time fields | publication_ts, collection_ts (items without parseable pubDate are dropped, not stored) | published_ts (nullable), retrieved_ts |
+| Status/failure | counters in-run only; no per-source state table | sv2_source_state + sv2_collection_runs |
+| Scope | research only; header says 0 rows in production when PR59 was written (research/event_source_relevance.py header; verify current) | feeds V2 scoring |
+Duplication: both fetch RSS and keep headlines independently; two ID schemes (INTEGER autoinc vs ev_ sha256), two hash definitions, two canonicalisations (collector.js sv2CanonicalUrl vs raw URL), no shared URL set, no FK. Research collector overlaps V1's feeds by construction, V2 collector avoids them, so the two stores are disjoint by publisher. Also a third event path: events/ (event_ledger mig 0023: source, source_url, source_ts, detected_ts, evidence_json, freshness_ms; adapters deribit, liquidations, macro, sec-edgar) which fetches SEC EDGAR too (EVENT_DETECTION.md) while collector mstr_8k also reads EDGAR submissions (same EVENT_SEC_USER_AGENT): overlap on SEC accession data not linked. event_documents stores processed SEC accession numbers.
+exp005/009/010: all read only history (+btc_data, predictions, research_events, research_event_evidence) via D1 REST, write research_analyses; exp005 per-source score vs BTC outcome; exp009 joins event x source x research_event_evidence (topic-affinity bridge in research/event_source_relevance.py maps V1 source key to feed category by text, not by ID); exp010 source dialogue. None reads sv2_*.
+
+## C. Temporal fields stored
+| Concept | V1 data (history/archive/server) | V2 evidence (sv2_evidence) | research evidence | event_ledger | sentiment_v2_results | predictions/exp |
+|---|---|---|---|---|---|---|
+| Event time | no | no | no (event_ts in research_events) | source_ts | - | - |
+| Publication time | NO | published_ts (nullable) | publication_ts | source_ts (source-defined) | - | - |
+| Retrieval / fetch time | per-source `observed_at` (server prov only, semantic unverified) | retrieved_ts | collection_ts | detected_ts | - | - |
+| First-available time | NO (observation_ts is composite time) | not separate; retrieved_ts used as proxy, but item may have been published earlier and first seen later: first-seen = retrieved_ts only if the collector ran when it appeared (interval 3-12 h lag) | no | detected_ts (first detection wins) | - | - |
+| Reading / observation time | ts / observation_ts / computed_ts, slot_ts | - | - | - | decision_ts = V1 observation_ts | predictions.ts |
+| Archive/ingest time | archived_ts | retrieved_ts | collection_ts | created_ts | created_ts | - |
+| Decision time | - | - | - | - | decision_ts | prediction ts |
+| Forecast creation/cutoff | - | - | - | - | created_ts (cycle write time); no explicit information cutoff column | prediction ts; research/evidence_temporal.py is_predictive_eligible uses publication_ts < prediction_ts |
+| Target time | - | - | - | - | none (horizonMs in config only, 24h) | predictions.target_ts, experiment_4_timesfm.target_ts |
+| Resolution time | - | - | - | expires_ts | none | experiment_4_timesfm.resolved_ts, predictions.realized_up |
+Missing: V1 source publication time; V1 first-available; evidence first_seen vs retrieved distinction; an explicit `information_cutoff_ts` on sentiment_v2_results; per-evidence-item scores and the evidence-to-decision link table (only supporting_ids_json + family_json); evidence version/snapshot of text at retrieval (title/summary kept, but later edits not tracked; INSERT OR IGNORE keeps first); published_ts for items with no pubDate is NULL and retrieved_ts is used silently.
+
+## D. Overlap / linkage collector evidence <-> V1 source records
+- No shared IDs, URLs, hashes: V1 records have none (no URLs/headlines). Collector deliberately has v1_overlap null for all entries; no registry field maps evidence source to a V1 source id except family membership via V2 family names (e.g. decrypt -> market_sentiment_news with V1 cryptonews/fng/foufi). Family-level linkage only (worker.js sv2Config families vs registry family), not source-level.
+- Evidence is independent of V1 by design; V2 combines them as extra sources in the same family (evidence source ids `ev:<source_id>`, evidence-score.js).
+- Research evidence (research_event_evidence) shares publishers with V1 feeds, so it is the only store where V1 feed identity is recoverable, via topic-affinity bridge (research/event_source_relevance.py) with text rules, not IDs; article-level link to a V1 reading does not exist.
+- Time-only join possible: V1 observation_ts vs evidence retrieved_ts/published_ts within window (that is what V2 does), but no item-to-reading provenance.
+
+## Gap list
+1. V1 per-source readings carry no input provenance: no headline/URL/publisher, no counts, no raw value; cannot audit which articles drove cryptonews/regulatory/geopolitics.
+2. No V1 source publication time or retrieval status; `observed_at` in server provenance is the only per-source time and is unverified (fixture only; V1 repo not in clone).
+3. Archive density low (~6/day browser-only) and history capped at 500 rows; server table hourly but Worker scores only 1 per cycle (SV2_SERVER_V1_PER_CYCLE).
+4. No source-family tag in V1 data; families hand-defined in V2 (worker.js:12247); riskregime missing from families; 21 vs 22 known-source count inconsistency.
+5. Collector: no asset tag (BTC/ETH/etc), no per-item score stored, no body, no language/author/GUID; reliability only per source (state counters), not a graded reliability.
+6. first-available vs retrieved: collector polls every 3-12 h (and backoff), so retrieved_ts overstates availability delay; published_ts can be NULL or unreliable; no field for observed-first-seen distinct from "stored".
+7. Dedup gaps: same-title only across different sources; same-source different-URL duplicate not caught; content_hash non-unique and not used; canonicalisation differs from research collector.
+8. Only 8 sources (1 disabled in prod); 3 crypto-news RSS; regulatory/macro are press releases with 168 h freshness. No social, on-chain, or exchange evidence in collector.
+9. Two overlapping RSS collection systems (research Python/GHA vs Worker) plus event_ledger SEC adapter with unlinked ID schemes; no common evidence ID or URL canonicalisation.
+10. sentiment_v2_results lacks explicit information cutoff, target/resolution time and per-evidence contribution rows; only supporting_ids_json (capped maxIds=20) and family_json.
+11. Collector failure history is only last-state + per-run JSON (run_ts PK); no per-attempt rows, no stable run id, no raw fetch snapshot/hash of feed body.
+12. Unverified from code alone (needs D1/V1 repo, not queried): actual provenance_json schema in V1, row counts, whether research_event_evidence is still empty, whether mig 0029 is applied in prod.

@@ -664,14 +664,16 @@ test('GLM adjustments: baseline, shadow and final kept apart; hits computed only
 test('GLM evidence drill-down: grouped by class in fixed order; Gemini marked as interpretation; shared story keys flagged', () => {
   const run = { input_refs: [
     { ref: 'ev:1', class: 'collector_evidence', table: 'sv2_evidence', id: '1', family: 'news', key: 'url:https://a.com/x', fa: NOW - 5 * HOUR, basis: 'retrieved_ts' },
-    { ref: 'cat:2', class: 'gemini_interpretation', table: 'coin_catalyst_log', id: '2', family: 'news', key: 'url:https://a.com/x', fa: NOW - 6 * HOUR, basis: 'created_ts', derived_from: ['src:url:2'] },
+    { ref: 'cat:2', class: 'gemini_interpretation', table: 'coin_catalyst_log', id: '2', family: 'news', key: 'url:https://a.com/x', fa: NOW - 6 * HOUR, basis: 'created_ts', derived_from: ['src:url:2'], verification: 'original_linked' },
     { ref: 'tfm:9', class: 'forecast_timesfm', table: 'experiment_4_timesfm', id: '9', family: 'model_forecast', key: 'model:timesfm', fa: NOW - 14 * HOUR, basis: 'created_ts' },
   ] };
   const g = H.glmEvidenceGroups(run);
   assert.deepEqual(plain(g.map(x => x.cls)), ['forecast_timesfm', 'gemini_interpretation', 'collector_evidence']);
   assert.equal(g[1].interpretation, true);
-  assert.equal(g[1].label, 'V1 Gemini interpretation');
+  assert.equal(g[1].label, 'Existing Gemini interpretation (stored)');
   assert.deepEqual(plain(g[1].items[0].derivedFrom), ['src:url:2']);
+  assert.equal(g[1].items[0].verification, 'original_linked');
+  assert.equal(g[0].items[0].verification, null);
   assert.equal(g[1].items[0].sharedKey, true);
   assert.equal(g[0].items[0].sharedKey, false);
   assert.deepEqual(plain(H.glmEvidenceGroups(null)), []);

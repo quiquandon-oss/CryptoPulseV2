@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestDeposits, pfBackfillSnapshots };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestDeposits, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -205,7 +205,8 @@ test('page source: one write request, user-entered key only, no embedded secrets
   // Exactly three POSTs, each named: the analyst relay (pre-existing), Hyperliquid allMids (a read-only market-data
   // query that the API only offers as POST) and V1's /gemini-outlook (Narrative parity, only on an explicit click).
   const posts = SRC.match(/method:\s*['"]POST['"]/g) || [];
-  assert.equal(posts.length, 6, 'six POSTs: analyst relay, Hyperliquid allMids + 2 candleSnapshot reads (read-only market data), V1 Narrative and Trader Analysis (clicks)');
+  assert.equal(posts.length, 7, 'seven POSTs: analyst relay, Hyperliquid allMids + 3 candleSnapshot reads (read-only market data; one is the portfolio value history), V1 Narrative and Trader Analysis (clicks)');
+  assert.match(SRC, /type: 'candleSnapshot', req: \{ coin: a, interval: '1d'/);
   const tr = SRC.slice(SRC.indexOf('async function runTraderAnalysis()'), SRC.indexOf('// ---- Settings:'));
   assert.match(tr, /fetch\(V1_WORKER_URL \+ '\/trader-analysis-gemini', \{ method: 'POST'/);
   assert.match(SRC, /fetch\('https:\/\/api\.hyperliquid\.xyz\/info', \{ method: 'POST', headers: \{ 'Content-Type': 'application\/json' \}, body: JSON\.stringify\(\{ type: 'allMids' \}\) \}\)/);
@@ -855,7 +856,7 @@ test('page structure: backtests live in Research; Learning & Audit holds prospec
   // V1 is called on exactly three routes (contracts §4/§6/§8): the digest (GET), the user's own backup (GET, explicit
   // click with confirmation, security register S-10) and the Narrative (POST, explicit click). Nothing else.
   const v1Calls = (SRC.match(/V1_WORKER_URL \+ '[^']+'/g) || []).sort();
-  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/alert-configs'", "V1_WORKER_URL + '/alert-log?limit=50'", "V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/trader-analysis-gemini'", "V1_WORKER_URL + '/txs-backup'"]);
+  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/alert-configs'", "V1_WORKER_URL + '/alert-log?limit=50'", "V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/trader-analysis-gemini'", "V1_WORKER_URL + '/txs-backup'", "V1_WORKER_URL + '/txs-backup'"]);   // backup: import + "Check against V1" (both GET, explicit clicks)
   assert.doesNotMatch(SRC, /test-telegram|alert-configs\/toggle|alert-configs\/delete/, 'V2 never changes or tests V1 alerts');
   const imp = SRC.slice(SRC.indexOf('async function pfImportFromV1()'), SRC.indexOf('function pfDownload'));
   assert.match(imp, /if\(!confirm\(/, 'V1 backup read only after confirmation');
@@ -1219,18 +1220,40 @@ test('V1 embedded interest: one EUR deposit per month (the month’s accrual) in
   const store = { accounts: [{ id: 'n', name: 'Neverless' }], txs: [] };
   assert.equal(H.pfValidateTx({ id: 'i1', account_id: 'n', ...items[0].tx }, store, NOW + 400 * 86400000).length, 0);
 });
-test('V1 embedded prices: daily value history = holdings at the end of each day × that day’s price, only before existing snapshots', () => {
+test('daily value history: holdings at the end of each UTC day × that day’s price; a reversal voids its row on every day', () => {
   const e = H.pfParseV1Embedded(V1_PAGE);
   const seed = H.pfFromV1Backup({ txs: e.seedTxs }, 'V1 embedded data');
   assert.match(seed.items[0].tx.note, /V1 embedded data/);
   const store = { accounts: [{ id: 'n', name: 'Neverless' }, { id: 'r', name: 'Revolut' }], snapshots: [],
     txs: seed.items.map((it, k) => ({ id: 's' + k, account_id: it.accountName === 'Neverless' ? 'n' : 'r', ...it.tx })) };
   assert.equal(H.pfHasV1NeverlessSeed(store), true);
-  const snaps = H.pfBackfillSnapshots(store, e.priceHistory);
-  assert.deepEqual(plain(snaps.map((x) => [new Date(x.ts).toISOString().slice(0, 10), x.totalUsd, x.complete, x.source])), [
-    ['2026-04-11', 1440, true, 'v1_embedded_prices'], ['2026-04-12', 0.02 * 73000 + 3 * 11, true, 'v1_embedded_prices']]);   // 04-10: nothing held yet
-  store.snapshots = [{ ts: Date.parse('2026-04-12T08:00:00Z'), totalUsd: 1, complete: true }];
-  assert.equal(H.pfBackfillSnapshots(store, e.priceHistory).length, 1);
+  const h = H.pfDailyHistory(store, e.priceHistory, '2026-04-13');
+  assert.deepEqual(plain(h.map((x) => [new Date(x.ts).toISOString().slice(0, 10), x.totalUsd, x.complete])), [
+    ['2026-04-11', 1440, true], ['2026-04-12', 0.02 * 73000 + 3 * 11, true], ['2026-04-13', 0, false]]);   // no price on 04-13: partial
+  store.txs.push({ id: 'rv', type: 'reversal', reverses_id: 's1', ts: Date.UTC(2026, 10, 20) });
+  assert.equal(H.pfDailyHistory(store, e.priceHistory, '2026-04-12')[1].totalUsd, 0.02 * 73000);
+  assert.deepEqual(plain(H.pfCandlesToDaily([{ t: Date.UTC(2026, 6, 1), c: '61000.5' }, { t: 'x', c: 1 }, { t: Date.UTC(2026, 6, 2), c: '0' }])), { '2026-07-01': 61000.5 });
+});
+test('V1 alignment: Neverless statement rows on or before the seed date are planned for reversal only when V1’s seed is in the ledger', () => {
+  const day = (d) => Date.parse(d + 'T00:00:00Z');
+  const store = { accounts: [{ id: 'n', name: 'Neverless' }, { id: 'r', name: 'Revolut' }], txs: [
+    { id: 'seed', account_id: 'n', type: 'buy', asset: 'LINK', qty: 65.9, price: 16.9, price_ccy: 'EUR', ts: day('2026-04-11'), note: 'imported from V1 embedded data' },
+    { id: 'old1', account_id: 'n', type: 'buy', asset: 'LINK', qty: 600, price: 15, price_ccy: 'USD', ts: day('2025-10-01'), src_id: 'nlv:a' },
+    { id: 'old2', account_id: 'n', type: 'buy', asset: 'BTC', qty: 0.1, price: 90000, price_ccy: 'USD', ts: day('2026-04-11'), src_id: 'nlv:b' },
+    { id: 'new', account_id: 'n', type: 'buy', asset: 'LINK', qty: 2, price: 11, price_ccy: 'USD', ts: day('2026-08-23'), src_id: 'nlv:c' },
+    { id: 'rev', account_id: 'r', type: 'buy', asset: 'LINK', qty: 1, price: 8, price_ccy: 'EUR', ts: day('2026-01-01'), src_id: 'rev:x' }] };
+  assert.deepEqual(plain(H.pfV1RepairPlan(store)), ['old1', 'old2']);
+  store.txs.push({ id: 'r1', type: 'reversal', reverses_id: 'old1', ts: day('2026-11-20') });
+  assert.deepEqual(plain(H.pfV1RepairPlan(store)), ['old2']);
+  assert.deepEqual(plain(H.pfV1RepairPlan({ ...store, txs: store.txs.filter((t) => t.id !== 'seed') })), []);
+  const c = H.pfV1Compare([{ acct: 'Neverless', asset: 'LINK', type: 'buy', qty: 65.9 }, { acct: 'Neverless', asset: 'LINK', type: 'buy', qty: 2 },
+    { acct: 'Revolut', asset: 'LINK', type: 'buy', qty: 1 }], store);
+  assert.deepEqual(plain(c.rows.map((r) => [r.account, r.asset, r.match])), [['Neverless', 'BTC', false], ['Neverless', 'LINK', true], ['Revolut', 'LINK', true]]);
+  assert.equal(c.allMatch, false);
+});
+test('Neverless statements always skip rows up to V1’s starting balance (V1 rule), whatever the import order', () => {
+  assert.match(SRC, /const cutoff = fmt === 'neverless' \? PF_NEVERLESS_V1_SEED_DATE : null;/);
+  assert.match(SRC, /id="pfV1Check"/);
 });
 test('portfolio import UI: "Import V1 embedded data" reads V1’s public page; the data is not in V2’s source', () => {
   assert.match(SRC, /id="pfImportV1Embedded"/);

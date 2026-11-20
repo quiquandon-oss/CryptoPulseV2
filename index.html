@@ -2433,29 +2433,16 @@ function pfParseV1Embedded(html){
   grab('SEED_TXS', 'seedTxs', true); grab('INTEREST_EUR', 'interestEur', false); grab('PRICE_HISTORY', 'priceHistory', false);
   return out;
 }
-// Cumulative Neverless interest (EUR by day) → one EUR cash deposit per calendar month (that month's accrual), dated the
-// month's last day in the series. Source ids make re-imports add nothing.
-function pfV1InterestDeposits(interestEur){
-  const days = Object.keys(interestEur || {}).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && pfNum(interestEur[d]) !== null).sort();
-  const items = []; let prev = 0;
-  const months = [...new Set(days.map((d) => d.slice(0, 7)))];
-  for(const mo of months){
-    const last = days.filter((d) => d.slice(0, 7) === mo).pop(), cum = pfNum(interestEur[last]), delta = Math.round((cum - prev) * 1e4) / 1e4;
-    prev = cum;
-    if(delta > 0) items.push({ line: items.length + 1, accountName: 'Neverless', tx: { ts: Date.parse(last + 'T00:00:00Z'), type: 'deposit', asset: 'EUR', qty: delta, price: null, price_ccy: '', fee: null, fee_ccy: null,
-      fx_to_usd: null, transfer_id: null, note: 'Neverless interest accrued in ' + mo + ' (V1 embedded series, cumulative €' + cum.toFixed(2) + ')', src_id: 'v1int:' + mo } });
-  }
-  return items;
-}
 // ---- V1 alignment. V1 always skips Neverless statement rows dated on or before its 2026-04-11 starting balance
 // (V1 NEVERLESS_SEED_CUTOFF); a ledger that took them in before that rule applied double counts. The plan lists the
 // rows to reverse (append-only: reversal rows, nothing deleted). ----
 function pfV1RepairPlan(store){
   const s = store || {}, accs = (s.accounts || []).filter((a) => a.name.toLowerCase() === 'neverless').map((a) => a.id);
-  if(!pfHasV1NeverlessSeed(s)) return [];
-  const reversed = new Set((s.txs || []).filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
-  return (s.txs || []).filter((t) => t.type !== 'reversal' && !reversed.has(t.id) && accs.includes(t.account_id) && /^nlv:/.test(t.src_id || '')
-    && new Date(t.ts).toISOString().slice(0, 10) <= PF_NEVERLESS_V1_SEED_DATE).map((t) => t.id);
+  const seed = pfHasV1NeverlessSeed(s), reversed = new Set((s.txs || []).filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
+  // Also the monthly EUR deposits an earlier V2 import made from V1's interest series: V2 now values that interest the
+  // way V1 does (accrued, in the portfolio value), so the deposits would count it twice in cash.
+  return (s.txs || []).filter((t) => t.type !== 'reversal' && !reversed.has(t.id) && ((seed && accs.includes(t.account_id) && /^nlv:/.test(t.src_id || '')
+    && new Date(t.ts).toISOString().slice(0, 10) <= PF_NEVERLESS_V1_SEED_DATE) || /^v1int:/.test(t.src_id || ''))).map((t) => t.id);
 }
 // Quantities per account and asset: V1 backup (buy +, sell −) against this ledger, counted only up to the last day V1's
 // backup has for that account (must match), with this ledger's newer movements shown apart (statements newer than V1).
@@ -2506,6 +2493,18 @@ function pfDailyHistory(store, dailyPrices, toDay){
 function pfCandlesToDaily(candles){
   const o = {}; for(const c of Array.isArray(candles) ? candles : []){ const t = pfNum(c && c.t), v = pfNum(c && c.c); if(t !== null && v !== null && v > 0) o[new Date(t).toISOString().slice(0, 10)] = v; }
   return o;
+}
+// V1 Neverless savings interest (V1 interestEUR): the cumulative EUR value of V1's embedded series on or before `day`;
+// after its last day, extended at the average daily increase of its last 5 days (V1: "AER ~4.08%, added daily").
+// V1 adds it to the portfolio value (converted at the current EUR/USD rate); it is not a cost.
+function pfV1InterestAt(series, day){
+  const ks = Object.keys(series || {}).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k) && pfNum(series[k]) !== null).sort();
+  if(!ks.length || !day) return 0;
+  let v = 0; for(const k of ks){ if(k <= day) v = series[k]; else break; }
+  const last = ks[ks.length - 1];
+  if(day > last){ const n = ks.length, span = Math.min(5, n - 1), inc = span > 0 ? (series[ks[n - 1]] - series[ks[n - 1 - span]]) / span : 0;
+    const nd = Math.max(0, Math.round((Date.parse(day + 'T00:00:00Z') - Date.parse(last + 'T00:00:00Z')) / 86400000)); v = series[last] + inc * nd; }
+  return v;
 }
 // ---- END view-model helpers ----
 
@@ -3863,7 +3862,8 @@ function pfPartial(t){ return t.complete ? '' : ' <span class="text-[10px] text-
 function pfSnapshot(m){
   const s = pfLoad(), last = s.snapshots[s.snapshots.length - 1];
   if(!m.positions.length || _pf.pricesErr || (last && Date.now() - last.ts < 3600000)) return;
-  s.snapshots.push({ ts: Date.now(), totalUsd: m.totals.valueUsd.value, complete: m.totals.valueUsd.complete });
+  const iu = pfInterestUsd(new Date().toISOString().slice(0, 10));
+  s.snapshots.push({ ts: Date.now(), totalUsd: m.totals.valueUsd.value + (iu || 0), complete: m.totals.valueUsd.complete && iu !== null, interest: true });
   if(s.snapshots.length > 3000) s.snapshots.splice(0, s.snapshots.length - 3000);
   pfSave();
 }
@@ -3890,11 +3890,14 @@ function pfMergedDailyPrices(s){
   for(const [a, o] of Object.entries(v1)) out[a] = { ...(out[a] || {}), ...o };
   return out;
 }
+// V1 rule: accrued Neverless interest (EUR) × the current EUR/USD rate; null when the rate is unknown.
+function pfInterestUsd(day){ const s = pfLoad(); if(!s.v1InterestEur) return 0; const eur = pfV1InterestAt(s.v1InterestEur, day); return eur > 0 ? (pfNum(_pf.fxNow) ? eur * _pf.fxNow : null) : 0; }
 function pfValueSeries(){
   const s = pfLoad(), today = new Date().toISOString().slice(0, 10), yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const key = [s.txs.length, (s.dailyPricesHl || {}).fetched_at, Object.keys(s.dailyPricesV1 || {}).length, yesterday].join('|');
-  if(_pf.histKey !== key){ _pf.hist = pfDailyHistory(s, pfMergedDailyPrices(s), yesterday); _pf.histKey = key; }
-  const live = s.snapshots.filter(x => x.source !== 'v1_embedded_prices' && x.ts >= Date.parse(today + 'T00:00:00Z'));
+  if(_pf.histKey !== key + '|' + _pf.fxNow){ _pf.hist = pfDailyHistory(s, pfMergedDailyPrices(s), yesterday).map((x) => { const iu = pfInterestUsd(new Date(x.ts).toISOString().slice(0, 10));
+      return { ...x, totalUsd: x.totalUsd + (iu || 0), complete: x.complete && iu !== null }; }); _pf.histKey = key + '|' + _pf.fxNow; }
+  const live = s.snapshots.filter(x => x.source !== 'v1_embedded_prices' && x.interest && x.ts >= Date.parse(today + 'T00:00:00Z'));
   return _pf.hist.concat(live);
 }
 async function loadPortfolio(force){
@@ -3926,13 +3929,13 @@ function renderPfHoldings(m){
   sel.onchange = () => { _pf.account = sel.value; renderPortfolio(); };
   const A = _pf.account ? m.accounts.find(a => a.id === _pf.account) : null;
   const positions = A ? A.positions : m.positions;
-  const t = m.totals;
+  const t = m.totals, today = new Date().toISOString().slice(0, 10), iEur = pfLoad().v1InterestEur ? pfV1InterestAt(pfLoad().v1InterestEur, today) : 0, iUsd = pfInterestUsd(today);
   const kpi = (k, v, sub) => `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2.5"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] text-base mt-0.5">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
   document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' : A
     ? kpi('Account', esc(A.name), esc(A.kind || '')) + kpi('Cash in account', A.cashUsd.complete ? pfMoney(A.cashUsd.usd) : 'partial', Object.entries(A.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none recorded')
-    : kpi('Market value', pfMoney(t.valueUsd.value) + pfPartial(t.valueUsd), 'current prices') +
+    : kpi('Market value', pfMoney(t.valueUsd.value + (iUsd || 0)) + pfPartial({ complete: t.valueUsd.complete && iUsd !== null }), iEur > 0 ? `current prices + Neverless interest €${iEur.toFixed(2)} (V1 accrual)` : 'current prices') +
       kpi('Cost basis of holdings', pfMoney(t.costUsd.value) + pfPartial(t.costUsd), 'what was paid for what is still held') +
-      kpi('Unrealised P&L', pfSigned(t.unrealizedUsd.value) + pfPartial(t.unrealizedUsd), 'market movement on holdings') +
+      kpi('Unrealised P&L', pfSigned(t.unrealizedUsd.value === null ? null : t.unrealizedUsd.value + (iUsd || 0)) + pfPartial({ complete: t.unrealizedUsd.complete && iUsd !== null }), iEur > 0 ? 'market movement + Neverless interest (as V1)' : 'market movement on holdings') +
       kpi('Realised P&L', pfSigned(t.realizedUsd.value) + pfPartial(t.realizedUsd), 'from sells, after fees') +
       kpi('Cash (dry powder)', t.cashUsd.complete ? pfMoney(t.cashUsd.usd) : 'partial', Object.entries(t.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'no deposits recorded');
   const neg = Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9);
@@ -3945,7 +3948,9 @@ function renderPfHoldings(m){
     <td class="px-2 font-mono-data text-right">${p.price === null ? '—' : pfMoney(p.price, p.price < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${pfMoney(p.valueUsd)}</td>
     <td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? (p.qty > 0 ? '<span class="text-[#8A9599]">FX missing</span>' : '—') : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td>
     <td class="px-2 font-mono-data text-right">${p.costUsd === null ? Object.entries(p.costByCcy).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' + ') : pfMoney(p.costUsd)}</td>
-    <td class="px-2 font-mono-data text-right">${pfSigned(p.unrealizedUsd)}</td><td class="px-2 font-mono-data text-right">${pfSigned(p.realizedUsd)}</td></tr>`).join('') || '<tr><td colspan="8" class="py-3 px-2 text-[#BAC9CD]">No holdings in this account.</td></tr>';
+    <td class="px-2 font-mono-data text-right">${pfSigned(p.unrealizedUsd)}</td><td class="px-2 font-mono-data text-right">${pfSigned(p.realizedUsd)}</td></tr>`).join('')
+    + (iEur > 0 && (!A || A.name.toLowerCase() === 'neverless') ? `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 font-semibold">EUR interest</td><td class="px-2 font-mono-data text-right">€${iEur.toFixed(2)}</td><td class="px-2 text-right text-[#8A9599]">EUR/USD ${pfNum(_pf.fxNow) ? _pf.fxNow.toFixed(4) : '—'}</td><td class="px-2 font-mono-data text-right">${iUsd === null ? '—' : pfMoney(iUsd)}</td><td colspan="4" class="px-2 text-[10px] text-[#8A9599]">Neverless savings interest, accrued daily as V1 does (V1's series, then ~€${(pfV1InterestAt(pfLoad().v1InterestEur, today) - pfV1InterestAt(pfLoad().v1InterestEur, new Date(Date.now() - 86400000).toISOString().slice(0, 10))).toFixed(4)}/day)</td></tr>` : '')
+    || '<tr><td colspan="8" class="py-3 px-2 text-[#BAC9CD]">No holdings in this account.</td></tr>';
   // Allocation (static: full screen, no time presets) and value history (time-based: presets + full screen).
   const alloc = A ? (() => { const h = A.positions.filter(p => p.valueUsd > 0), tv = h.reduce((s, p) => s + p.valueUsd, 0); return tv > 0 ? h.map(p => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : []; })() : m.allocation;
   document.getElementById('pfAllocNote').textContent = alloc.length ? alloc.map(a => `${a.asset} ${(a.share * 100).toFixed(1)}%`).join(' · ') + (alloc.length && alloc[0].share > 0.5 ? ' · concentration: one asset is over half the portfolio' : '') : 'No priced holdings to allocate.';
@@ -4200,13 +4205,13 @@ async function pfImportV1Embedded(){
   const run = pfImportCandidates(v1.items, 'v1_embedded', null, { v1Match: true });
   if(run.cancelled || run.error) return pfShowRun(run);
   let interest = null, added = 0;
-  if(e.interestEur){ interest = pfImportCandidates(pfV1InterestDeposits(e.interestEur), 'v1_embedded_interest', null, { v1Match: true }); }
+  if(e.interestEur){ const si = pfLoad(); si.v1InterestEur = e.interestEur; pfSave(); interest = true; }
   if(e.priceHistory){ const s = pfLoad(); s.snapshots = s.snapshots.filter((x) => x.source !== 'v1_embedded_prices');
     s.dailyPrices = s.dailyPrices || {}; s.dailyPricesV1 = {};
     for(const [a, o] of Object.entries(e.priceHistory)){ s.dailyPricesV1[a] = o; added += Object.keys(o || {}).length; }
     pfSave(); }
   run.label = 'V1 embedded data';
-  run.cutoffNote = (interest && !interest.error ? `Neverless interest: ${interest.accepted} monthly EUR deposit(s) added, ${interest.duplicates} already present. ` : '')
+  run.cutoffNote = (interest ? `Neverless savings interest: V1's series stored; it is added to the portfolio value the way V1 does (accrued daily, €${pfV1InterestAt(e.interestEur, new Date().toISOString().slice(0, 10)).toFixed(2)} today). ` : '')
     + (e.priceHistory ? `Value history: V1's ${added} embedded daily prices stored (V1 interpolated them between trades); the value chart uses them for those days.` : '')
     + (e.errors.length ? ' Not found in the V1 page: ' + e.errors.join('; ') + '.' : '');
   pfShowRun(run);
@@ -4218,20 +4223,25 @@ async function pfV1Check(note){
   const out = document.getElementById('pfV1CheckOut'); out.innerHTML = (note || '') + '<p>Reading V1 backup…</p>';
   const r = await getJson(V1_WORKER_URL + '/txs-backup');
   if(!r.ok || !r.data || !Array.isArray(r.data.txs)) return out.innerHTML = (note || '') + `${chip('UNAVAILABLE', 'neutral')} V1 backup could not be read${r.error ? ' (' + esc(r.error) + ')' : ''}.`;
+  // V1's interest series and daily prices (V1 page) are needed for the same value as V1; read once if this ledger lacks them.
+  if(!pfLoad().v1InterestEur){ try{ const rp = await fetch(PF_V1_PAGE_URL, { cache: 'no-store' }); if(rp.ok){ const e = pfParseV1Embedded(await rp.text()), sx = pfLoad();
+    if(e.interestEur) sx.v1InterestEur = e.interestEur; if(e.priceHistory && !sx.dailyPricesV1) sx.dailyPricesV1 = e.priceHistory; pfSave(); _pf.histKey = null; } }catch(e){ /* the check still runs */ } }
   const v1Txs = r.data.txs, s = pfLoad(), c = pfV1Compare(v1Txs, s), plan = pfV1RepairPlan(s), q = (v) => (+v).toLocaleString('en-US', { maximumFractionDigits: 8 });
+  const nInt = s.txs.filter(t => plan.includes(t.id) && /^v1int:/.test(t.src_id || '')).length, nOld = plan.length - nInt;
   const lastTxt = Object.entries(c.lastV1Day).map(([a, d]) => esc(a) + ' ' + esc(d)).join(', ');
   out.innerHTML = (note || '') + `<p>${chip(c.allMatch ? 'SAME AS V1' : 'DIFFERS FROM V1', c.allMatch ? 'good' : 'warn')} V1 backup: ${c.v1Rows} rows${r.data.ts ? ', saved ' + esc(fmtUtc(r.data.ts)) : ''}. This ledger: ${s.txs.length} rows. Compared up to V1's last day per account (${lastTxt}).</p>
     <div class="overflow-x-auto mt-1"><table class="text-[11px]"><thead class="text-[#8A9599]"><tr><th class="text-left pr-2 font-normal">Account</th><th class="text-left pr-2 font-normal">Asset</th><th class="text-right pr-2 font-normal">V1</th><th class="text-right pr-2 font-normal">V2</th><th class="text-right pr-2 font-normal">V2 − V1</th><th class="text-right font-normal">Newer than V1</th></tr></thead><tbody>
     ${c.rows.map(x => `<tr class="${x.match ? '' : 'text-[#FBBF24]'}"><td class="pr-2">${esc(x.account)}</td><td class="pr-2">${esc(x.asset)}</td><td class="text-right pr-2 font-mono-data">${q(x.v1)}</td><td class="text-right pr-2 font-mono-data">${q(x.v2)}</td><td class="text-right pr-2 font-mono-data">${x.match ? '✓' : (x.diff > 0 ? '+' : '') + q(x.diff)}</td><td class="text-right font-mono-data text-[#8A9599]">${x.newer ? (x.newer > 0 ? '+' : '') + q(x.newer) : '—'}</td></tr>`).join('')}</tbody></table></div>
-    ${c.allMatch ? '' : `<button type="button" id="pfV1Align" class="mt-2 px-3 py-1.5 rounded-lg border border-[#FBBF24] text-[#FBBF24] font-semibold">Align with V1${plan.length ? ` (reverse ${plan.length} old Neverless rows + add missing V1 rows)` : ' (add missing V1 rows)'}</button>`}
+    ${c.allMatch && !plan.length ? '' : `<button type="button" id="pfV1Align" class="mt-2 px-3 py-1.5 rounded-lg border border-[#FBBF24] text-[#FBBF24] font-semibold">Align with V1 (${[nOld ? `reverse ${nOld} old Neverless rows` : '', nInt ? `replace ${nInt} interest deposits by V1's daily accrual` : '', c.allMatch ? '' : 'add missing V1 rows'].filter(Boolean).join(' + ')})</button>`}
+    ${s.v1InterestEur ? `<p class="text-[#8A9599] mt-1">Neverless savings interest is valued as V1 does: €${pfV1InterestAt(s.v1InterestEur, new Date().toISOString().slice(0, 10)).toFixed(2)} accrued today, included in Market value.</p>` : ''}
     <p class="text-[#8A9599] mt-1">Quantities only. "Newer than V1" = movements in your statements after V1's last day for that account (not compared). Rows are never deleted: a fix adds reversal rows.</p>`;
   const b = document.getElementById('pfV1Align');
   if(b) b.onclick = () => pfV1Align(v1Txs, plan);
 }
 function pfV1Align(v1Txs, plan){
-  if(!confirm(`Align this ledger with V1?${plan.length ? `\n• reverse ${plan.length} Neverless statement rows dated on or before ${PF_NEVERLESS_V1_SEED_DATE}` : ''}\n• add the V1 backup rows this ledger does not have`)) return;
+  if(!confirm(`Align this ledger with V1?${plan.length ? `\n• reverse ${plan.length} row(s): Neverless statement rows dated on or before ${PF_NEVERLESS_V1_SEED_DATE}, and interest deposits now valued by V1's daily accrual` : ''}\n• add the V1 backup rows this ledger does not have`)) return;
   const s = pfLoad(), before = s.txs.length, errs = []; let n = 0;
-  for(const id of plan){ const tx = { id: pfId(), created_at: Date.now(), type: 'reversal', reverses_id: id, ts: Date.now(), note: 'V1 rule: Neverless history before the ' + PF_NEVERLESS_V1_SEED_DATE + ' starting balance' };
+  for(const id of plan){ const tx = { id: pfId(), created_at: Date.now(), type: 'reversal', reverses_id: id, ts: Date.now(), note: /^v1int:/.test((s.txs.find(t => t.id === id) || {}).src_id || '') ? 'V1 rule: interest valued by V1\u2019s daily accrual, not as a deposit' : 'V1 rule: Neverless history before the ' + PF_NEVERLESS_V1_SEED_DATE + ' starting balance' };
     const e = pfValidateTx(tx, s, Date.now()); if(e.length){ if(errs.length < 5) errs.push(id + ': ' + e.join(', ')); continue; } s.txs.push(tx); n++; }
   if(!pfSave()){ s.txs.length = before; return pfV1Check(`<p>${chip('NOT SAVED', 'bad')} This browser refused to save (storage full or blocked). Export a backup and try again.</p>`); }
   const v1 = pfFromV1Backup({ txs: v1Txs });

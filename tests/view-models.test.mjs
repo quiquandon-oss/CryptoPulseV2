@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestDeposits, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -1213,12 +1213,18 @@ test('V1 embedded data: the three constants are read as JSON; missing ones are r
   assert.deepEqual(plain(bad.errors), ['INTEREST_EUR not found in the V1 page', 'PRICE_HISTORY not found in the V1 page']);
   assert.deepEqual(H.pfParseV1Embedded('const SEED_TXS=foo();').errors[0], 'SEED_TXS is not plain JSON');
 });
-test('V1 embedded interest: one EUR deposit per month (the month’s accrual) into Neverless, with stable source ids', () => {
-  const items = H.pfV1InterestDeposits(H.pfParseV1Embedded(V1_PAGE).interestEur);
-  assert.deepEqual(plain(items.map((i) => [i.accountName, i.tx.type, i.tx.asset, i.tx.qty, new Date(i.tx.ts).toISOString().slice(0, 10), i.tx.src_id])), [
-    ['Neverless', 'deposit', 'EUR', 3.5, '2026-04-30', 'v1int:2026-04'], ['Neverless', 'deposit', 'EUR', 2.75, '2026-05-31', 'v1int:2026-05'], ['Neverless', 'deposit', 'EUR', 0.75, '2026-06-10', 'v1int:2026-06']]);
-  const store = { accounts: [{ id: 'n', name: 'Neverless' }], txs: [] };
-  assert.equal(H.pfValidateTx({ id: 'i1', account_id: 'n', ...items[0].tx }, store, NOW + 400 * 86400000).length, 0);
+test('V1 Neverless interest (V1 interestEUR): series value on or before the day, then extended at the last 5 days’ average', () => {
+  const series = { '2026-04-11': 0, '2026-06-20': 14.43, '2026-06-21': 14.64, '2026-06-22': 14.84, '2026-06-23': 15.05, '2026-06-24': 15.26, '2026-06-26': 15.67 };
+  assert.equal(H.pfV1InterestAt(series, '2026-04-10'), 0);
+  assert.equal(H.pfV1InterestAt(series, '2026-06-25'), 15.26);
+  const inc = (15.67 - 14.43) / 5;   // V1: (last entry − entry 5 before it) / 5, per calendar day after the last entry (as V1)
+  assert.ok(Math.abs(H.pfV1InterestAt(series, '2026-11-20') - (15.67 + inc * 147)) < 1e-9);
+  assert.equal(H.pfV1InterestAt({}, '2026-11-20'), 0);
+});
+test('Align plan also reverses the monthly interest deposits of earlier V2 imports (V1 values interest by accrual)', () => {
+  const store = { accounts: [{ id: 'n', name: 'Neverless' }], txs: [{ id: 'd1', account_id: 'n', type: 'deposit', asset: 'EUR', qty: 3.5, ts: Date.UTC(2026, 3, 30), src_id: 'v1int:2026-04' },
+    { id: 'd2', account_id: 'n', type: 'deposit', asset: 'EUR', qty: 100, ts: Date.UTC(2026, 3, 30) }] };
+  assert.deepEqual(plain(H.pfV1RepairPlan(store)), ['d1']);
 });
 test('daily value history: holdings at the end of each UTC day × that day’s price; a reversal voids its row on every day', () => {
   const e = H.pfParseV1Embedded(V1_PAGE);

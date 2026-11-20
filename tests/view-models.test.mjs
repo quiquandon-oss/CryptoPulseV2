@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -990,4 +990,39 @@ test('V1 alerts: read-only model; enabled first; bad params and errors explicit'
   assert.deepEqual([m.log.length, m.lastFired], [1, NOW - 2 * HOUR]);
   const e = plain(H.v1AlertsModel({ ok: false, error: 'HTTP 500' }, { ok: true, data: { log: [] } }, NOW));
   assert.deepEqual([e.configsState, e.configsError, e.logState], ['error', 'HTTP 500', 'empty']);
+});
+
+// ---- Comparison (outcome-based) on the backend contract cmp-v1-v2-1. The fixtures are real: production D1 read
+// 2026-11-20 with PulseWorkerV2 d061409's own SQL and functions (see _provenance in each file). ----
+const CMP_SUM = JSON.parse(readFileSync(new URL('./fixtures/comparison-summary-btc24-2026-11-20.json', import.meta.url), 'utf8'));
+const CMP_REC = JSON.parse(readFileSync(new URL('./fixtures/comparison-records-btc24-2026-11-20.json', import.meta.url), 'utf8'));
+test('comparison: real production summary maps field by field, nothing recomputed', () => {
+  const m = plain(H.cmpSummaryModel({ ok: true, data: CMP_SUM })), s = CMP_SUM.summary;
+  assert.equal(m.state, 'ok');
+  assert.deepEqual([m.nAligned, m.nResolved, m.nResolvedPairs, m.v1Coverage], [s.n_aligned, s.n_resolved, s.n_resolved_pairs, s.v1_coverage]);
+  assert.deepEqual([m.accV1.rate, m.accV1.n, m.accV1.ci, m.accV2b.rate, m.accV2f.rate], [s.accuracy.v1.rate, s.accuracy.v1.n, s.accuracy.v1.ci95, s.accuracy.v2_baseline.rate, s.accuracy.v2_final.rate]);
+  assert.deepEqual([m.brierV2b.score, m.brierV2f.score], [s.brier.v2_baseline.score, s.brier.v2_final.score]);
+  assert.equal(m.bands.length, 3);
+  assert.equal(m.bands.filter((b) => b.proposed).map((b) => b.band)[0], '45/55');
+  assert.deepEqual([m.glm.adjusted, m.glm.changed_calls], [s.glm.adjusted, s.glm.changed_calls]);
+  assert.equal(m.claim, s.claim);
+  assert.equal(m.observational, /_observational$/.test(s.claim));
+  for (const k of Object.keys(H.CMP_CLAIM_TEXT)) assert.ok(H.CMP_CLAIM_TEXT[k].length > 20);
+});
+test('comparison: not-deployed, missing-table and empty states are explicit; no figures', () => {
+  assert.equal(H.cmpSummaryModel({ ok: false, error: 'not_found', data: { ok: false, error: 'not_found' } }).state, 'not_deployed');
+  const e = H.cmpSummaryModel({ ok: false, error: 'comparison data unavailable', data: { reason: 'missing_table' } });
+  assert.deepEqual([e.state, /missing_table/.test(e.note)], ['error', true]);
+  assert.equal(H.cmpSummaryModel({ ok: true, data: { summary: { n_aligned: 0 } } }).state, 'empty');
+  assert.equal(H.cmpSummaryModel({ ok: true, data: {} }).state, 'error');
+});
+test('comparison: real records keep decision time, V1 provenance and pending outcomes', () => {
+  const rows = plain(H.cmpRecordRows({ ok: true, data: CMP_REC }, 50));
+  assert.equal(rows.length, 50);
+  for (const r of rows) {
+    if (r.v1) { assert.ok(['server_composite_readings', 'history'].includes(r.v1.source)); assert.ok(r.v1.ageMin >= 0 && r.v1.ageMin <= 180, 'V1 at most 3 h before'); }
+    if (r.outcome.status === 'resolved') assert.ok(r.outcome.resolved_ts >= r.ts, 'no outcome before the decision');
+    assert.ok(r.target > r.ts);
+  }
+  assert.equal(H.cmpRecordRows({ ok: false }, 5), null);
 });

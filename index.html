@@ -866,11 +866,11 @@
         <div class="flex flex-wrap gap-2 text-xs">
           <button type="button" id="pfExportCsv" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export CSV</button>
           <button type="button" id="pfExportJson" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export full backup (JSON)</button>
-          <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / JSON…<input id="pfImportFile" type="file" accept=".csv,.json,text/csv,application/json" class="hidden"></label>
+          <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / XLSX / JSON…<input id="pfImportFile" type="file" accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden"></label>
           <button type="button" id="pfImportV1" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import from V1 backup</button>
           <button type="button" id="pfFxFetch" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Fetch ECB reference rates</button>
         </div>
-        <p class="text-[10px] text-[#8A9599] mt-2">CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
+        <p class="text-[10px] text-[#8A9599] mt-2"><b>Same portfolio as V1:</b> 1) "Import from V1 backup" (what V1 already holds), then 2) your Revolut and Neverless statements (CSV or XLSX, as exported for V1). They are read with V1's rules (BTC, ETH, SOL, LINK, HYPE; staking and Neverless deposits at zero cost; Neverless rows up to V1's 11 Apr 2026 starting balance skipped), and rows already in the ledger are skipped, so files can be re-imported safely.</p><p class="text-[10px] text-[#8A9599] mt-1">Generic CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
         <p id="pfFxMsg" class="text-[11px] mt-2"></p>
         <p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
       </section>
@@ -2273,9 +2273,138 @@ function pfToCsv(store){
 function pfFromV1Backup(json){
   const list = json && Array.isArray(json.txs) ? json.txs : null;
   if(!list) return { items: [], errors: ['not a V1 backup (no txs list)'] };
-  return { errors: [], items: list.map((t, k) => ({ line: k + 1, accountName: String(t.acct || 'V1').trim() || 'V1', tx: { ts: pfDateMs(t.date), type: t.type,
-    asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: pfNum(t.price), price_ccy: String(t.ccy || 'USD').toUpperCase(), fee: null, fee_ccy: null,
-    fx_to_usd: null, transfer_id: null, note: 'imported from V1 backup' } })) };
+  // V1 stores staking rewards and Neverless deposits as zero-price buys (isReward): they become zero-cost rewards here,
+  // as V1 counts them (holdings up, invested capital unchanged), instead of being rejected as buys without a price.
+  return { errors: [], items: list.map((t, k) => { const reward = t.type === 'buy' && (t.isReward === true || pfNum(t.price) === 0);
+    return { line: k + 1, accountName: String(t.acct || 'V1').trim() || 'V1', tx: { ts: pfDateMs(t.date), type: reward ? 'reward' : t.type,
+    asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: reward ? 0 : pfNum(t.price), price_ccy: reward ? 'USD' : String(t.ccy || 'USD').toUpperCase(), fee: null, fee_ccy: null,
+    fx_to_usd: null, transfer_id: null, note: reward ? 'imported from V1 backup (reward, zero cost)' : 'imported from V1 backup', src_id: t.srcId ? String(t.srcId) : null } }; }) };
+}
+// ---- Revolut / Neverless statements (V1 parity). Ports V1's mapRevolut / mapNeverless rules (CryptoPulse
+// index.html, "CSV / XLSX IMPORT") so the same files give the same portfolio: V1's five tracked assets, staking and
+// Neverless deposit rows as zero-cost rewards, Revolut X rows priced in USD, IDR-priced rows converted at V1's fixed
+// rate (and V1's ×1000 quantity fix), Neverless rows on or before V1's seed date skipped when the V1 seed is present.
+// Rows that are not imported are counted by reason, never dropped silently. ----
+var PF_V1_ASSETS = ['BTC', 'ETH', 'SOL', 'LINK', 'HYPE'];
+var PF_V1_IDR_PER_EUR = 17800;
+var PF_NEVERLESS_V1_SEED_DATE = '2026-04-11';
+var PF_STABLES = ['USDT', 'USDC', 'EURC', 'EUR', 'USD'];
+var PF_MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+// Number from a statement cell: strips symbols and spaces; the last of ',' / '.' is the decimal mark (V1 csvNum).
+function pfStmtNum(v){
+  if(v === null || v === undefined) return NaN;
+  if(typeof v === 'number') return v;
+  let s = String(v).replace(/[^0-9.,\-]/g, '');
+  const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+  if(lc > -1 && ld > -1) s = lc > ld ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if(lc > -1){ const p = s.split(','); s = p.length === 2 && p[1].length <= 2 ? s.replace(',', '.') : s.replace(/,/g, ''); }
+  return parseFloat(s);
+}
+// 'YYYY-MM-DD' from ISO, 'Apr 10, 2026, 3:41:03 PM', dd/mm/yyyy or an Excel serial day (V1 csvDate + XLSX serials).
+function pfStmtDate(v){
+  if(v === null || v === undefined || v === '') return null;
+  const s = String(v).replace(/[  ]/g, ' ').trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if(m){ const mo = PF_MONTHS[m[1].slice(0, 3).toLowerCase()]; if(mo) return m[3] + '-' + String(mo).padStart(2, '0') + '-' + String(+m[2]).padStart(2, '0'); }
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return m[3] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0');
+  if(/^\d{5}(\.\d+)?$/.test(s)){ const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(+s) * 86400000); return d.toISOString().slice(0, 10); }
+  return null;
+}
+// Array rows (first row = header) → objects keyed by the trimmed header.
+function pfRowObjects(rows){
+  if(!rows || !rows.length) return [];
+  const head = rows[0].map((h) => String(h || '').replace(/^﻿/, '').trim());
+  return rows.slice(1).map((r, k) => { const o = { _line: k + 2 }; head.forEach((h, i) => { if(h) o[h] = r[i] === undefined || r[i] === null ? '' : String(r[i]).trim(); }); return o; });
+}
+function pfDetectStatement(rows){
+  const h = rows && rows.length ? rows[0].map((x) => String(x || '').replace(/^﻿/, '').trim()) : [];
+  if(h.includes('Symbol') && h.includes('Quantity') && h.includes('Value')) return 'revolut';
+  if(h.includes('Asset received') && h.includes('Asset sent') && h.includes('ID')) return 'neverless';
+  return null;
+}
+function pfStmtTx(date, type, asset, qty, price, ccy, note, srcId){
+  return { ts: Date.parse(date + 'T00:00:00Z'), type, asset, qty, price, price_ccy: ccy, fee: null, fee_ccy: null, fx_to_usd: null, transfer_id: null, note, src_id: srcId };
+}
+function pfFromRevolut(objs){
+  const items = [], skipped = {}, flags = [];
+  const skip = (why) => { skipped[why] = (skipped[why] || 0) + 1; };
+  for(const r of objs){
+    const raw = String(r.Type || '').trim().toLowerCase(), reward = raw === 'staking reward';
+    const type = raw.startsWith('buy') ? 'buy' : raw.startsWith('sell') ? 'sell' : reward ? 'reward' : null;
+    if(!type){ skip('not a buy, sell or staking reward'); continue; }
+    const sym = String(r.Symbol || '').trim().toUpperCase();
+    if(!PF_V1_ASSETS.includes(sym)){ skip('asset not tracked by V1 (' + (sym || 'none') + ')'); continue; }
+    let qty = pfStmtNum(r.Quantity); const date = pfStmtDate(r.Date);
+    if(!(qty > 0) || !date){ skip('missing quantity or date'); continue; }
+    let price = 0, ccy = 'USD', note = 'Revolut statement';
+    if(reward) note = 'Revolut staking reward (zero cost, as in V1)';
+    else {
+      const px = pfStmtNum(r.Price); if(!(px > 0)){ skip('missing price'); continue; }
+      const ps = String(r.Price);
+      if(/IDR/i.test(ps)){
+        price = px / PF_V1_IDR_PER_EUR; ccy = 'EUR';
+        note = 'Revolut IDR price ' + ps + ' converted at V1’s fixed ' + PF_V1_IDR_PER_EUR + ' IDR/EUR';
+        const v = pfStmtNum(r.Value); if(v > 0 && v < 1000){ qty *= 1000; note += '; quantity ×1000 (V1 fix for IDR round-up rows)'; }
+        flags.push({ line: r._line, date, asset: sym, why: 'IDR price converted with V1’s fixed rate' });
+      } else { price = px; ccy = ps.includes('$') ? 'USD' : 'EUR'; }
+    }
+    items.push({ line: r._line, accountName: 'Revolut', tx: pfStmtTx(date, type, sym, qty, price, ccy, note, 'rev:' + sym + ':' + String(r.Date).trim() + ':' + qty.toFixed(8)) });
+  }
+  return { items, skipped, flags };
+}
+// cutoffDate: rows on or before it are skipped (V1's seed already holds them as one balance per asset); null = none.
+function pfFromNeverless(objs, cutoffDate){
+  const items = [], skipped = {}, flags = [];
+  const skip = (why) => { skipped[why] = (skipped[why] || 0) + 1; };
+  for(const r of objs){
+    const date = pfStmtDate(r.Date) || String(r.Date || '').slice(0, 10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ skip('missing date'); continue; }
+    if(cutoffDate && date <= cutoffDate){ skip('on or before the V1 seed date ' + cutoffDate + ' (already in the V1 balance)'); continue; }
+    const recv = String(r['Asset received'] || '').trim().toUpperCase(), sent = String(r['Asset sent'] || '').trim().toUpperCase();
+    if(!PF_V1_ASSETS.includes(recv)){ skip(recv ? 'received asset not tracked by V1 (sells, withdrawals and other assets are not imported, as in V1)' : 'nothing received (sells, withdrawals and fees are not imported, as in V1)'); continue; }
+    const qty = pfStmtNum(r['Amount received']), src = 'nlv:' + String(r.ID || '').trim();
+    if(r.Type === 'Trade' && PF_STABLES.includes(sent)){
+      const usd = pfStmtNum(r['USD price of asset received']);
+      if(!(qty > 0) || !(usd > 0)){ skip('trade without quantity or USD price'); continue; }
+      items.push({ line: r._line, accountName: 'Neverless', tx: pfStmtTx(date, 'buy', recv, qty, usd, 'USD', 'Neverless trade (paid in ' + sent + ')', src) });
+    } else if(r.Type === 'Deposit' && !sent){
+      if(!(qty > 0)){ skip('deposit without quantity'); continue; }
+      items.push({ line: r._line, accountName: 'Neverless', tx: pfStmtTx(date, 'reward', recv, qty, 0, 'USD', 'Neverless deposit/interest (zero cost, as in V1)', src) });
+    } else skip('other Neverless row type (' + (r.Type || 'none') + ')');
+  }
+  return { items, skipped, flags };
+}
+// V1-style duplicate match for statements and V1 backups: same account, UTC day, asset and quantity (8 dp); buy and
+// reward count as the same acquisition because V1 stores rewards as zero-price buys.
+function pfStmtMatchKey(t, accountName){
+  const kind = t.type === 'reward' ? 'buy' : t.type;
+  const q = pfNum(t.qty);
+  return [String(accountName || '').toLowerCase(), new Date(t.ts).toISOString().slice(0, 10), kind, pfAsset(t.asset), q === null ? '' : q.toFixed(8)].join('|');
+}
+// True when the ledger holds V1's Neverless seed balances (imported from a V1 backup, dated the seed day).
+function pfHasV1NeverlessSeed(store){
+  const acc = ((store && store.accounts) || []).filter((a) => a.name.toLowerCase() === 'neverless').map((a) => a.id);
+  return ((store && store.txs) || []).some((t) => acc.includes(t.account_id) && /V1 backup/i.test(t.note || '') && new Date(t.ts).toISOString().slice(0, 10) === PF_NEVERLESS_V1_SEED_DATE);
+}
+// XLSX sheet XML → array rows (pure, regex-based: no DOM, so it is unit-tested). Shared strings, inline strings,
+// plain values; column letters place cells, so empty cells keep their position.
+function pfXmlText(x){ return String(x).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, d) => String.fromCharCode(+d)).replace(/&amp;/g, '&'); }
+function pfXlsxShared(xml){ return [...String(xml || '').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => [...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => pfXmlText(t[1])).join('')); }
+function pfXlsxCol(ref){ const l = String(ref).replace(/\d+/g, ''); let n = 0; for(const ch of l) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1; }
+function pfXlsxSheetRows(sheetXml, sharedXml){
+  const shared = pfXlsxShared(sharedXml), rows = [];
+  for(const rm of String(sheetXml || '').matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)){
+    const row = [];
+    for(const cm of rm[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+      const attrs = cm[1], body = cm[2] || '', ref = (attrs.match(/\br="([A-Z]+)\d*"/) || [])[1], t = (attrs.match(/\bt="([^"]+)"/) || [])[1];
+      const v = (body.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
+      const val = t === 's' ? (shared[+v] ?? '') : t === 'inlineStr' ? pfXmlText((body.match(/<is>([\s\S]*?)<\/is>/) || [])[1] || '') : v === undefined ? '' : pfXmlText(v);
+      const i = ref ? pfXlsxCol(ref) : row.length; while(row.length < i) row.push(''); row[i] = val;
+    }
+    if(row.some((c) => String(c).trim() !== '')) rows.push(row);
+  }
+  return rows;
 }
 // ---- END view-model helpers ----
 
@@ -3785,20 +3914,35 @@ function pfSubmitAccount(){
 }
 // Import: every candidate is validated; duplicates (same account, time, type, asset, quantity, price) are skipped;
 // unknown account names are created only after the user confirms. One import-run record per import.
-function pfImportCandidates(items, source, fileHash){
+// opts.v1Match (Revolut/Neverless statements and V1 backups): also skip a row whose source id is already in the ledger, or
+// that matches an existing row on account, UTC day, asset and quantity (V1's own duplicate rule), each existing row
+// absorbing at most one candidate. Re-importing the same statement, or a statement that overlaps a V1 backup, adds nothing.
+function pfImportCandidates(items, source, fileHash, opts){
   const s = pfLoad(), newNames = [...new Set(items.map(i => i.accountName).filter(n => n && !s.accounts.some(a => a.name.toLowerCase() === n.toLowerCase())))];
   if(newNames.length && !confirm(`Create ${newNames.length} new account(s): ${newNames.join(', ')}?`)) return { cancelled: true };
   for(const n of newNames) s.accounts.push({ id: pfId(), name: n.slice(0, 40), kind: 'exchange', base_ccy: 'USD', created_at: Date.now() });
   const byName = n => s.accounts.find(a => a.name.toLowerCase() === String(n).toLowerCase());
   const seen = new Set(s.txs.map(t => pfDedupKey(t, (s.accounts.find(a => a.id === t.account_id) || {}).name)));
   const run = { id: pfId(), source, file_hash: fileHash || null, created_at: Date.now(), rows: items.length, accepted: 0, duplicates: 0, rejected: 0, errors: [] };
+  const v1Match = !!(opts && opts.v1Match), srcIds = new Set(), matchCount = new Map();
+  if(v1Match){
+    const reversed = new Set(s.txs.filter(t => t.type === 'reversal').map(t => t.reverses_id));
+    for(const t of s.txs){ if(t.type === 'reversal' || reversed.has(t.id)) continue;
+      if(t.src_id) srcIds.add(t.src_id);
+      const k = pfStmtMatchKey(t, (s.accounts.find(a => a.id === t.account_id) || {}).name); matchCount.set(k, (matchCount.get(k) || 0) + 1); }
+  }
   for(const it of items){
     const acc = byName(it.accountName), tx = { id: pfId(), created_at: Date.now(), import_run_id: run.id, ...it.tx, account_id: acc ? acc.id : null };
     const key = pfDedupKey(tx, acc ? acc.name : it.accountName);
     if(seen.has(key)){ run.duplicates++; continue; }
+    if(v1Match){
+      if(tx.src_id && srcIds.has(tx.src_id)){ run.duplicates++; continue; }
+      const mk = pfStmtMatchKey(tx, acc ? acc.name : it.accountName), c = matchCount.get(mk) || 0;
+      if(c > 0){ matchCount.set(mk, c - 1); run.duplicates++; continue; }
+    }
     const e = pfValidateTx(tx, s, Date.now());
     if(e.length){ run.rejected++; if(run.errors.length < 20) run.errors.push(`line ${it.line}: ${e.join(', ')}`); continue; }
-    s.txs.push(tx); seen.add(key); run.accepted++;
+    s.txs.push(tx); seen.add(key); if(tx.src_id) srcIds.add(tx.src_id); run.accepted++;
   }
   s.importRuns.push(run);
   if(!pfSave()) return { error: 'could not save in this browser' };
@@ -3807,13 +3951,57 @@ function pfImportCandidates(items, source, fileHash){
 function pfShowRun(r){
   if(r.cancelled) return pfMsg('pfImportMsg', ['import cancelled']);
   if(r.error) return pfMsg('pfImportMsg', [r.error]);
-  document.getElementById('pfImportMsg').innerHTML = `${chip(r.rejected ? 'IMPORTED WITH ERRORS' : 'IMPORTED', r.rejected ? 'warn' : 'good')} ${r.accepted} added · ${r.duplicates} duplicate skipped · ${r.rejected} rejected${r.errors.length ? `<ul class="list-disc pl-4 mt-1 text-[#FBBF24]">${r.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}`;
+  const sk = r.skipped ? Object.entries(r.skipped) : [], fl = r.flags || [];
+  document.getElementById('pfImportMsg').innerHTML = `${chip(r.rejected ? 'IMPORTED WITH ERRORS' : 'IMPORTED', r.rejected ? 'warn' : 'good')} ${r.label ? '<b>' + esc(r.label) + '</b> · ' : ''}${r.accepted} added · ${r.duplicates} duplicate skipped · ${r.rejected} rejected${r.errors.length ? `<ul class="list-disc pl-4 mt-1 text-[#FBBF24]">${r.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}`
+    + (r.cutoffNote ? `<p class="text-[#BAC9CD] mt-1">${esc(r.cutoffNote)}</p>` : '')
+    + (sk.length ? `<p class="text-[#8A9599] mt-1">Not imported (same rules as V1):</p><ul class="list-disc pl-4 text-[#8A9599]">${sk.map(([k, n]) => `<li>${n} × ${esc(k)}</li>`).join('')}</ul>` : '')
+    + (fl.length ? `<p class="text-[#FBBF24] mt-1">${fl.length} row(s) converted from IDR with V1's fixed rate; check them: ${fl.slice(0, 10).map(f => esc(f.date + ' ' + f.asset)).join(', ')}${fl.length > 10 ? '…' : ''}</p>` : '');
   renderPortfolio();
 }
+// XLSX file → rows of its first worksheet. Reads the ZIP directory and inflates with the browser's own
+// DecompressionStream: no library, no network.
+async function pfReadXlsx(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let eocd = -1; for(let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--){ if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; } }
+  if(eocd < 0) throw new Error('not a ZIP/XLSX file');
+  const n = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true); const files = {};
+  for(let k = 0; k < n; k++){
+    if(dv.getUint32(p, true) !== 0x02014b50) throw new Error('bad ZIP directory');
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    files[new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl))] = { method, csize, off }; p += 46 + nl + el + cl;
+  }
+  const read = async (name) => { const f = files[name]; if(!f) return null;
+    const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(start, start + f.csize);
+    if(f.method === 0) return new TextDecoder().decode(data);
+    if(f.method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('unsupported compression');
+    return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text(); };
+  const sheet = files['xl/worksheets/sheet1.xml'] ? 'xl/worksheets/sheet1.xml' : Object.keys(files).filter(k => /^xl\/worksheets\/[^/]+\.xml$/.test(k)).sort()[0];
+  if(!sheet) throw new Error('no worksheet');
+  return pfXlsxSheetRows(await read(sheet), await read('xl/sharedStrings.xml'));
+}
 async function pfHash(text){ try{ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join(''); }catch(e){ return null; } }
+// A Revolut or Neverless statement (CSV or XLSX) → V1-rule candidates. Returns false when the rows are not a statement.
+function pfImportStatement(rows, h){
+  const fmt = pfDetectStatement(rows);
+  if(!fmt) return false;
+  const objs = pfRowObjects(rows), s = pfLoad();
+  const cutoff = fmt === 'neverless' && pfHasV1NeverlessSeed(s) ? PF_NEVERLESS_V1_SEED_DATE : null;
+  const m = fmt === 'revolut' ? pfFromRevolut(objs) : pfFromNeverless(objs, cutoff);
+  const run = pfImportCandidates(m.items, fmt + '_statement', h, { v1Match: true });
+  if(!run.cancelled && !run.error){ run.label = fmt === 'revolut' ? 'Revolut statement' : 'Neverless statement'; run.skipped = m.skipped; run.flags = m.flags;
+    if(fmt === 'neverless') run.cutoffNote = cutoff ? `V1's Neverless starting balances (dated ${cutoff}) are in this ledger, so statement rows up to that date were skipped, as V1 does.` : 'No V1 Neverless starting balance in this ledger, so the full statement history was imported.'; }
+  pfShowRun(run);
+  return true;
+}
 async function pfImportFile(file){
   if(!file) return;
   if(file.size > 2000000) return pfMsg('pfImportMsg', ['file too large (max 2 MB)']);
+  if(/\.xlsx$/i.test(file.name)){
+    let rows; try{ rows = await pfReadXlsx(await file.arrayBuffer()); }catch(e){ return pfMsg('pfImportMsg', ['could not read this XLSX (' + e.message + '); export the statement as CSV instead']); }
+    const hx = await pfHash(JSON.stringify(rows));
+    if(!pfImportStatement(rows, hx)) pfMsg('pfImportMsg', ['this XLSX is not a Revolut or Neverless statement (expected Symbol/Quantity/Value or ID/Asset received/Asset sent columns)']);
+    return;
+  }
   const text = await file.text(), h = await pfHash(text);
   if(/\.json$/i.test(file.name)){
     let j; try{ j = JSON.parse(text); }catch(e){ return pfMsg('pfImportMsg', ['not valid JSON']); }
@@ -3828,9 +4016,11 @@ async function pfImportFile(file){
       pfMsg('pfImportMsg', [], 'Backup restored.'); return renderPortfolio();
     }
     const v1 = pfFromV1Backup(j); if(v1.errors.length) return pfMsg('pfImportMsg', v1.errors);
-    return pfShowRun(pfImportCandidates(v1.items, 'v1_backup_file', h));
+    return pfShowRun(pfImportCandidates(v1.items, 'v1_backup_file', h, { v1Match: true }));
   }
-  const parsed = pfCsvRowsToTxs(pfParseCsv(text));
+  const csvRows = pfParseCsv(text);
+  if(pfImportStatement(csvRows, h)) return;
+  const parsed = pfCsvRowsToTxs(csvRows);
   if(parsed.errors.length) return pfMsg('pfImportMsg', parsed.errors);
   pfShowRun(pfImportCandidates(parsed.items, 'csv', h));
 }
@@ -3866,7 +4056,7 @@ async function pfImportFromV1(){
   if(!r.ok || !r.data) return pfMsg('pfImportMsg', ['V1 backup could not be read' + (r.error ? ' (' + r.error + ')' : '')]);
   if(r.data.found === false) return pfMsg('pfImportMsg', ['V1 has no backup stored']);
   const v1 = pfFromV1Backup(r.data); if(v1.errors.length) return pfMsg('pfImportMsg', v1.errors);
-  pfShowRun(pfImportCandidates(v1.items, 'v1_backup_route', null));
+  pfShowRun(pfImportCandidates(v1.items, 'v1_backup_route', null, { v1Match: true }));
 }
 function pfDownload(name, text, type){ const b = new Blob([text], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0); }
 function pfExport(kind){

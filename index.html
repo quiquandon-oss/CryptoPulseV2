@@ -426,35 +426,6 @@
          model selection, learning events, analyst relay, audit trail. It is
          coin/horizon scoped and fetch-heavy, so it loads only when opened. -->
 
-  </div>
-
-  <!-- ═══ HISTORY ═══ The detailed records: every logged prediction with
-       its realized outcome and deviation, and every offline backtest run.
-       Reuses the chart's /chart-data response and the single
-       /backtest-history and /backtest-regime-split-history responses —
-       no new requests just to show the same data again. ═══ -->
-  <div id="view-history" class="hidden">
-
-    <section id="historyRecapCard" aria-labelledby="historyRecapTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
-        <h2 id="historyRecapTitle" class="text-sm font-semibold">Prediction history <span id="historyRecapScope" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
-        <div id="historyFilter" role="group" aria-label="Filter predictions" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
-      </div>
-      <p id="historySummary" class="text-[11px] text-[#BAC9CD] mb-2 font-mono-data"></p>
-      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every logged call for this coin/horizon, newest first. "Predicted" is the called direction, probability and expected median move; "Reality" is the realized return once the horizon passed; "Deviation" is realized minus expected. Pending rows have not reached their target time. All times UTC.</p>
-      <div class="overflow-x-auto overflow-y-auto" style="max-height:560px;">
-        <table class="w-full text-xs">
-          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C] sticky top-0 bg-[#191C1F]"><tr>
-            <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
-            <th scope="col" class="text-left font-medium px-2 py-2">Target (UTC)</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Reality</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Deviation</th>
-          </tr></thead>
-          <tbody id="historyRecapTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
 
     <section aria-labelledby="historyBacktestTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <p class="text-[10px] uppercase tracking-wide text-[#00E0FF] font-bold mb-1">Offline research — not live predictions</p><h2 id="historyBacktestTitle" class="text-sm font-semibold mb-1">Offline backtest runs</h2>
@@ -491,12 +462,51 @@
         </table>
       </div>
     </section>
+  </div>
+
+  <!-- ═══ HISTORY ═══ The detailed records: every logged prediction with
+       its realized outcome and deviation, and every offline backtest run.
+       Reuses the chart's /chart-data response and the single
+       /backtest-history and /backtest-regime-split-history responses —
+       no new requests just to show the same data again. ═══ -->
+  <div id="view-history" class="hidden">
+
+    <section id="historyRecapCard" aria-labelledby="historyRecapTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <h2 id="historyRecapTitle" class="text-sm font-semibold">Prediction history <span id="historyRecapScope" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
+        <div id="historyFilter" role="group" aria-label="Filter predictions" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
+      </div>
+      <p id="historySummary" class="text-[11px] text-[#BAC9CD] mb-2 font-mono-data"></p>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every logged call for this coin/horizon, newest first. "Predicted" is the called direction, probability and expected median move; "Reality" is the realized return once the horizon passed; "Deviation" is realized minus expected. Pending rows have not reached their target time. All times UTC.</p>
+      <div class="overflow-x-auto overflow-y-auto" style="max-height:560px;">
+        <table class="w-full text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C] sticky top-0 bg-[#191C1F]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
+            <th scope="col" class="text-left font-medium px-2 py-2">Target (UTC)</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Reality</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Deviation</th>
+          </tr></thead>
+          <tbody id="historyRecapTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
 
     <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are in the learning loop below.</p>
   </div>
 
   <!-- Learning & Audit also holds the learning loop (moved here from Experiments). -->
   <div id="view-learningblock" class="hidden">
+    <section id="prospectiveCard" aria-labelledby="prospectiveTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <h2 id="prospectiveTitle" class="text-sm font-semibold mb-1">Prospective evaluations <span class="text-[#BAC9CD] font-normal text-xs">· frozen protocols, read-only</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-3">Both protocols were fixed before their data existed. This page only reports them; nothing here changes their windows, rules or records.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">GLM-PE-1 · GLM influence on BTC 24 h</p><div id="glmEvalBody" class="mt-2" role="status">Loading…</div></div>
+        <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">PEV-1P · forecast models, prospective window</p>
+          <p class="mt-2 text-[#BAC9CD]">Counts-only until its single confirmatory analysis; the per-origin results and the counts are in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('sentiment-v2/forecast')">Sentiment V2 › Forecast</button>. No interim verdict is shown anywhere.</p></div>
+      </div>
+    </section>
     <details id="learningDetails" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <summary class="flex items-center justify-between cursor-pointer select-none">
         <span class="text-sm font-semibold">Learning loop &amp; model selection <span class="text-[#BAC9CD] font-normal text-xs">(formerly "AI Learning")</span></span>
@@ -745,13 +755,19 @@
       <div id="flPev1" class="text-[11px]"></div>
     </section>
 
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flCovTitle">
+      <h3 id="flCovTitle" class="text-sm font-semibold mb-1">Coverage and missing forecasts</h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Persisted forecasts by model and horizon whose input cutoff falls in the selected range. "Only this model" counts origins the other model has no forecast for; those are shown as missing, never filled.</p>
+      <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Model</th><th class="px-2 font-normal">H</th><th class="px-2 font-normal">Forecasts</th><th class="px-2 font-normal">Resolved</th><th class="px-2 font-normal">Pending</th><th class="px-2 font-normal">Only this model</th><th class="px-2 font-normal">Latest input cutoff · issued</th></tr></thead><tbody id="flCovBody"></tbody></table></div>
+    </section>
+
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flLedgerTitle">
       <h3 id="flLedgerTitle" class="text-sm font-semibold mb-3">Forecast ledger</h3>
       <div id="flLedgerFilters" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3 text-xs"></div>
       <p id="flLedgerCount" class="text-[11px] text-[#8A9599] mb-2"></p>
       <ul id="flLedgerCards" class="sm:hidden space-y-2 max-h-[560px] overflow-y-auto"></ul>
       <div class="hidden sm:block overflow-x-auto max-h-[480px] overflow-y-auto border border-[#3B494C] rounded-lg"><table class="w-full text-left text-[11px] min-w-[760px]"><thead class="sticky top-0 bg-[#191C1F] text-[#8A9599]"><tr>
-        <th class="py-1.5 px-2 font-normal">Forecast</th><th class="px-2 font-normal">Model</th><th class="px-2 font-normal">Origin (UTC)</th><th class="px-2 font-normal">H</th><th class="px-2 font-normal">Call</th><th class="px-2 font-normal">Forecast</th><th class="px-2 font-normal">Actual</th><th class="px-2 font-normal">Error (pp)</th><th class="px-2 font-normal">Status</th></tr></thead><tbody id="flLedgerBody"></tbody></table></div>
+        <th class="py-1.5 px-2 font-normal">Forecast</th><th class="px-2 font-normal">Model</th><th class="px-2 font-normal">Input cutoff · issued · target (UTC)</th><th class="px-2 font-normal">H</th><th class="px-2 font-normal">Call</th><th class="px-2 font-normal">Forecast</th><th class="px-2 font-normal">Actual</th><th class="px-2 font-normal">Error (pp)</th><th class="px-2 font-normal">Status</th></tr></thead><tbody id="flLedgerBody"></tbody></table></div>
     </section>
   </div>
 
@@ -767,6 +783,11 @@
       <p id="v1Coverage" class="text-[11px] text-[#8A9599] mb-2"></p>
       <div id="v1ChartContainer" class="relative" style="height:260px"><canvas id="v1Chart" aria-label="V1 sentiment over time"></canvas></div>
       <p id="v1Status" class="text-[11px] text-[#8A9599] mt-2" role="status">Loading…</p>
+    </section>
+    <section id="foufiCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="foufiTitle">
+      <h2 id="foufiTitle" class="text-sm font-semibold mb-1">Foufi Daily <span class="text-[#BAC9CD] font-normal text-xs">· V1 input, Gemini summary of a video</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-3">V1 summarises each new video by the analyst Foufi with Gemini (model gemini-3.6-flash) and uses the BTC score as one low-weight V1 source. Shown here as V1 stored it: an interpretation of a video, not a V2 score and not a fact. Read from V1's <span class="font-mono-data">GET /foufi-latest</span>, which never triggers a Gemini call.</p>
+      <div id="foufiBody" class="space-y-3 text-xs" role="status">Loading…</div>
     </section>
   </div>
 
@@ -1607,6 +1628,67 @@ function cmpSentimentSummary(rows){
     meanAbsDiff: round1(diffs.reduce((a, b) => a + Math.abs(b), 0) / diffs.length),
     sameSide: same, decided, sameSideRate: decided ? same / decided : null, firstTs: Math.min(...both.map((r) => r.ts)),
     lastTs: last.ts, last: { ts: last.ts, v1: last.v1, v2: last.v2 } };
+}
+// ---- Forecast coverage (contracts §4.4): per model and horizon, what exists in the window and which origins only
+// one model covers. Counts persisted forecasts only; a missing forecast is reported, never filled. ----
+function flCoverage(timesfm, chronos, fromTs){
+  const inWin = (r) => fromTs === null || r.originTs >= fromTs;
+  const out = [];
+  for(const h of [12, 24]){
+    const T = (timesfm || []).filter((r) => r.horizon === h && inWin(r)), C = (chronos || []).filter((r) => r.horizon === h && inWin(r));
+    const tO = new Set(T.map((r) => r.originTs)), cO = new Set(C.map((r) => r.originTs));
+    const row = (model, rows, own, other) => {
+      const last = rows.reduce((a, r) => (!a || r.originTs > a.originTs ? r : a), null);
+      return { model, horizon: h, n: rows.length, resolved: rows.filter((r) => r.status === 'resolved').length,
+        pending: rows.filter((r) => r.status === 'pending').length, unreadable: rows.filter((r) => r.status === 'unreadable').length,
+        onlyThis: [...own].filter((o) => !other.has(o)).length, lastOrigin: last ? last.originTs : null, lastIssued: last ? last.issuedTs : null };
+    };
+    out.push(row('timesfm', T, tO, cO), row('chronos', C, cO, tO));
+    out.push({ model: 'both', horizon: h, n: [...tO].filter((o) => cO.has(o)).length });
+  }
+  return out;
+}
+// ---- GLM-PE-1 prospective evaluation (/api/glm/evaluation): reported as returned; no claim before the protocol's
+// minimum (30 resolved applied ticks), whatever the Worker's flag says. ----
+var GLM_PE1_MIN_APPLIED = 30;
+function glmEvalModel(res){
+  const ev = res && res.ok && res.data && res.data.evaluation;
+  if(!ev || !ev.overall) return { state: 'error', note: 'The GLM evaluation could not be loaded' + (res && res.error ? ' (' + res.error + ')' : '') + '.' };
+  const o = ev.overall, num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const applied = num(o.applied_ticks) || 0, resolved = num(o.resolved) || 0;
+  const da = o.directional_accuracy || {}, br = o.brier || {};
+  const sufficient = ev.sufficient_for_claims === true && applied >= GLM_PE1_MIN_APPLIED;
+  return { state: 'ok', ticks: num(o.ticks) || 0, resolved, signalTicks: num(o.signal_ticks) || 0, applied,
+    accBaseline: num(da.baseline), accFinal: num(da.final), brierBaseline: num(br.baseline), brierFinal: num(br.final),
+    meanAbsAdj: num((o.adjustment || {}).mean_abs), maxAbsAdj: num((o.adjustment || {}).max_abs),
+    helpful: num((o.activations || {}).helpful) || 0, falseAct: num((o.activations || {}).false) || 0,
+    sufficient, verdict: sufficient ? 'SAMPLE SUFFICIENT' : applied === 0 ? 'NO APPLIED ADJUSTMENT YET' : 'INSUFFICIENT SAMPLE',
+    note: typeof ev.note === 'string' ? ev.note : '' };
+}
+// ---- V1 Foufi Daily (Gemini parity, contracts §6): V1's own stored Gemini summaries, read with GET /foufi-latest
+// (V1 never calls Gemini for that route). Values are shown as V1 stored them; nothing is re-scored. ----
+var V1_WORKER_URL = 'https://sentiment-ff75.quiquandon.workers.dev';
+var FOUFI_STALE_HOURS = 36;
+function foufiModel(res, now){
+  const list = res && res.ok && res.data && Array.isArray(res.data.latest) ? res.data.latest : null;
+  if(!list) return { state: 'error', items: [], note: 'Foufi Daily could not be read from V1' + (res && res.error ? ' (' + res.error + ')' : '') + '.' };
+  const lean = (v) => (v === 'bullish' || v === 'bearish' || v === 'neutral' ? v : null);
+  const items = list.filter((d) => d && typeof d.publishedTs === 'number').map((d) => {
+    const sm = d.summary && typeof d.summary === 'object' ? d.summary : null;
+    const structured = !!(sm && typeof sm.market_summary === 'string');
+    const coins = structured && sm.coins && typeof sm.coins === 'object' ? Object.entries(sm.coins)
+      .filter(([, c]) => c && typeof c.score === 'number' && isFinite(c.score) && c.score >= -2 && c.score <= 2)
+      .map(([k, c]) => ({ coin: k, score: c.score, note: typeof c.note === 'string' ? c.note : '' })) : [];
+    const read = (k) => (structured && sm[k] && typeof sm[k] === 'object' ? { lean: lean(sm[k].lean), text: typeof sm[k].text === 'string' ? sm[k].text : '' } : null);
+    return { videoId: String(d.videoId || ''), title: typeof d.title === 'string' ? d.title : '(untitled)',
+      url: typeof d.url === 'string' && /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(d.url) ? d.url : null,
+      publishedTs: d.publishedTs, status: d.status || 'unknown', structured, summaryText: structured ? sm.market_summary : null,
+      macro: read('macro'), micro: read('micro'), tradfi: read('tradfi'), coins,
+      driver: structured && typeof sm.dominant_driver === 'string' ? sm.dominant_driver : null };
+  }).sort((a, b) => b.publishedTs - a.publishedTs);
+  if(!items.length) return { state: 'empty', items: [], note: 'V1 has no Foufi digest yet.' };
+  const stale = now - items[0].publishedTs > FOUFI_STALE_HOURS * 3600000;
+  return { state: 'ok', items, stale, latestTs: items[0].publishedTs };
 }
 // ---- END view-model helpers ----
 
@@ -2612,7 +2694,7 @@ function loadActiveView(force){
   if (force) apiCacheClear();
   if (activeView === 'dashboard') { if (force) { _dashboardLoadedFor = null; loadSystemStatus(true); } loadDashboardIfNeeded(); }
   if (activeView === 'lab') { if (force) _labLoadedFor = null; loadLabIfNeeded(); }
-  if (activeView === 'history') { loadHistoryIfNeeded(); if (force && _learningLoaded) loadLearningSelection(); }
+  if (activeView === 'history') { loadHistoryIfNeeded(); loadGlmEvaluation(force); if (force && _learningLoaded) loadLearningSelection(); }
   if (activeView === 'experiments') { if (force) _experimentsLoaded = false; loadExperimentsIfNeeded(); }
   if (activeView === 'sentiment') loadSentimentV2IfNeeded(force);
   if (activeView === 'forecast') loadForecastLabIfNeeded(force);
@@ -2754,7 +2836,29 @@ function sv2Comparison(period, force){
   if(!force && _v1.at[period] && Date.now() - _v1.at[period] < SV2_REFRESH_MS && _v1.res[period]) return Promise.resolve(_v1.res[period]);
   return getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=' + period).then(res => { if(res.ok){ _v1.res[period] = res; _v1.at[period] = Date.now(); } return res; });
 }
+var _foufiAt = 0;
+function loadFoufi(force){
+  if(!force && _foufiAt && Date.now() - _foufiAt < SV2_REFRESH_MS) return;
+  _foufiAt = Date.now();
+  getJson(V1_WORKER_URL + '/foufi-latest').then(res => renderFoufi(foufiModel(res, Date.now())));
+}
+function renderFoufi(m){
+  const host = document.getElementById('foufiBody');
+  if(m.state !== 'ok'){ host.innerHTML = `${chip(m.state === 'empty' ? 'NO DATA' : 'UNAVAILABLE', 'neutral')} <span class="text-[#BAC9CD]">${esc(m.note)}</span>`; if(m.state === 'error') _foufiAt = 0; return; }
+  const toneOf = (l) => (l === 'bullish' ? 'good' : l === 'bearish' ? 'bad' : 'neutral');
+  const sc = (v) => (v > 0 ? '+' : '') + v;
+  host.innerHTML = (m.stale ? `<p>${chip('STALE', 'warn')} <span class="text-[#BAC9CD]">Newest digest is from ${esc(fmtUtc(m.latestTs))} (${esc(ageStr(m.latestTs))}); no newer video has been summarised by V1.</span></p>` : '') +
+    m.items.map(d => `<article class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3">
+      <div class="flex items-start justify-between gap-2 flex-wrap"><p class="font-semibold text-[#E1E2E7] min-w-0 break-words">${d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer nofollow" class="hover:text-[#00E0FF]">${esc(d.title)} ↗</a>` : esc(d.title)}</p>${chip(String(d.status).toUpperCase(), d.status === 'ok' ? 'good' : 'neutral')}</div>
+      <p class="text-[10px] text-[#8A9599] mt-0.5">published ${esc(fmtUtc(d.publishedTs))} · video ${esc(d.videoId)}${d.driver ? ' · short-term driver: ' + esc(d.driver) : ''}</p>
+      ${d.structured ? `<p class="text-[#BAC9CD] mt-2">${esc(d.summaryText)}</p>
+        <div class="flex flex-wrap gap-1 mt-2">${[['Macro', d.macro], ['Micro', d.micro], ['TradFi', d.tradfi]].filter(([, r]) => r && r.lean).map(([k, r]) => chip(k + ' ' + r.lean, toneOf(r.lean))).join(' ')}</div>
+        ${d.coins.length ? `<p class="mt-2 text-[#BAC9CD]">Scores (−2…+2): ${d.coins.map(c => `<span class="font-mono-data text-[#E1E2E7]">${esc(c.coin)} ${sc(c.score)}</span>`).join(' · ')}</p>` : '<p class="mt-2 text-[#8A9599]">No coin addressed with a score.</p>'}`
+        : '<p class="mt-2 text-[#8A9599]">No structured summary stored for this video (V1 status above). Nothing is shown in its place.</p>'}
+    </article>`).join('');
+}
 function loadSentimentV1IfNeeded(force){
+  loadFoufi(force);
   v1Presets('v1Presets', _v1.period, k => { _v1.period = k; loadSentimentV1IfNeeded(); });
   const seq = ++_v1.seq, period = _v1.period;
   document.getElementById('v1Status').textContent = 'Loading…';
@@ -2822,6 +2926,23 @@ function renderComparison(res){
     ${line('Same side of 50 (both non-neutral)', c.sameSideRate === null ? '—' : `${c.sameSide} of ${c.decided} (${Math.round(c.sameSideRate * 100)}%)`)}
   </dl>
   <p class="text-[11px] text-[#8A9599] mt-3">Descriptive only: sentiment levels, not predictions, and no market outcomes. Sample size is shown beside every figure; ${c.n < 30 ? '<b class="text-[#FBBF24]">fewer than 30 aligned points: too few to draw any conclusion</b>' : 'no conclusion about which engine is better can be drawn from sentiment levels alone'}. The chart of both series is in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('sentiment-v2/overview')">Sentiment V2 › Overview</button>.</p>`;
+}
+// ---- Learning & Audit: GLM-PE-1 prospective evaluation (read-only) ----
+var _glmEvalAt = 0;
+function loadGlmEvaluation(force){
+  if(!force && _glmEvalAt && Date.now() - _glmEvalAt < SV2_REFRESH_MS) return;
+  _glmEvalAt = Date.now();
+  getJson(WORKER_URL + '/api/glm/evaluation').then(res => {
+    const m = glmEvalModel(res), host = document.getElementById('glmEvalBody');
+    if(m.state !== 'ok'){ host.innerHTML = `${chip('UNAVAILABLE', 'neutral')} <span class="text-[#BAC9CD]">${esc(m.note)}</span>`; _glmEvalAt = 0; return; }
+    const pct = (v) => (v === null ? '—' : (v * 100).toFixed(1) + '%'), f3 = (v) => (v === null ? '—' : v.toFixed(3));
+    const line = (k, v) => `<div class="flex justify-between gap-3 py-0.5"><dt class="text-[#8A9599]">${k}</dt><dd class="font-mono-data text-[#E1E2E7] text-right">${v}</dd></div>`;
+    host.innerHTML = `<p>${chip(m.verdict, m.sufficient ? 'good' : 'neutral')}</p><dl class="mt-2">
+      ${line('Ticks recorded · resolved', m.ticks + ' · ' + m.resolved)}${line('Ticks with an eligible signal', m.signalTicks)}${line('Ticks where GLM changed the value', m.applied + ' of ' + GLM_PE1_MIN_APPLIED + ' needed')}
+      ${line('Direction accuracy · baseline / final', pct(m.accBaseline) + ' / ' + pct(m.accFinal))}${line('Brier · baseline / final', f3(m.brierBaseline) + ' / ' + f3(m.brierFinal))}
+      ${line('Adjustment · mean / max |pp|', (m.meanAbsAdj === null ? '—' : (m.meanAbsAdj * 100).toFixed(2)) + ' / ' + (m.maxAbsAdj === null ? '—' : (m.maxAbsAdj * 100).toFixed(2)))}</dl>
+      <p class="text-[10px] text-[#8A9599] mt-2">${esc(m.note)}${m.sufficient ? '' : ' Until then these figures are descriptive only.'}</p>`;
+  });
 }
 // ---- Settings: display and connection preferences only; no model, weight or production configuration. ----
 function renderSettings(){
@@ -2899,6 +3020,7 @@ function renderForecastLab(){
   renderFlPerformance(now, H);
   renderFlAgreement();
   renderFlSentiment(now);
+  renderFlCoverage(now);
   renderFlLedger();
 }
 function renderGlmPanel(now){
@@ -3092,6 +3214,14 @@ function renderFlSentiment(now){
       `</tbody></table><p class="mt-1">${chip(String(h.decision.C || 'NOT EVALUATED'), 'warn')} <span class="text-[#BAC9CD]">Sentiment effect (C − B): ${h.cMinusB ? `Brier ${h.cMinusB.dBrier > 0 ? '+' : ''}${h.cMinusB.dBrier.toFixed(3)}${ci(h.cMinusB.dBrierCi)}, balanced accuracy ${h.cMinusB.dBa > 0 ? '+' : ''}${h.cMinusB.dBa.toFixed(3)}${ci(h.cMinusB.dBaCi)}` : 'not reported'}. ${Object.entries(h.excluded).map(([k, v]) => `${esc(v)} excluded (${esc(String(k).replace(/_/g, ' '))})`).join(', ')}.</span></p></div>`).join('') +
     `<p class="text-[#BAC9CD]"><b class="text-[#E1E2E7]">Result: sentiment has not been shown to improve prediction.</b> V1 sentiment was available for few units because V1 records only while its app is open. A combined sentiment + TimesFM/Chronos-2 evaluation has not been registered or run, so no result exists for it yet.</p>`;
 }
+function renderFlCoverage(now){
+  const D = _fl.data, pr = chartPreset(_fl.period);
+  const cov = flCoverage(D.timesfm, D.chronos, pr.ms === Infinity ? null : now - pr.ms);
+  const name = (m) => (m === 'both' ? 'Both models (same origin)' : FL_MODELS[m].label);
+  document.getElementById('flCovBody').innerHTML = cov.map(c => c.model === 'both'
+    ? `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 text-[#BAC9CD]">${name(c.model)}</td><td class="px-2">${c.horizon} h</td><td class="px-2 font-mono-data">${c.n}</td><td colspan="4" class="px-2 text-[#8A9599]">pairs available for side-by-side comparison</td></tr>`
+    : `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2" style="color:${FL_MODELS[c.model].color}">${name(c.model)}</td><td class="px-2">${c.horizon} h</td><td class="px-2 font-mono-data">${c.n}${c.n === 0 ? ' ' + chip('NONE IN RANGE', 'neutral') : ''}</td><td class="px-2 font-mono-data">${c.resolved}</td><td class="px-2 font-mono-data">${c.pending}${c.unreadable ? ' · ' + c.unreadable + ' unreadable' : ''}</td><td class="px-2 font-mono-data">${c.onlyThis}</td><td class="px-2 font-mono-data whitespace-nowrap">${c.lastOrigin ? esc(fmtUtc(c.lastOrigin)) + ' · ' + (c.lastIssued ? esc(fmtUtc(c.lastIssued)) : 'not recorded') : '—'}</td></tr>`).join('');
+}
 function renderFlLedger(){
   const D = _fl.data, f = _fl.ledger;
   const host = document.getElementById('flLedgerFilters');
@@ -3113,11 +3243,12 @@ function renderFlLedger(){
   // Phones: one stacked card per forecast (no sideways scrolling); wider screens: the table below.
   const status = (r) => (r.status === 'resolved' ? chip(r.correct === 1 ? 'RIGHT' : 'WRONG', r.correct === 1 ? 'good' : 'bad') : chip(r.status.toUpperCase(), 'neutral')) + (r.population === 'post_seal_descriptive' ? ' ' + chip('DESCRIPTIVE', 'neutral') : '');
   document.getElementById('flLedgerCards').innerHTML = rows.map(r => `<li class="rounded-lg border border-[#3B494C] p-2.5 text-[11px]"><div class="flex justify-between gap-2"><span style="color:${FL_MODELS[r.model].color}" class="font-semibold">${FL_MODELS[r.model].label} · ${r.horizon} h</span><span>${status(r)}</span></div>
+    <div class="text-[10px] text-[#8A9599] mt-1">${esc(r.coin || 'BTC')} · input cutoff ${fmtUtc(r.originTs)} · issued ${r.issuedTs ? fmtUtc(r.issuedTs) : 'not recorded'} · target ${r.targetTs ? fmtUtc(r.targetTs) : '—'}</div>
     <div class="font-mono-data mt-1">${fmtUtc(r.originTs)} · <span class="${r.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${esc(r.direction || '—')}</span></div>
     <div class="font-mono-data">forecast ${flUsd(r.forecastPrice)} (${flPp(r.predRet)})${r.status === 'resolved' ? ` · actual ${flUsd(r.actualPrice)} (${flPp(r.actualRet)})` : ''}</div>
     <div class="text-[10px] text-[#8A9599] break-all mt-0.5">${esc(r.id)} · ${esc(r.source)}</div></li>`).join('') || '<li class="text-[#BAC9CD]">No forecasts match these filters.</li>';
   document.getElementById('flLedgerBody').innerHTML = rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top"><td class="py-1 px-2"><span class="font-mono-data">${esc(r.id)}</span><br><span class="text-[10px] text-[#8A9599] break-all">${esc(r.source)}</span></td>
-    <td class="px-2" style="color:${FL_MODELS[r.model].color}">${FL_MODELS[r.model].label}</td><td class="px-2 font-mono-data whitespace-nowrap">${fmtUtc(r.originTs)}</td><td class="px-2">${r.horizon} h</td>
+    <td class="px-2" style="color:${FL_MODELS[r.model].color}">${FL_MODELS[r.model].label}<br><span class="text-[10px] text-[#8A9599]">${esc(r.coin || 'BTC')}</span></td><td class="px-2 font-mono-data whitespace-nowrap">${fmtUtc(r.originTs)}<br><span class="text-[10px] text-[#8A9599]">issued ${r.issuedTs ? fmtUtc(r.issuedTs) : 'not recorded'}</span><br><span class="text-[10px] text-[#8A9599]">target ${r.targetTs ? fmtUtc(r.targetTs) : '—'}</span></td><td class="px-2">${r.horizon} h</td>
     <td class="px-2 ${r.direction === 'UP' ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${esc(r.direction || '—')}</td><td class="px-2 font-mono-data whitespace-nowrap">${flUsd(r.forecastPrice)}<br><span class="text-[#8A9599]">${flPp(r.predRet)}</span></td>
     <td class="px-2 font-mono-data whitespace-nowrap">${r.status === 'resolved' ? `${flUsd(r.actualPrice)}<br><span class="text-[#8A9599]">${flPp(r.actualRet)}</span>` : '—'}</td>
     <td class="px-2 font-mono-data">${r.status === 'resolved' && r.predRet !== null ? (r.predRet - r.actualRet > 0 ? '+' : '') + (r.predRet - r.actualRet).toFixed(2) : '—'}</td>

@@ -128,6 +128,8 @@ wireFullscreen(btnId, sectionId, containerId, getChart, normalHeight)  // existi
 | Must not change in V1 | route, prompt, model, key, cron, tables | same | same; V2 never calls `/foufi-check` |
 | Not done | No V2 Gemini key or call; V2 `GEMINI_DAILY_CRON_ENABLED` stays `0`; no Gemini in GLM as provider or fallback | | |
 
+**Trader Analysis input mapping (implemented 2026-11-20):** price and technicals from Hyperliquid BTC daily candles (≥ 200 closes) with V1's own indicator functions copied verbatim (sha256-pinned in tests; V1 used CoinGecko daily closes); `sentiment` = V2 `sv2-1.1.0` score and its fresh evidence-source readings (labelled `V2 …`); `topHeadlines` = V2 collector evidence retrieved ≤ the snapshot (V1 lexicon score); `probabilityModel` = `{insufficient: true}` (V1's 7-day frequency model has no V2 equivalent); every other V1 field is omitted, so V1's data block prints "Not available this session". The snapshot is taken at click time and its per-field provenance is shown with the result.
+
 Verification gate before release: one live call of each POST from a browser, with the response shape checked against the
 table, **on explicit owner request only** (each call spends V1's free Gemini quota). Until then the panels are built against
 recorded V1 contracts and tested with mocked routes.

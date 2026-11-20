@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -205,7 +205,9 @@ test('page source: one write request, user-entered key only, no embedded secrets
   // Exactly three POSTs, each named: the analyst relay (pre-existing), Hyperliquid allMids (a read-only market-data
   // query that the API only offers as POST) and V1's /gemini-outlook (Narrative parity, only on an explicit click).
   const posts = SRC.match(/method:\s*['"]POST['"]/g) || [];
-  assert.equal(posts.length, 3, 'three POSTs');
+  assert.equal(posts.length, 5, 'five POSTs: analyst relay, Hyperliquid allMids + candleSnapshot (read-only market data), V1 Narrative and Trader Analysis (clicks)');
+  const tr = SRC.slice(SRC.indexOf('async function runTraderAnalysis()'), SRC.indexOf('// ---- Settings:'));
+  assert.match(tr, /fetch\(V1_WORKER_URL \+ '\/trader-analysis-gemini', \{ method: 'POST'/);
   assert.match(SRC, /fetch\('https:\/\/api\.hyperliquid\.xyz\/info', \{ method: 'POST', headers: \{ 'Content-Type': 'application\/json' \}, body: JSON\.stringify\(\{ type: 'allMids' \}\) \}\)/);
   const nar = SRC.slice(SRC.indexOf('async function pfRunNarrative()'), SRC.indexOf('// ---- Settings:'));
   assert.match(nar, /fetch\(V1_WORKER_URL \+ '\/gemini-outlook', \{ method: 'POST'/);
@@ -853,7 +855,7 @@ test('page structure: backtests live in Research; Learning & Audit holds prospec
   // V1 is called on exactly three routes (contracts §4/§6/§8): the digest (GET), the user's own backup (GET, explicit
   // click with confirmation, security register S-10) and the Narrative (POST, explicit click). Nothing else.
   const v1Calls = (SRC.match(/V1_WORKER_URL \+ '[^']+'/g) || []).sort();
-  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/alert-configs'", "V1_WORKER_URL + '/alert-log?limit=50'", "V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/txs-backup'"]);
+  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/alert-configs'", "V1_WORKER_URL + '/alert-log?limit=50'", "V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/trader-analysis-gemini'", "V1_WORKER_URL + '/txs-backup'"]);
   assert.doesNotMatch(SRC, /test-telegram|alert-configs\/toggle|alert-configs\/delete/, 'V2 never changes or tests V1 alerts');
   const imp = SRC.slice(SRC.indexOf('async function pfImportFromV1()'), SRC.indexOf('function pfDownload'));
   assert.match(imp, /if\(!confirm\(/, 'V1 backup read only after confirmation');
@@ -1025,4 +1027,35 @@ test('comparison: real records keep decision time, V1 provenance and pending out
     assert.ok(r.target > r.ts);
   }
   assert.equal(H.cmpRecordRows({ ok: false }, 5), null);
+});
+
+// ---- Trader Analysis (Gemini) parity ----
+import { createHash } from 'node:crypto';
+test('trader parity: indicator functions are byte-identical to V1 (CryptoPulse index.html@9a5810c)', () => {
+  const fnText = (name) => { const i = SRC.indexOf('function ' + name + '('); let j = SRC.indexOf('{', i), d = 0; for (let k = j; k < SRC.length; k++) { if (SRC[k] === '{') d++; else if (SRC[k] === '}') { d--; if (!d) return SRC.slice(i, k + 1); } } };
+  const pinned = { techSma: 'aaf9276f5a5a', techIchimoku: '4f034743a0e9', techRsi: 'c5103373e8ba', findLocalExtrema: '763e54dfe328', techIchimokuCloud: 'fc395ee4409c',
+    techMaCrossoverEvent: 'a2fb750140be', techSwingStructure: '41ce0e4b3455', techRsiDivergence: '3fb844115936' };
+  for (const [n, h] of Object.entries(pinned)) assert.equal(createHash('sha256').update(fnText(n)).digest('hex').slice(0, 12), h, n + ' differs from V1');
+});
+test('trader parity: technicals need 200 closes; known values on a synthetic series', () => {
+  assert.equal(H.traderTechnicals(Array.from({ length: 150 }, (_, i) => ({ t: i, c: 100, v: 1 }))).ok, false);
+  const up = Array.from({ length: 260 }, (_, i) => ({ t: i * 86400000, c: 100 + i, v: i === 259 ? 5 : 1 }));
+  const t = plain(H.traderTechnicals(up));
+  assert.deepEqual([t.ok, t.price, t.ma50, t.rsi14, t.cloud.position, t.volumeTrend, t.closeCount], [true, 359, 334.5, 100, 'above', 'above 20d average', 260]);
+  assert.equal(t.tenkan, (359 + 351) / 2);
+});
+test('trader parity: payload only carries V2 data available at the snapshot; the rest is left to V1 as unavailable', () => {
+  const SNAP = NOW;
+  const tech = { ok: true, asOfTs: SNAP - 3 * HOUR, closeCount: 400, price: 61000, tenkan: 1, kijun: 2, ma50: 3, ma100: 4, ma200: 5, rsi14: 30, cloud: { position: 'below' }, crossover: { type: null }, swing: { structure: 'Mixed' }, divergence: { type: 'none' }, volume: 9, volumeTrend: 'N/A' };
+  const sv = { decision_ts: SNAP - HOUR, calc_version: 'sv2-1.1.0', sentiment_score: 38, evidence: { 'ev:decrypt': { state: 'fresh', value: 37 }, 'ev:x': { state: 'stale', value: 50 } } };
+  const ev = [{ title: 'Old news', retrieved_ts: SNAP - HOUR, lexicon_score: -2, family: 'market_sentiment_news' }, { title: 'From the future', retrieved_ts: SNAP + HOUR, lexicon_score: 3, family: 'x' }, { title: 'No score', retrieved_ts: SNAP - HOUR }];
+  const p = plain(H.traderPayloadV2(tech, sv, ev, SNAP));
+  assert.deepEqual(Object.keys(p.body).sort(), ['price', 'probabilityModel', 'sentiment', 'technicals', 'topHeadlines']);
+  assert.deepEqual(p.body.sentiment, { composite: 38, sources: { 'V2 decrypt': 37 } }, 'only fresh sources');
+  assert.deepEqual(p.body.topHeadlines.map((h) => h.title), ['Old news'], 'nothing retrieved after the snapshot');
+  assert.deepEqual(p.body.probabilityModel, { insufficient: true, n: 0 });
+  for (const k of ['liquidationClusters', 'whaleActivity', 'buyTheNews', 'regimeScorecard', 'nineMagFlags', 'sourceCorrelations']) assert.ok(!(k in p.body), k + ' not sent');
+  const late = plain(H.traderPayloadV2({ ok: false, reason: 'x' }, { ...sv, decision_ts: SNAP + 1 }, [], SNAP));
+  assert.ok(!('sentiment' in late.body) && !('price' in late.body), 'a V2 result newer than the snapshot is not used');
+  assert.ok(late.provenance.every((r) => typeof r.status === 'string' && r.status.length > 3));
 });

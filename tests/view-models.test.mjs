@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -230,8 +230,9 @@ const sv2 = (over = {}, ss = {}) => ({ ok: true, data: { ok: true, period: '7d',
 const texts = (m) => m.notices.map((n) => n.text).join(' | ');
 
 test('sentiment v2: periods match the Worker route and the spec', () => {
-  assert.deepEqual(plain(H.SV2_PERIODS).map((p) => p[0]), ['24h', '7d', '30d', '90d', 'all']);
-  assert.deepEqual(plain(H.SV2_PERIODS).map((p) => p[1]), ['24H', '7D', '30D', '90D', 'ALL']);
+  // Server keys the Worker accepts, labelled with the global chart presets (OD-08): 24H first.
+  assert.deepEqual(plain(H.SV2_PERIODS).map((p) => p[0]), ['24h', '7d', '30d', 'all']);
+  assert.deepEqual(plain(H.SV2_PERIODS).map((p) => p[1]), ['24H', '7D', '1M', 'All']);
 });
 
 test('sentiment v2: values pass through unchanged and stay aligned per timestamp', () => {
@@ -281,9 +282,8 @@ test('sentiment v2: errors and empty periods never draw invented data', () => {
 });
 
 test('page source: Sentiment V2 tab, colours, axes and route', () => {
-  assert.ok(/data-view="sentiment"/.test(SRC) && /id="view-sentiment"/.test(SRC), 'tab and view present');
-  assert.equal((SRC.match(/data-view="sentiment"/g) || []).length, 2, 'desktop and mobile nav');
-  assert.ok(/\{ key: 'sentiment', label: 'Sentiment V2'/.test(SRC));
+  assert.ok(/id="view-sentiment"/.test(SRC), 'view present');
+  assert.ok(/\{ key: 'sentiment-v2', label: 'Sentiment V2'/.test(SRC), 'area in navigation');
   assert.ok(/'V1 sentiment', 'v1', '#3B82F6'/.test(SRC), 'V1 blue');
   assert.ok(/'V2 sentiment', 'v2', '#22C55E'/.test(SRC), 'V2 green');
   assert.ok(/'BTC price', 'btc', '#F59E0B'/.test(SRC), 'BTC orange');
@@ -585,7 +585,7 @@ test('page source: Forecasting Lab reads persisted research results only', () =>
   const a = SRC.indexOf('// ---- Forecasting Lab: loading and rendering'), b = SRC.indexOf('buildSv2Periods();', a);
   assert.ok(a > 0 && b > a);
   assert.doesNotMatch(SRC.slice(a, b), /Math\.random|\.fill\(|interpolat/i, 'no generated values');
-  assert.match(SRC, /data-view="forecast"/);
+  assert.match(SRC, /id="view-forecast"/);
   // Every report-derived string in the PEV-1 table is escaped (review finding).
   assert.match(SRC, /\$\{esc\(v\)\} excluded \(\$\{esc\(String\(k\)/);
 });
@@ -713,4 +713,87 @@ test('GLM influence: shadow mode or zero adjustment never changes the headline',
     const h = H.headlineOf({ status: 'ok', p_up: 0.6, glm: g });
     assert.equal(h.pUp, 0.6); assert.equal(H.glmHeadlineNote(h), null);
   }
+});
+
+// ---- Stage 2 frontend foundation: navigation, global chart standard, Comparison (descriptive) ----
+test('navigation: nine areas in the contract order; Forecast is a Sentiment V2 tab; no Forecasting Lab', () => {
+  assert.deepEqual(plain(H.AREAS.map((a) => a.label)), ['Overview', 'Portfolio', 'Sentiment V1', 'Sentiment V2', 'Comparison', 'Research', 'Learning & Audit', 'Alerts', 'Settings']);
+  const v2 = H.AREAS.find((a) => a.key === 'sentiment-v2');
+  assert.deepEqual(plain(v2.tabs.map((t) => t.key)), ['overview', 'forecast', 'model']);
+  assert.ok(!H.AREAS.some((a) => /lab/i.test(a.label)), 'no Lab area');
+  assert.doesNotMatch(SRC, />Forecasting Lab</, 'no Forecasting Lab heading or nav label');
+  assert.equal(H.MOBILE_PRIMARY_AREAS.length, 4, 'four primary phone items plus More');
+  for (const v of H.allAreaViews()) assert.match(SRC, new RegExp('id="view-' + v + '"'), 'container for ' + v);
+});
+
+test('navigation: routes resolve, unknown falls back to Overview, legacy links redirect', () => {
+  const r = (h) => plain(H.resolveRoute(h));
+  assert.deepEqual([r('').area, r('').view, r('').canonical], ['overview', 'dashboard', 'overview']);
+  assert.deepEqual([r('#nonsense').canonical], ['overview']);
+  assert.deepEqual([r('#sentiment-v2').canonical, r('#sentiment-v2').view], ['sentiment-v2/overview', 'sentiment']);
+  assert.deepEqual([r('#sentiment-v2/forecast').view, r('#sentiment-v2/bogus').tab], ['forecast', 'overview']);
+  assert.deepEqual([r('#forecast').canonical, r('#lab').canonical, r('#dashboard').canonical, r('#sentiment').canonical], ['sentiment-v2/forecast', 'sentiment-v2/model', 'overview', 'sentiment-v2/overview']);
+  assert.deepEqual([r('#experiments').canonical, r('#history').canonical], ['research', 'learning']);
+  assert.deepEqual([r('#learning').canonical, r('#learning').openLearning, r('#history').openLearning], ['learning', true, false]);
+  assert.deepEqual(r('#learning').views, ['history', 'learningblock']);
+  assert.equal(r('#SETTINGS').area, 'settings', 'case-insensitive');
+});
+
+test('chart standard: 24H / 7D / 1M / All in that order, 24H default', () => {
+  assert.deepEqual(plain(H.CHART_PRESETS.map((p) => p.label)), ['24H', '7D', '1M', 'All']);
+  assert.equal(H.CHART_DEFAULT_PRESET, '24H');
+  assert.equal(H.chartPreset('nope').key, '24H');
+  assert.match(SRC, /const RANGES = CHART_PRESETS;/);
+  assert.match(SRC, /let activeRange = CHART_DEFAULT_PRESET;/);
+  assert.match(SRC, /const LAB_RANGES = CHART_PRESETS;/);
+  assert.match(SRC, /labChartRangeState\[stateKey\] = CHART_DEFAULT_PRESET;/);
+  assert.match(SRC, /var FL_PERIODS = CHART_PRESETS\.map/);
+  assert.match(SRC, /var _fl = \{ horizon: 24, period: CHART_DEFAULT_PRESET,/);
+  assert.match(SRC, /var _sv2Period = '24h';/);
+  assert.doesNotMatch(SRC, /key: '3M'|'90D'\]|\['90d'/, 'no off-standard presets left');
+});
+
+test('chart standard: clipping keeps real points only and reports coverage honestly', () => {
+  const pts = [{ ts: NOW - 40 * 24 * HOUR }, { ts: NOW - 3 * 24 * HOUR }, { ts: NOW - 2 * HOUR }, { ts: 'bad' }, null];
+  const d = plain(H.clipSeries(pts, 'ts', '24H', NOW));
+  assert.deepEqual([d.points.length, d.coverage.n, d.coverage.nAll, d.limited], [1, 1, 3, false]);
+  assert.equal(plain(H.clipSeries(pts, 'ts', '7D', NOW)).points.length, 2);
+  assert.equal(plain(H.clipSeries(pts, 'ts', 'ALL', NOW)).points.length, 3, 'All = every valid point');
+  const short = [{ ts: NOW - 3 * HOUR }, { ts: NOW - HOUR }];
+  const s7 = H.clipSeries(short, 'ts', '7D', NOW);
+  assert.equal(s7.limited, true);
+  assert.match(H.coverageNote(s7.coverage, '7D', NOW), /^Data starts .* shorter than 7D\.$/);
+  assert.match(H.coverageNote(H.clipSeries(short, 'ts', '24H', NOW).coverage, '24H', NOW), /shorter than 24H/, 'history really is shorter');
+  assert.equal(H.coverageNote(H.clipSeries(pts, 'ts', '24H', NOW).coverage, '24H', NOW), '', 'long history: no note even if the window is sparse');
+  assert.match(H.coverageNote(H.clipSeries([{ ts: NOW - 5 * 24 * HOUR }], 'ts', '24H', NOW).coverage, '24H', NOW), /^No data in the last 24H/);
+  assert.equal(H.coverageNote(H.clipSeries([], 'ts', '24H', NOW).coverage, '24H', NOW), 'No data available yet.');
+});
+
+test('chart standard: one shared full-screen implementation with Esc and an exit label', () => {
+  assert.match(SRC, /function chartFsEnter\(f\)/);
+  assert.match(SRC, /ev\.key === 'Escape' && _fsActive/);
+  assert.match(SRC, /'Exit full screen' : 'Expand chart to full screen'/);
+  assert.match(SRC, /wireFullscreenToggle\('fullscreenBtn', 'chartSection', 'chartContainer'/);
+  assert.match(SRC, /enableChartFullscreen\(id, \(\) => _fl\.charts\[id\]\)/, 'every Forecast chart');
+  assert.match(SRC, /enableChartFullscreen\('sv2Chart'/);
+  assert.match(SRC, /enableChartFullscreen\('v1Chart'/);
+  assert.doesNotMatch(SRC, /let isFullscreen = false/, 'old one-off handler removed');
+});
+
+test('comparison (descriptive): counts only aligned pairs, never invents values', () => {
+  const rows = [{ ts: 1, v1: 60, v2: 55 }, { ts: 2, v1: 40, v2: 52 }, { ts: 3, v1: 50, v2: 70 }, { ts: 4, v1: 61, v2: null }, { ts: 5, v1: null, v2: 48 }];
+  const c = plain(H.cmpSentimentSummary(rows));
+  assert.deepEqual([c.n, c.nRows, c.meanDiff, c.meanAbsDiff], [3, 5, 9, 12.3]);
+  assert.deepEqual([c.sameSide, c.decided], [1, 2], 'a neutral V1 (50) is not counted as a side');
+  assert.deepEqual(c.last, { ts: 3, v1: 50, v2: 70 });
+  assert.deepEqual(plain(H.cmpSentimentSummary([{ ts: 1, v1: 50, v2: null }])), { n: 0, nRows: 1 });
+  assert.deepEqual(plain(H.cmpSentimentSummary(null)), { n: 0, nRows: 0 });
+});
+
+test('comparison and V1 pages are read-only: no write call, no V1 write route', () => {
+  const a = SRC.indexOf('// ---- Sentiment V1 (read-only) and Comparison'), b = SRC.indexOf('// ---- Settings:', a);
+  assert.ok(a > 0 && b > a);
+  const block = SRC.slice(a, b);
+  assert.doesNotMatch(block, /method:\s*'(POST|PUT|DELETE)'|sentiment-ff75|txs-backup|foufi-check/);
+  assert.match(block, /getJson\(WORKER_URL \+ '\/api\/sentiment-v2\/comparison\?period='/);
 });

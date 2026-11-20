@@ -802,9 +802,82 @@
 
   <div id="view-portfolio" class="hidden">
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfTitle">
-      <h2 id="pfTitle" class="text-lg font-bold tracking-tight mb-1">Portfolio</h2>
-      <p class="text-xs text-[#BAC9CD]"><span class="inline-block px-1.5 py-0.5 rounded bg-[#3B494C]/60 text-[10px] font-semibold mr-1">NOT YET AVAILABLE</span>The V2 portfolio ledger (accounts, transactions, average cost, P&amp;L, allocation, import/export) is the next frontend stage. Nothing is shown in its place and no portfolio data is read or stored by this page yet. The V1 portfolio keeps working in V1.</p>
+      <h2 id="pfTitle" class="text-lg font-bold tracking-tight">Portfolio <span class="text-xs font-normal text-[#BAC9CD]">· personal accounting, USD reporting</span></h2>
+      <p id="pfStorageNote" class="text-[11px] text-[#8A9599] mt-1"></p>
+      <p id="pfPriceNote" class="text-[11px] text-[#8A9599] mt-0.5" role="status"></p>
+      <p class="text-[10px] text-[#8A9599] mt-0.5">Separate from the prediction engines: nothing here reads or changes sentiment, predictions or model settings. Not investment advice.</p>
     </section>
+
+    <div id="pf-holdings">
+      <div class="flex items-center gap-2 mb-3 flex-wrap"><label class="flex flex-col gap-0.5 min-w-0 w-64 max-w-full"><span class="text-[10px] text-[#8A9599]">View</span><select id="pfAccountFilter" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label></div>
+      <div id="pfKpis" class="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 text-xs"></div>
+      <ul id="pfIssues" class="space-y-1 text-[11px] mb-3"></ul>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfPosTitle"><h3 id="pfPosTitle" class="text-sm font-semibold mb-2">Holdings</h3>
+        <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Quantity</th><th class="py-1 px-2 font-normal text-right">Price</th><th class="py-1 px-2 font-normal text-right">Value</th><th class="py-1 px-2 font-normal text-right">Avg cost</th><th class="py-1 px-2 font-normal text-right">Cost basis</th><th class="py-1 px-2 font-normal text-right">Unrealised</th><th class="py-1 px-2 font-normal text-right">Realised</th></tr></thead><tbody id="pfPositions"></tbody></table></div>
+        <p class="text-[10px] text-[#8A9599] mt-2">Average-cost method. Fees paid in the price currency are part of the cost; a fee paid in the asset reduces the quantity. Internal transfers move quantity and cost between accounts without a buy or a sell. A cost recorded in another currency without an FX rate stays in that currency and is never converted with a guessed rate.</p>
+      </section>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfAllocTitle"><h3 id="pfAllocTitle" class="text-sm font-semibold mb-1">Allocation</h3><p id="pfAllocNote" class="text-[11px] text-[#8A9599] mb-2"></p>
+          <div class="relative h-[240px]"><canvas id="pfAllocChart" role="img" aria-label="Allocation of priced holdings by market value"></canvas></div></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfValueTitle"><div class="flex items-center justify-between flex-wrap gap-2 mb-1"><h3 id="pfValueTitle" class="text-sm font-semibold">Value history</h3><div id="pfValuePresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+          <p id="pfValueNote" class="text-[11px] text-[#8A9599] mb-2"></p><div class="relative h-[240px]"><canvas id="pfValueChart" role="img" aria-label="Portfolio value over time, recorded on this device"></canvas></div></section>
+      </div>
+    </div>
+
+    <div id="pf-transactions" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfAccTitle"><h3 id="pfAccTitle" class="text-sm font-semibold mb-2">Accounts</h3>
+          <ul id="pfAccountsList" class="text-xs space-y-0.5 mb-3"></ul>
+          <div class="grid grid-cols-2 gap-2"><label class="flex flex-col gap-0.5 min-w-0 col-span-2"><span class="text-[10px] text-[#8A9599]">Name</span><input id="pfAccName" maxlength="40" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="e.g. Revolut"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Kind</span><select id="pfAccKind" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option>exchange</option><option>wallet</option><option>bank</option></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Base currency</span><select id="pfAccCcy" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option>USD</option><option>EUR</option><option>GBP</option><option>CHF</option></select></label></div>
+          <button type="button" id="pfAccAdd" class="mt-2 px-3 py-1.5 rounded-lg bg-[#00E0FF] text-[#0B0E11] text-xs font-semibold">Add account</button><p id="pfAccMsg" class="text-[11px] mt-1"></p>
+        </section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6 lg:col-span-2" aria-labelledby="pfTxTitle"><h3 id="pfTxTitle" class="text-sm font-semibold mb-2">Add a transaction <span class="text-[#8A9599] font-normal text-[11px]">(rows are never edited; use Reverse to correct)</span></h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Account</span><select id="pfTxAccount" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Type</span><select id="pfTxType" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option value="buy">Buy</option><option value="sell">Sell</option><option value="deposit">Deposit (cash)</option><option value="withdrawal">Withdrawal (cash)</option><option value="reward">Reward / staking</option><option value="fee">Fee</option></select></label>
+            <label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Date and time (UTC)</span><input id="pfTxDate" type="datetime-local" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0"><span id="pfTxAssetLabel" class="text-[10px] text-[#8A9599]">Asset</span><input id="pfTxAsset" maxlength="10" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full uppercase" placeholder="BTC"></label>
+            <label class="flex flex-col gap-0.5 min-w-0"><span id="pfTxQtyLabel" class="text-[10px] text-[#8A9599]">Quantity</span><input id="pfTxQty" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label>
+            <div id="pfFieldPrice" class="contents"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Price per unit</span><input id="pfTxPrice" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Price currency</span><select id="pfTxPriceCcy" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option>USD</option><option>EUR</option><option>GBP</option><option>CHF</option></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">FX to USD (if not USD)</span><input id="pfTxFx" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="e.g. 1.0812"></label></div>
+            <div id="pfFieldFee" class="contents"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Fee</span><input id="pfTxFee" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Fee currency</span><input id="pfTxFeeCcy" maxlength="10" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full uppercase" placeholder="price ccy or asset"></label></div>
+            <label class="flex flex-col gap-0.5 min-w-0 col-span-2"><span class="text-[10px] text-[#8A9599]">Note</span><input id="pfTxNote" maxlength="200" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label>
+          </div>
+          <button type="button" id="pfTxAdd" class="mt-2 px-3 py-1.5 rounded-lg bg-[#00E0FF] text-[#0B0E11] text-xs font-semibold">Add transaction</button><p id="pfTxMsg" class="text-[11px] mt-1"></p>
+          <h4 class="text-xs font-semibold mt-4 mb-2">Transfer between my accounts</h4>
+          <div class="grid grid-cols-2 sm:grid-cols-6 gap-2"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">From</span><select id="pfTrFrom" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">To</span><select id="pfTrTo" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Asset</span><input id="pfTrAsset" maxlength="10" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full uppercase" placeholder="BTC"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Sent</span><input id="pfTrSent" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Received (if less: network fee)</span><input id="pfTrRecv" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Date (UTC)</span><input id="pfTrDate" type="datetime-local" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label></div>
+          <button type="button" id="pfTrAdd" class="mt-2 px-3 py-1.5 rounded-lg border border-[#00E0FF] text-[#00E0FF] text-xs font-semibold">Record transfer</button><p id="pfTrMsg" class="text-[11px] mt-1"></p>
+        </section>
+      </div>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfIoTitle"><h3 id="pfIoTitle" class="text-sm font-semibold mb-2">Import and export</h3>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <button type="button" id="pfExportCsv" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export CSV</button>
+          <button type="button" id="pfExportJson" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export full backup (JSON)</button>
+          <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / JSON…<input id="pfImportFile" type="file" accept=".csv,.json,text/csv,application/json" class="hidden"></label>
+          <button type="button" id="pfImportV1" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import from V1 backup</button>
+        </div>
+        <p class="text-[10px] text-[#8A9599] mt-2">CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
+        <p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
+      </section>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfLedgerTitle"><h3 id="pfLedgerTitle" class="text-sm font-semibold mb-1">Ledger</h3><p id="pfLedgerCount" class="text-[11px] text-[#8A9599] mb-2"></p>
+        <div class="overflow-x-auto max-h-[520px] overflow-y-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Date (UTC)</th><th class="py-1 px-2 font-normal ">Type</th><th class="py-1 px-2 font-normal ">Account</th><th class="py-1 px-2 font-normal ">Asset · qty</th><th class="py-1 px-2 font-normal ">Price · fee · FX</th><th class="py-1 px-2 font-normal ">Note</th><th class="py-1 px-2 font-normal "></th></tr></thead><tbody id="pfLedger"></tbody></table></div>
+      </section>
+    </div>
+
+    <div id="pf-planning" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfDryTitle"><h3 id="pfDryTitle" class="text-sm font-semibold mb-1">Dry powder planner</h3>
+          <p id="pfCashLine" class="text-[11px] text-[#8A9599] mb-2"></p>
+          <div class="grid grid-cols-2 gap-2"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Asset</span><select id="pfDryAsset" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Amount to deploy (USD)</span><input id="pfDryAmount" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="1000"></label></div>
+          <p id="pfDryOut" class="text-xs mt-2 text-[#BAC9CD]" role="status"></p><p class="text-[10px] text-[#8A9599] mt-1">Same rule as V1: the amount buys at the current price and is blended into the average cost.</p></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfBeTitle"><h3 id="pfBeTitle" class="text-sm font-semibold mb-1">Break-even prices</h3>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Break-even (avg cost)</th><th class="py-1 px-2 font-normal text-right">Price now</th><th class="py-1 px-2 font-normal text-right">Move needed</th></tr></thead><tbody id="pfBreakEven"></tbody></table></div>
+          <p class="text-[10px] text-[#8A9599] mt-1">The probability of reaching break-even (V1's scenario model) is not migrated yet; it is listed as a follow-up and nothing is shown in its place.</p></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfScTitle"><h3 id="pfScTitle" class="text-sm font-semibold mb-1">Scenarios</h3><p class="text-[11px] text-[#8A9599] mb-2">Assumption: every held asset moves by the same percentage from today's price. An illustration, not a forecast.</p>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Move</th><th class="py-1 px-2 font-normal text-right">Portfolio value</th><th class="py-1 px-2 font-normal text-right">P&amp;L vs cost basis</th></tr></thead><tbody id="pfScenarios"></tbody></table></div></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfNarrTitle"><h3 id="pfNarrTitle" class="text-sm font-semibold mb-1">Narrative <span class="text-[#BAC9CD] font-normal text-xs">· Gemini via V1</span></h3>
+          <p class="text-[11px] text-[#8A9599] mb-2">The V1 Narrative capability: Gemini's own read of 2–3 medium/long-term themes for your holdings. Runs only when you click, through V1's existing route and free Gemini quota; only holding weights are sent.</p>
+          <button type="button" id="pfNarrativeBtn" class="px-3 py-1.5 rounded-lg border border-[#A78BFA] text-[#A78BFA] text-xs font-semibold disabled:opacity-40">Ask for the narrative</button>
+          <div id="pfNarrativeOut" class="text-xs mt-2" role="status"></div></section>
+      </div>
+    </div>
   </div>
 
   <div id="view-alerts" class="hidden">
@@ -1584,7 +1657,10 @@ function coverageNote(coverage, key, now){
 // (id view-<name>) each route shows; the first one is the internal activeView key the loaders already use. ----
 var AREAS = [
   { key: 'overview', label: 'Overview', icon: 'monitoring', views: ['dashboard'] },
-  { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', views: ['portfolio'] },
+  { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', tabs: [
+    { key: 'holdings', label: 'Holdings', views: ['portfolio'] },
+    { key: 'transactions', label: 'Transactions', views: ['portfolio'] },
+    { key: 'planning', label: 'Planning', views: ['portfolio'] }] },
   { key: 'sentiment-v1', label: 'Sentiment V1', short: 'V1', icon: 'history_edu', views: ['sentiment-v1'] },
   { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
     { key: 'overview', label: 'Overview', views: ['sentiment'] },
@@ -1689,6 +1765,212 @@ function foufiModel(res, now){
   if(!items.length) return { state: 'empty', items: [], note: 'V1 has no Foufi digest yet.' };
   const stale = now - items[0].publishedTs > FOUFI_STALE_HOURS * 3600000;
   return { state: 'ok', items, stale, latestTs: items[0].publishedTs };
+}
+// ---- Portfolio accounting (contracts §8; temporary V1-equivalent security, owner decision OD-06). Pure functions:
+// the ledger is append-only (corrections are reversal rows), USD is the reporting currency, a missing FX rate is
+// reported and never guessed. Nothing here reads or writes sentiment, predictions, weights or outcomes. ----
+var PF_TYPES = ['buy', 'sell', 'deposit', 'withdrawal', 'transfer_out', 'transfer_in', 'reward', 'fee', 'reversal'];
+var PF_FIAT = ['USD', 'EUR', 'GBP', 'CHF'];
+var PF_ACCOUNT_KINDS = ['exchange', 'wallet', 'bank'];
+var PF_EPS = 1e-12;
+function pfNum(v){ const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v; return typeof n === 'number' && isFinite(n) ? n : null; }
+function pfAsset(v){ const a = String(v || '').trim().toUpperCase(); return /^[A-Z0-9]{2,10}$/.test(a) ? a : null; }
+function pfIsFiat(a){ return PF_FIAT.includes(a); }
+// Validation of one new transaction against the stored ledger. Returns a list of errors (empty = valid).
+function pfValidateTx(tx, store, now){
+  const e = [];
+  if(!tx || typeof tx !== 'object') return ['not a transaction'];
+  if(!PF_TYPES.includes(tx.type)) e.push('unknown type');
+  const accounts = (store && store.accounts) || [], txs = (store && store.txs) || [];
+  if(tx.type !== 'reversal' && !accounts.some((a) => a.id === tx.account_id)) e.push('unknown account');
+  if(pfNum(tx.ts) === null) e.push('invalid date');
+  else if(tx.ts > now + 86400000) e.push('date is in the future');
+  if(txs.some((t) => t.id === tx.id)) e.push('duplicate id');
+  const qty = pfNum(tx.qty), price = pfNum(tx.price), fee = pfNum(tx.fee), fx = pfNum(tx.fx_to_usd);
+  const needAsset = () => { if(!pfAsset(tx.asset)) e.push('asset must be 2-10 letters/digits'); };
+  const needQty = () => { if(qty === null || qty <= 0) e.push('quantity must be above 0'); };
+  if(tx.type === 'buy' || tx.type === 'sell'){
+    needAsset(); needQty();
+    if(pfIsFiat(pfAsset(tx.asset))) e.push('buy/sell a crypto asset; use deposit/withdrawal for cash');
+    if(price === null || price <= 0) e.push('price must be above 0');
+    if(!pfIsFiat(tx.price_ccy)) e.push('price currency must be one of ' + PF_FIAT.join(', '));
+  }
+  if(tx.type === 'deposit' || tx.type === 'withdrawal'){ needQty(); if(!pfIsFiat(pfAsset(tx.asset))) e.push('cash currency must be one of ' + PF_FIAT.join(', ')); }
+  if(tx.type === 'transfer_out' || tx.type === 'transfer_in'){ needAsset(); needQty(); if(!tx.transfer_id) e.push('transfer id required'); }
+  if(tx.type === 'reward'){ needAsset(); needQty(); if(price !== null && (price < 0 || !pfIsFiat(tx.price_ccy))) e.push('reward value needs a price ≥ 0 and a cash currency'); }
+  if(tx.type === 'fee'){ needAsset(); needQty(); }
+  if(fee !== null && fee < 0) e.push('fee cannot be negative');
+  if(fee !== null && fee > 0 && !(pfIsFiat(tx.fee_ccy) || pfAsset(tx.fee_ccy) === pfAsset(tx.asset))) e.push('fee currency must be the price currency, a cash currency or the asset itself');
+  if(fx !== null && fx <= 0) e.push('FX rate must be above 0');
+  if(tx.type === 'reversal'){
+    const target = txs.find((t) => t.id === tx.reverses_id);
+    if(!target) e.push('reversal must point to an existing transaction');
+    else if(target.type === 'reversal') e.push('a reversal cannot be reversed; enter the transaction again');
+    else if(txs.some((t) => t.type === 'reversal' && t.reverses_id === target.id)) e.push('already reversed');
+  }
+  return e;
+}
+// Amount in USD: USD as is; another currency only with a positive rate (the transaction's own, or the store's
+// rate table for that currency and day if the user supplied one). Otherwise null = unknown.
+function pfUsd(amount, ccy, fx){ if(amount === null) return null; if(ccy === 'USD') return amount; return fx !== null && fx > 0 ? amount * fx : null; }
+function pfCompute(store, prices, fxNow){
+  const accounts = (store && store.accounts) || [], all = (store && store.txs) || [];
+  const reversed = new Set(all.filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
+  const ORDER = { deposit: 0, transfer_out: 1, transfer_in: 2, buy: 3, reward: 4, sell: 5, fee: 6, withdrawal: 7 };
+  const active = all.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'reversal' && !reversed.has(t.id))
+    .sort((a, b) => (a.t.ts - b.t.ts) || (ORDER[a.t.type] - ORDER[b.t.type]) || (a.i - b.i)).map(({ t }) => t);
+  const acc = {}; for(const a of accounts) acc[a.id] = { id: a.id, name: a.name, kind: a.kind, pos: {}, cash: {}, feesUsd: 0, feesKnown: true };
+  const issues = [], pending = {};
+  const P = (A, asset) => (A.pos[asset] = A.pos[asset] || { asset, qty: 0, costUsd: 0, costKnown: true, costByCcy: {}, realizedUsd: 0, realizedKnown: true, rewardsUsd: 0, rewardNoPrice: false });
+  const addCcy = (p, ccy, v) => { p.costByCcy[ccy] = (p.costByCcy[ccy] || 0) + v; };
+  const remove = (p, q) => { // takes q units out at average cost; returns the cost removed
+    const r = p.qty > PF_EPS ? Math.min(1, q / p.qty) : 0;
+    const out = { costUsd: p.costKnown ? p.costUsd * r : null, byCcy: {} };
+    for(const [c, v] of Object.entries(p.costByCcy)){ out.byCcy[c] = v * r; p.costByCcy[c] = v - v * r; }
+    if(p.costKnown) p.costUsd -= out.costUsd;
+    p.qty -= q; if(Math.abs(p.qty) < 1e-10){ p.qty = 0; p.costUsd = p.costKnown ? 0 : p.costUsd; for(const c in p.costByCcy) p.costByCcy[c] = 0; }
+    return out;
+  };
+  for(const t of active){
+    const A = acc[t.account_id];
+    if(!A){ issues.push({ id: t.id, code: 'unknown_account', text: 'Transaction for an account that does not exist; ignored.' }); continue; }
+    const asset = pfAsset(t.asset), qty = pfNum(t.qty) || 0, price = pfNum(t.price), fx = pfNum(t.fx_to_usd);
+    const fee = pfNum(t.fee) || 0, feeCcy = t.fee_ccy ? String(t.fee_ccy).toUpperCase() : t.price_ccy;
+    const feeInAsset = fee > 0 && feeCcy === asset, feeQuote = fee > 0 && !feeInAsset && feeCcy === t.price_ccy ? fee : 0;
+    const feeOther = fee > 0 && !feeInAsset && !feeQuote ? fee : 0;
+    if(feeOther){ A.cash[feeCcy] = (A.cash[feeCcy] || 0) - feeOther; const u = pfUsd(feeOther, feeCcy, feeCcy === t.price_ccy ? fx : null); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
+    if(t.type === 'deposit' || t.type === 'withdrawal'){ A.cash[asset] = (A.cash[asset] || 0) + (t.type === 'deposit' ? qty : -qty); continue; }
+    if(t.type === 'buy'){
+      const p = P(A, asset), total = qty * price + feeQuote, u = pfUsd(total, t.price_ccy, fx);
+      p.qty += qty - (feeInAsset ? fee : 0); addCcy(p, t.price_ccy, total);
+      if(u === null){ p.costKnown = false; issues.push({ id: t.id, code: 'fx_missing', text: `${asset} buy in ${t.price_ccy} has no FX rate to USD: its USD cost is unknown.` }); } else if(p.costKnown) p.costUsd += u;
+      if(feeQuote){ const fu = pfUsd(feeQuote, t.price_ccy, fx); if(fu === null) A.feesKnown = false; else A.feesUsd += fu; }
+      A.cash[t.price_ccy] = (A.cash[t.price_ccy] || 0) - total; continue;
+    }
+    if(t.type === 'sell'){
+      const p = P(A, asset);
+      let q = qty + (feeInAsset ? fee : 0);
+      if(q > p.qty + 1e-9){ issues.push({ id: t.id, code: 'oversell', text: `${asset} sell of ${qty} exceeds the ${+p.qty.toFixed(10)} held in ${A.name}; only what is held is counted.` }); q = Math.max(0, p.qty); }
+      const sold = Math.min(qty, q), proceeds = sold * price - feeQuote, pu = pfUsd(proceeds, t.price_ccy, fx);
+      const out = remove(p, q);
+      if(pu === null || out.costUsd === null){ p.realizedKnown = false; if(pu === null) issues.push({ id: t.id, code: 'fx_missing', text: `${asset} sell in ${t.price_ccy} has no FX rate to USD: realised P&L in USD is unknown.` }); }
+      else p.realizedUsd += pu - out.costUsd;
+      if(feeQuote){ const fu = pfUsd(feeQuote, t.price_ccy, fx); if(fu === null) A.feesKnown = false; else A.feesUsd += fu; }
+      A.cash[t.price_ccy] = (A.cash[t.price_ccy] || 0) + proceeds; continue;
+    }
+    if(t.type === 'transfer_out'){
+      const p = P(A, asset); let q = qty;
+      if(q > p.qty + 1e-9){ issues.push({ id: t.id, code: 'overtransfer', text: `${asset} transfer of ${qty} exceeds what ${A.name} holds; only what is held is moved.` }); q = Math.max(0, p.qty); }
+      const known = p.costKnown, out = remove(p, q);
+      (pending[t.transfer_id] = pending[t.transfer_id] || []).push({ asset, qty: q, costUsd: out.costUsd, costKnown: known, byCcy: out.byCcy, from: A.name, id: t.id });
+      continue;
+    }
+    if(t.type === 'transfer_in'){
+      const p = P(A, asset), list = pending[t.transfer_id] || [], k = list.findIndex((m) => m.asset === asset);
+      if(k < 0){ p.qty += qty; p.costKnown = false; issues.push({ id: t.id, code: 'unmatched_transfer_in', text: `${asset} transfer into ${A.name} has no matching transfer out: its cost is unknown.` }); continue; }
+      const m = list.splice(k, 1)[0];
+      if(qty > m.qty + 1e-9) issues.push({ id: t.id, code: 'transfer_in_exceeds_out', text: `${asset} received (${qty}) is more than was sent (${m.qty}).` });
+      p.qty += qty; for(const [c, v] of Object.entries(m.byCcy)) addCcy(p, c, v);
+      if(!m.costKnown || m.costUsd === null) p.costKnown = false; else if(p.costKnown) p.costUsd += m.costUsd;
+      continue;   // a smaller amount received is the network fee, paid in the asset: the cost moves in full
+    }
+    if(t.type === 'reward'){
+      const p = P(A, asset); p.qty += qty;
+      if(price === null){ p.rewardNoPrice = true; issues.push({ id: t.id, code: 'reward_no_price', text: `${asset} reward without a value: counted at zero cost.` }); }
+      else { const u = pfUsd(qty * price, t.price_ccy, fx); addCcy(p, t.price_ccy, qty * price);
+        if(u === null){ p.costKnown = false; issues.push({ id: t.id, code: 'fx_missing', text: `${asset} reward valued in ${t.price_ccy} has no FX rate.` }); } else { if(p.costKnown) p.costUsd += u; p.rewardsUsd += u; } }
+      continue;
+    }
+    if(t.type === 'fee'){
+      if(pfIsFiat(asset)){ A.cash[asset] = (A.cash[asset] || 0) - qty; const u = pfUsd(qty, asset, fx); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
+      else { const p = P(A, asset); p.qty -= Math.min(qty, Math.max(0, p.qty)); }   // a fee in the asset leaves the cost, raising the average
+      continue;
+    }
+  }
+  for(const [tid, list] of Object.entries(pending)) for(const m of list) issues.push({ id: m.id, code: 'in_transit', text: `${m.qty} ${m.asset} sent from ${m.from} (transfer ${tid}) has no matching receipt yet: not counted in any account.` });
+  const px = (a) => { const v = prices ? pfNum(prices[a]) : null; return v !== null && v > 0 ? v : null; };
+  const cashUsd = (cash) => { let s = 0, ok = true; for(const [c, v] of Object.entries(cash)){ if(Math.abs(v) < 1e-9) continue; const u = c === 'USD' ? v : (c === 'EUR' && pfNum(fxNow) ? v * fxNow : null); if(u === null) ok = false; else s += u; } return { usd: s, complete: ok }; };
+  const finish = (p) => { const price = px(p.asset), value = price !== null ? p.qty * price : null;
+    return { asset: p.asset, qty: p.qty, costUsd: p.costKnown ? p.costUsd : null, costByCcy: p.costByCcy, avgCostUsd: p.costKnown && p.qty > PF_EPS ? p.costUsd / p.qty : null,
+      price, valueUsd: value, unrealizedUsd: value !== null && p.costKnown ? value - p.costUsd : null,
+      realizedUsd: p.realizedKnown ? p.realizedUsd : null, rewardsUsd: p.rewardsUsd, rewardNoPrice: p.rewardNoPrice }; };
+  const outAccounts = Object.values(acc).map((A) => ({ id: A.id, name: A.name, kind: A.kind,
+    positions: Object.values(A.pos).filter((p) => Math.abs(p.qty) > PF_EPS || Math.abs(p.realizedUsd) > 1e-9).map(finish).sort((a, b) => a.asset < b.asset ? -1 : 1),
+    cash: A.cash, cashUsd: cashUsd(A.cash), feesUsd: A.feesKnown ? A.feesUsd : null }));
+  // Consolidated by asset: sums across accounts; a USD figure is known only if it is known in every account.
+  const cons = {};
+  for(const A of Object.values(acc)) for(const p of Object.values(A.pos)){
+    const c = cons[p.asset] = cons[p.asset] || { asset: p.asset, qty: 0, costUsd: 0, costKnown: true, costByCcy: {}, realizedUsd: 0, realizedKnown: true, rewardsUsd: 0, rewardNoPrice: false };
+    c.qty += p.qty; if(!p.costKnown) c.costKnown = false; else c.costUsd += p.costUsd;
+    for(const [k, v] of Object.entries(p.costByCcy)) c.costByCcy[k] = (c.costByCcy[k] || 0) + v;
+    if(!p.realizedKnown) c.realizedKnown = false; else c.realizedUsd += p.realizedUsd;
+    c.rewardsUsd += p.rewardsUsd; c.rewardNoPrice = c.rewardNoPrice || p.rewardNoPrice;
+  }
+  const positions = Object.values(cons).filter((p) => Math.abs(p.qty) > PF_EPS || Math.abs(p.realizedUsd) > 1e-9).map(finish).sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
+  const sum = (k) => { let s = 0, ok = true; for(const p of positions){ if(Math.abs(p.qty) <= PF_EPS && k !== 'realizedUsd') continue; if(p[k] === null) ok = false; else s += p[k]; } return { value: s, complete: ok }; };
+  const allCash = {}; for(const A of Object.values(acc)) for(const [c, v] of Object.entries(A.cash)) allCash[c] = (allCash[c] || 0) + v;
+  const totals = { valueUsd: sum('valueUsd'), costUsd: sum('costUsd'), unrealizedUsd: sum('unrealizedUsd'), realizedUsd: sum('realizedUsd'), cash: allCash, cashUsd: cashUsd(allCash) };
+  const held = positions.filter((p) => p.qty > PF_EPS && p.valueUsd !== null && p.valueUsd > 0);
+  const tv = held.reduce((s, p) => s + p.valueUsd, 0);
+  const allocation = tv > 0 ? held.map((p) => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : [];
+  return { accounts: outAccounts, positions, totals, allocation, issues, nActive: active.length, nReversed: reversed.size };
+}
+// V1 Dry Powder Planner rule (CryptoPulse index.html renderDryPowder): deploy `amountUsd` at the current price.
+function pfDryPowder(position, amountUsd, priceUsd){
+  const q = position && position.qty > 0 ? position.qty : 0, oldAvg = position && position.avgCostUsd !== null ? position.avgCostUsd : null;
+  if(!(priceUsd > 0) || !(amountUsd >= 0)) return null;
+  if(oldAvg === null && q > 0) return { unknown: true };
+  const oldCost = q * (oldAvg || 0), addQty = amountUsd / priceUsd, newQty = q + addQty, newCost = oldCost + amountUsd;
+  const newAvg = newQty > 0 ? newCost / newQty : 0;
+  return { oldAvg: oldAvg || 0, newAvg, oldCost, newCost, addQty, shiftPct: oldAvg > 0 ? (newAvg - oldAvg) / oldAvg * 100 : 0 };
+}
+// Scenario: every held price moves by the same percentage (an assumption, stated in the UI; not a forecast).
+function pfScenario(positions, pct){
+  let v = 0, cost = 0, complete = true;
+  for(const p of positions || []){ if(!(p.qty > PF_EPS)) continue; if(p.price === null){ complete = false; continue; } v += p.qty * p.price * (1 + pct / 100); if(p.costUsd === null) complete = false; else cost += p.costUsd; }
+  return { pct, valueUsd: v, pnlUsd: complete ? v - cost : null, complete };
+}
+// ---- CSV import/export. Columns are fixed; dates are UTC (YYYY-MM-DD or ISO date-time). ----
+var PF_CSV_COLUMNS = ['date', 'account', 'type', 'asset', 'qty', 'price', 'price_ccy', 'fee', 'fee_ccy', 'fx_to_usd', 'transfer_id', 'note'];
+function pfParseCsv(text){
+  const rows = []; let row = [], cell = '', q = false; const s = String(text || '').replace(/^﻿/, '');
+  for(let i = 0; i < s.length; i++){ const ch = s[i];
+    if(q){ if(ch === '"'){ if(s[i + 1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if(ch === '"') q = true; else if(ch === ','){ row.push(cell); cell = ''; } else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && s[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch; }
+  if(cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+function pfDateMs(v){ const s = String(v || '').trim(); if(!s) return null; const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? Date.parse(s + 'T00:00:00Z') : /^\d{4}-\d{2}-\d{2}T/.test(s) ? Date.parse(/Z|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z') : NaN; return isFinite(d) ? d : null; }
+function pfDedupKey(t, accountName){ return [accountName || t.account_id, t.ts, t.type, pfAsset(t.asset), pfNum(t.qty), pfNum(t.price)].join('|'); }
+// Rows → candidate transactions (ids assigned by the caller). Unknown accounts are listed, not created silently.
+function pfCsvRowsToTxs(rows){
+  if(!rows.length) return { header: false, items: [], errors: ['empty file'] };
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const missing = PF_CSV_COLUMNS.slice(0, 5).filter((c) => !head.includes(c));
+  if(missing.length) return { header: false, items: [], errors: ['missing columns: ' + missing.join(', ')] };
+  const col = (r, c) => { const i = head.indexOf(c); return i < 0 ? '' : String(r[i] || '').trim(); };
+  const items = rows.slice(1).map((r, k) => { const type = col(r, 'type').toLowerCase();
+    return { line: k + 2, accountName: col(r, 'account'), tx: { ts: pfDateMs(col(r, 'date')), type, asset: pfAsset(col(r, 'asset')) || col(r, 'asset').toUpperCase(),
+      qty: pfNum(col(r, 'qty')), price: pfNum(col(r, 'price')), price_ccy: col(r, 'price_ccy').toUpperCase() || (type === 'buy' || type === 'sell' || type === 'reward' ? 'USD' : ''),
+      fee: pfNum(col(r, 'fee')), fee_ccy: col(r, 'fee_ccy').toUpperCase() || null, fx_to_usd: pfNum(col(r, 'fx_to_usd')),
+      transfer_id: col(r, 'transfer_id') || null, note: col(r, 'note').slice(0, 200) } }; });
+  return { header: true, items, errors: [] };
+}
+function pfCsvCell(v){ const s = v === null || v === undefined ? '' : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function pfToCsv(store){
+  const name = (id) => ((store.accounts || []).find((a) => a.id === id) || {}).name || '';
+  const lines = [PF_CSV_COLUMNS.concat(['id', 'reverses_id']).join(',')];
+  for(const t of store.txs || []) lines.push([new Date(t.ts).toISOString(), name(t.account_id), t.type, t.asset || '', t.qty ?? '', t.price ?? '', t.price_ccy || '', t.fee ?? '', t.fee_ccy || '', t.fx_to_usd ?? '', t.transfer_id || '', t.note || '', t.id, t.reverses_id || ''].map(pfCsvCell).join(','));
+  return lines.join('\n') + '\n';
+}
+// V1 backup (GET /txs-backup → {txs:[{date, asset, acct, type:'buy'|'sell', qty, price, ccy}]}) → candidates.
+function pfFromV1Backup(json){
+  const list = json && Array.isArray(json.txs) ? json.txs : null;
+  if(!list) return { items: [], errors: ['not a V1 backup (no txs list)'] };
+  return { errors: [], items: list.map((t, k) => ({ line: k + 1, accountName: String(t.acct || 'V1').trim() || 'V1', tx: { ts: pfDateMs(t.date), type: t.type,
+    asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: pfNum(t.price), price_ccy: String(t.ccy || 'USD').toUpperCase(), fee: null, fee_ccy: null,
+    fx_to_usd: null, transfer_id: null, note: 'imported from V1 backup' } })) };
 }
 // ---- END view-model helpers ----
 
@@ -2702,6 +2984,7 @@ function loadActiveView(force){
   if (activeView === 'comparison') loadComparisonIfNeeded(force);
   if (activeView === 'alerts') loadSystemStatus(force);
   if (activeView === 'settings') renderSettings();
+  if (activeView === 'portfolio') loadPortfolio(force);
 }
 function goRoute(target){
   _route = resolveRoute(target);
@@ -2943,6 +3226,296 @@ function loadGlmEvaluation(force){
       ${line('Adjustment · mean / max |pp|', (m.meanAbsAdj === null ? '—' : (m.meanAbsAdj * 100).toFixed(2)) + ' / ' + (m.maxAbsAdj === null ? '—' : (m.maxAbsAdj * 100).toFixed(2)))}</dl>
       <p class="text-[10px] text-[#8A9599] mt-2">${esc(m.note)}${m.sufficient ? '' : ' Until then these figures are descriptive only.'}</p>`;
   });
+}
+// ---- Portfolio: storage and UI. The ledger lives only in this browser (same model as V1, owner decision OD-06;
+// see docs/security/POST_PRODUCTION_SECURITY_REVIEW.md S-09/S-10). Export regularly: clearing site data deletes it. ----
+var PF_STORE_KEY = 'cpv2_portfolio_v1';
+var _pf = { store: null, prices: null, pricesAt: 0, pricesErr: null, fxNow: null, fxDate: null, fxErr: null, account: '', chart: null, alloc: null, range: CHART_DEFAULT_PRESET, narrative: null, narrativeBusy: false };
+function pfEmptyStore(){ return { version: 1, accounts: [], txs: [], importRuns: [], snapshots: [] }; }
+function pfLoad(){
+  if(_pf.store) return _pf.store;
+  try{ const raw = localStorage.getItem(PF_STORE_KEY); const s = raw ? JSON.parse(raw) : null;
+    _pf.store = s && s.version === 1 && Array.isArray(s.accounts) && Array.isArray(s.txs) ? { importRuns: [], snapshots: [], ...s } : pfEmptyStore();
+    _pf.storageOk = true;
+  }catch(e){ _pf.store = pfEmptyStore(); _pf.storageOk = false; }
+  return _pf.store;
+}
+function pfSave(){ try{ localStorage.setItem(PF_STORE_KEY, JSON.stringify(_pf.store)); _pf.storageOk = true; return true; }catch(e){ _pf.storageOk = false; return false; } }
+function pfId(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'tx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
+// Append-only: a transaction is added only if valid; nothing is ever edited or deleted.
+function pfAppend(tx){
+  const s = pfLoad(), full = { id: pfId(), created_at: Date.now(), ...tx };
+  const err = pfValidateTx(full, s, Date.now());
+  if(err.length) return err;
+  s.txs.push(full);
+  if(!pfSave()){ s.txs.pop(); return ['could not save in this browser (storage blocked or full)']; }
+  return [];
+}
+async function pfLoadPrices(force){
+  if(!force && _pf.prices && Date.now() - _pf.pricesAt < 60000) return;
+  try{ const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'allMids' }) });
+    if(!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json(); if(!j || typeof j !== 'object') throw new Error('unexpected response');
+    _pf.prices = j; _pf.pricesAt = Date.now(); _pf.pricesErr = null;
+  }catch(e){ _pf.pricesErr = e.message; }
+  try{ const r = await fetch('https://api.frankfurter.dev/v2/rate/EUR/USD'); if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(); if(typeof j.rate !== 'number') throw new Error('unexpected response'); _pf.fxNow = j.rate; _pf.fxDate = j.date || null; _pf.fxErr = null;
+  }catch(e){ _pf.fxErr = e.message; }
+}
+function pfMoney(v, d = 2){ return v === null || v === undefined || !isFinite(v) ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function pfQty(v){ return v === null || v === undefined ? '—' : (+v).toLocaleString('en-US', { maximumFractionDigits: 8 }); }
+function pfSigned(v){ return v === null ? '<span class="text-[#8A9599]">unknown</span>' : `<span class="${v >= 0 ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${v >= 0 ? '+' : ''}${pfMoney(v)}</span>`; }
+function pfPartial(t){ return t.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'; }
+function pfSnapshot(m){
+  const s = pfLoad(), last = s.snapshots[s.snapshots.length - 1];
+  if(!m.positions.length || _pf.pricesErr || (last && Date.now() - last.ts < 3600000)) return;
+  s.snapshots.push({ ts: Date.now(), totalUsd: m.totals.valueUsd.value, complete: m.totals.valueUsd.complete });
+  if(s.snapshots.length > 3000) s.snapshots.splice(0, s.snapshots.length - 3000);
+  pfSave();
+}
+async function loadPortfolio(force){
+  pfLoad(); renderPortfolio();
+  await pfLoadPrices(force);
+  if(activeView === 'portfolio') renderPortfolio();
+}
+function pfView(){ return _route.tab || 'holdings'; }
+function renderPortfolio(){
+  const s = pfLoad(), m = pfCompute(s, _pf.prices, _pf.fxNow), tab = pfView();
+  pfSnapshot(m);
+  document.getElementById('pfStorageNote').innerHTML = _pf.storageOk === false
+    ? `${chip('STORAGE BLOCKED', 'bad')} This browser does not allow local storage, so nothing can be saved here.`
+    : `Stored only in this browser (same model as V1; no server copy). ${s.txs.length} ledger row${s.txs.length === 1 ? '' : 's'} · ${s.accounts.length} account${s.accounts.length === 1 ? '' : 's'}. Export regularly: clearing site data deletes the ledger.`;
+  const priceLine = _pf.pricesErr ? `${chip('PRICES UNAVAILABLE', 'bad')} ${esc(_pf.pricesErr)}: values are not shown rather than guessed.` :
+    _pf.prices ? `Prices: Hyperliquid mid prices (USD), fetched ${esc(fmtUtc(_pf.pricesAt))}.` : 'Loading prices…';
+  document.getElementById('pfPriceNote').innerHTML = priceLine + (_pf.fxNow ? ` · EUR/USD ${_pf.fxNow.toFixed(4)} (ECB via Frankfurter${_pf.fxDate ? ', ' + esc(_pf.fxDate) : ''}), used only to show cash held in EUR.` : _pf.fxErr ? ' · EUR/USD unavailable: EUR cash is not converted.' : '');
+  for(const k of ['holdings', 'transactions', 'planning']) document.getElementById('pf-' + k).classList.toggle('hidden', k !== tab);
+  if(tab === 'holdings') renderPfHoldings(m);
+  if(tab === 'transactions') renderPfTransactions(m);
+  if(tab === 'planning') renderPfPlanning(m);
+}
+function renderPfHoldings(m){
+  const sel = document.getElementById('pfAccountFilter');
+  const accs = pfLoad().accounts;
+  sel.innerHTML = '<option value="">All accounts (consolidated)</option>' + accs.map(a => `<option value="${esc(a.id)}"${a.id === _pf.account ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
+  sel.onchange = () => { _pf.account = sel.value; renderPortfolio(); };
+  const A = _pf.account ? m.accounts.find(a => a.id === _pf.account) : null;
+  const positions = A ? A.positions : m.positions;
+  const t = m.totals;
+  const kpi = (k, v, sub) => `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2.5"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] text-base mt-0.5">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
+  document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' : A
+    ? kpi('Account', esc(A.name), esc(A.kind || '')) + kpi('Cash in account', A.cashUsd.complete ? pfMoney(A.cashUsd.usd) : 'partial', Object.entries(A.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none recorded')
+    : kpi('Market value', pfMoney(t.valueUsd.value) + pfPartial(t.valueUsd), 'current prices') +
+      kpi('Cost basis of holdings', pfMoney(t.costUsd.value) + pfPartial(t.costUsd), 'what was paid for what is still held') +
+      kpi('Unrealised P&L', pfSigned(t.unrealizedUsd.value) + pfPartial(t.unrealizedUsd), 'market movement on holdings') +
+      kpi('Realised P&L', pfSigned(t.realizedUsd.value) + pfPartial(t.realizedUsd), 'from sells, after fees') +
+      kpi('Cash (dry powder)', t.cashUsd.complete ? pfMoney(t.cashUsd.usd) : 'partial', Object.entries(t.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'no deposits recorded');
+  const neg = Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9);
+  document.getElementById('pfIssues').innerHTML = (neg.length ? `<li>${chip('CASH', 'warn')} Buys exceed recorded deposits in ${neg.map(([c]) => esc(c)).join(', ')}: record deposits to track cash; holdings and P&L are unaffected.</li>` : '') +
+    m.issues.slice(0, 12).map(i => `<li>${chip(i.code.replace(/_/g, ' ').toUpperCase(), i.code === 'fx_missing' || i.code === 'reward_no_price' || i.code === 'in_transit' ? 'warn' : 'bad')} <span class="text-[#BAC9CD]">${esc(i.text)}</span></li>`).join('') +
+    (m.issues.length > 12 ? `<li class="text-[#8A9599]">…and ${m.issues.length - 12} more.</li>` : '');
+  const body = document.getElementById('pfPositions');
+  if(!pfLoad().txs.length){ body.innerHTML = `<tr><td colspan="8" class="py-4 px-2 text-[#BAC9CD]">${chip('EMPTY', 'neutral')} No transactions yet. Add an account and a transaction in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('portfolio/transactions')">Transactions</button>, or import a CSV or your V1 backup there.</td></tr>`; }
+  else body.innerHTML = positions.map(p => `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 font-semibold">${esc(p.asset)}</td><td class="px-2 font-mono-data text-right">${pfQty(p.qty)}</td>
+    <td class="px-2 font-mono-data text-right">${p.price === null ? '—' : pfMoney(p.price, p.price < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${pfMoney(p.valueUsd)}</td>
+    <td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? (p.qty > 0 ? '<span class="text-[#8A9599]">FX missing</span>' : '—') : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td>
+    <td class="px-2 font-mono-data text-right">${p.costUsd === null ? Object.entries(p.costByCcy).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' + ') : pfMoney(p.costUsd)}</td>
+    <td class="px-2 font-mono-data text-right">${pfSigned(p.unrealizedUsd)}</td><td class="px-2 font-mono-data text-right">${pfSigned(p.realizedUsd)}</td></tr>`).join('') || '<tr><td colspan="8" class="py-3 px-2 text-[#BAC9CD]">No holdings in this account.</td></tr>';
+  // Allocation (static: full screen, no time presets) and value history (time-based: presets + full screen).
+  const alloc = A ? (() => { const h = A.positions.filter(p => p.valueUsd > 0), tv = h.reduce((s, p) => s + p.valueUsd, 0); return tv > 0 ? h.map(p => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : []; })() : m.allocation;
+  document.getElementById('pfAllocNote').textContent = alloc.length ? alloc.map(a => `${a.asset} ${(a.share * 100).toFixed(1)}%`).join(' · ') + (alloc.length && alloc[0].share > 0.5 ? ' · concentration: one asset is over half the portfolio' : '') : 'No priced holdings to allocate.';
+  const palette = ['#00E0FF', '#A78BFA', '#F59E0B', '#22C55E', '#F472B6', '#3B82F6', '#EF4444', '#94A3B8'];
+  const adata = { labels: alloc.map(a => a.asset), datasets: [{ data: alloc.map(a => +(a.share * 100).toFixed(2)), backgroundColor: alloc.map((_, i) => palette[i % palette.length]), borderColor: '#191C1F' }] };
+  if(_pf.alloc){ _pf.alloc.data = adata; _pf.alloc.update(); }
+  else { _pf.alloc = new Chart(document.getElementById('pfAllocChart').getContext('2d'), { type: 'doughnut', data: adata, options: { responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { position: 'right', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 10 } }, tooltip: { callbacks: { label: i => `${i.label}: ${i.parsed}%` } } } } });
+    enableChartFullscreen('pfAllocChart', () => _pf.alloc); }
+  buildPresetTabs('pfValuePresets', _pf.range, k => { _pf.range = k; renderPortfolio(); });
+  const now = Date.now(), clip = clipSeries(pfLoad().snapshots, 'ts', _pf.range, now);
+  document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' Recorded on this device, at most hourly, only while this page is open; gaps are not filled. ' + (A ? 'Whole portfolio, not this account.' : '');
+  const vdata = { datasets: [{ label: 'Portfolio value (USD)', data: clip.points.map(p => ({ x: p.ts, y: p.totalUsd })), borderColor: '#00E0FF', backgroundColor: '#00E0FF',
+    pointRadius: clip.points.length > 60 ? 0 : 2.5, borderWidth: 2, tension: 0, pointBackgroundColor: clip.points.map(p => (p.complete ? '#00E0FF' : 'rgba(0,0,0,0)')) }] };
+  // The axis spans the chosen window (All: from the first snapshot), so a single point is not stretched to milliseconds.
+  const win = chartPreset(_pf.range), xMin = win.ms === Infinity ? (clip.coverage.firstTs !== null ? Math.min(clip.coverage.firstTs, now - 3600000) : now - 86400000) : now - win.ms;
+  if(_pf.chart){ _pf.chart.data = vdata; _pf.chart.options.scales.x.min = xMin; _pf.chart.options.scales.x.max = now; _pf.chart.update(); }
+  else { const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
+    _pf.chart = new Chart(document.getElementById('pfValueChart').getContext('2d'), { type: 'line', data: vdata, options: { responsive: true, maintainAspectRatio: false, animation: false,
+      scales: { x: { type: 'time', min: xMin, max: now, ticks: { ...tick, maxRotation: 0, maxTicksLimit: 6 }, grid: { color: 'rgba(59,73,76,0.4)' }, title: { display: true, text: 'local time', color: '#8A9599', font: { size: 10 } } },
+        y: { ticks: { ...tick, callback: v => '$' + Number(v).toLocaleString('en-US') }, grid: { color: 'rgba(59,73,76,0.4)' } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: it => it.length ? fmtUtc(it[0].parsed.x) : '', label: it => pfMoney(it.parsed.y) + (it.raw && clip.points[it.dataIndex] && !clip.points[it.dataIndex].complete ? ' (partial: some prices missing)' : '') } } } } });
+    enableChartFullscreen('pfValueChart', () => _pf.chart); }
+}
+// Shared preset buttons (24H / 7D / 1M / All) for charts drawn from local data.
+function buildPresetTabs(hostId, current, onPick){
+  const host = document.getElementById(hostId); if(!host) return;
+  host.innerHTML = CHART_PRESETS.map(p => `<button type="button" data-k="${p.key}" aria-pressed="${p.key === current}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${p.key === current ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${p.label}</button>`).join('');
+  host.querySelectorAll('button').forEach(b => { b.onclick = () => onPick(b.dataset.k); });
+}
+function pfTypeLabel(t){ return { buy: 'Buy', sell: 'Sell', deposit: 'Deposit', withdrawal: 'Withdrawal', transfer_out: 'Transfer out', transfer_in: 'Transfer in', reward: 'Reward', fee: 'Fee', reversal: 'Reversal' }[t] || t; }
+function renderPfTransactions(m){
+  const s = pfLoad();
+  const accOpts = s.accounts.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  document.getElementById('pfTxAccount').innerHTML = accOpts || '<option value="">Add an account first</option>';
+  document.getElementById('pfTrFrom').innerHTML = accOpts; document.getElementById('pfTrTo').innerHTML = accOpts;
+  document.getElementById('pfAccountsList').innerHTML = s.accounts.map(a => `<li>${esc(a.name)} <span class="text-[#8A9599]">· ${esc(a.kind)} · ${esc(a.base_ccy || 'USD')}</span></li>`).join('') || '<li class="text-[#8A9599]">No accounts yet.</li>';
+  const reversed = new Set(s.txs.filter(t => t.type === 'reversal').map(t => t.reverses_id));
+  const name = id => (s.accounts.find(a => a.id === id) || {}).name || '—';
+  const rows = s.txs.slice().sort((a, b) => (b.ts - a.ts) || (b.created_at - a.created_at));
+  document.getElementById('pfLedgerCount').textContent = `${s.txs.length} row${s.txs.length === 1 ? '' : 's'} (append-only; ${reversed.size} reversed). Newest first.`;
+  document.getElementById('pfLedger').innerHTML = rows.map(t => { const isRev = reversed.has(t.id);
+    return `<tr class="border-t border-[#3B494C]/60 align-top ${isRev ? 'opacity-50' : ''}"><td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(new Date(t.ts).toISOString().slice(0, 16).replace('T', ' '))}</td>
+    <td class="px-2">${esc(pfTypeLabel(t.type))}${isRev ? ' ' + chip('REVERSED', 'neutral') : ''}</td><td class="px-2">${t.type === 'reversal' ? '<span class="text-[#8A9599]">of ' + esc(String(t.reverses_id).slice(0, 8)) + '</span>' : esc(name(t.account_id))}</td>
+    <td class="px-2 font-mono-data">${esc(t.asset || '')} ${t.qty !== undefined && t.qty !== null ? pfQty(t.qty) : ''}</td>
+    <td class="px-2 font-mono-data">${t.price !== null && t.price !== undefined ? esc(String(t.price)) + ' ' + esc(t.price_ccy || '') : ''}${t.fee ? '<br><span class="text-[#8A9599]">fee ' + esc(String(t.fee)) + ' ' + esc(t.fee_ccy || t.price_ccy || '') + '</span>' : ''}${t.fx_to_usd ? '<br><span class="text-[#8A9599]">FX ' + esc(String(t.fx_to_usd)) + '</span>' : ''}${t.transfer_id ? '<br><span class="text-[#8A9599]">transfer ' + esc(t.transfer_id) + '</span>' : ''}</td>
+    <td class="px-2 text-[#8A9599]">${esc(t.note || '')}</td>
+    <td class="px-2">${t.type !== 'reversal' && !isRev ? `<button type="button" data-rev="${esc(t.id)}" class="text-[11px] underline text-[#BAC9CD] hover:text-[#FFB4AB]">Reverse</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="py-3 px-2 text-[#BAC9CD]">No transactions yet.</td></tr>';
+  document.querySelectorAll('#pfLedger [data-rev]').forEach(b => { b.onclick = () => {
+    if(!confirm('Add a reversal row for this transaction? The original stays in the ledger, marked reversed; to correct it, enter the right transaction afterwards.')) return;
+    const err = pfAppend({ type: 'reversal', reverses_id: b.dataset.rev, ts: Date.now(), note: 'reversal' });
+    pfMsg('pfTxMsg', err); renderPortfolio(); }; });
+  const runs = s.importRuns.slice(-5).reverse();
+  document.getElementById('pfImportRuns').innerHTML = runs.map(r => `<li>${esc(fmtUtc(r.created_at))} · ${esc(r.source)} · ${r.accepted} added, ${r.duplicates} duplicate, ${r.rejected} rejected</li>`).join('') || '<li class="text-[#8A9599]">No imports yet.</li>';
+  pfTypeFields();
+}
+function pfMsg(id, errs, okText){ const el = document.getElementById(id); el.innerHTML = errs && errs.length ? `${chip('NOT SAVED', 'bad')} ${errs.map(esc).join('; ')}` : okText ? `${chip('SAVED', 'good')} ${esc(okText)}` : ''; }
+function pfTypeFields(){
+  const t = document.getElementById('pfTxType').value;
+  const show = (id, on) => document.getElementById(id).classList.toggle('hidden', !on);
+  show('pfFieldPrice', t === 'buy' || t === 'sell' || t === 'reward'); show('pfFieldFee', t === 'buy' || t === 'sell');
+  document.getElementById('pfTxAssetLabel').textContent = t === 'deposit' || t === 'withdrawal' ? 'Currency (USD, EUR, GBP, CHF)' : t === 'fee' ? 'Asset or currency' : 'Asset (e.g. BTC)';
+  document.getElementById('pfTxQtyLabel').textContent = t === 'deposit' || t === 'withdrawal' || (t === 'fee') ? 'Amount' : 'Quantity';
+}
+function pfFormVal(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function pfSubmitTx(){
+  const type = pfFormVal('pfTxType'), d = pfFormVal('pfTxDate');
+  const tx = { account_id: pfFormVal('pfTxAccount'), type, ts: d ? Date.parse(d + 'Z') : NaN, asset: pfFormVal('pfTxAsset').toUpperCase(), qty: pfNum(pfFormVal('pfTxQty')),
+    price: pfNum(pfFormVal('pfTxPrice')), price_ccy: pfFormVal('pfTxPriceCcy') || 'USD', fee: pfNum(pfFormVal('pfTxFee')), fee_ccy: pfFormVal('pfTxFeeCcy').toUpperCase() || null,
+    fx_to_usd: pfNum(pfFormVal('pfTxFx')), note: pfFormVal('pfTxNote').slice(0, 200) };
+  if(!(type === 'buy' || type === 'sell' || type === 'reward')){ tx.price = null; tx.price_ccy = null; tx.fee = null; tx.fee_ccy = null; }
+  if(tx.type === 'reward' && tx.price === null) tx.price_ccy = null;
+  const err = pfAppend(tx);
+  pfMsg('pfTxMsg', err, pfTypeLabel(type) + ' added.');
+  if(!err.length){ document.getElementById('pfTxQty').value = ''; document.getElementById('pfTxPrice').value = ''; document.getElementById('pfTxFee').value = ''; document.getElementById('pfTxFx').value = ''; document.getElementById('pfTxNote').value = ''; }
+  renderPortfolio();
+}
+function pfSubmitTransfer(){
+  const from = pfFormVal('pfTrFrom'), to = pfFormVal('pfTrTo'), asset = pfFormVal('pfTrAsset').toUpperCase(), sent = pfNum(pfFormVal('pfTrSent')), recv = pfNum(pfFormVal('pfTrRecv')), d = pfFormVal('pfTrDate');
+  if(from === to) return pfMsg('pfTrMsg', ['choose two different accounts']);
+  const ts = d ? Date.parse(d + 'Z') : NaN, tid = 'tr-' + pfId().slice(0, 8);
+  const outTx = { account_id: from, type: 'transfer_out', ts, asset, qty: sent, transfer_id: tid, note: 'internal transfer' };
+  const inTx = { account_id: to, type: 'transfer_in', ts, asset, qty: recv === null ? sent : recv, transfer_id: tid, note: 'internal transfer' };
+  const s = pfLoad(), e1 = pfValidateTx({ id: 'check-out', ...outTx }, s, Date.now()), e2 = pfValidateTx({ id: 'check-in', ...inTx }, s, Date.now());
+  if(e1.length || e2.length) return pfMsg('pfTrMsg', [...new Set([...e1, ...e2])]);
+  if(inTx.qty > outTx.qty) return pfMsg('pfTrMsg', ['received cannot exceed sent']);
+  const err = pfAppend(outTx); if(err.length) return pfMsg('pfTrMsg', err);
+  const err2 = pfAppend(inTx); pfMsg('pfTrMsg', err2, 'Transfer recorded as a matched pair (no buy, no sell, cost basis moved).'); renderPortfolio();
+}
+function pfSubmitAccount(){
+  const name = pfFormVal('pfAccName').slice(0, 40), kind = pfFormVal('pfAccKind'), ccy = pfFormVal('pfAccCcy');
+  const s = pfLoad();
+  if(!name) return pfMsg('pfAccMsg', ['name required']);
+  if(s.accounts.some(a => a.name.toLowerCase() === name.toLowerCase())) return pfMsg('pfAccMsg', ['an account with this name exists']);
+  s.accounts.push({ id: pfId(), name, kind: PF_ACCOUNT_KINDS.includes(kind) ? kind : 'exchange', base_ccy: PF_FIAT.includes(ccy) ? ccy : 'USD', created_at: Date.now() });
+  if(!pfSave()){ s.accounts.pop(); return pfMsg('pfAccMsg', ['could not save in this browser']); }
+  document.getElementById('pfAccName').value = ''; pfMsg('pfAccMsg', [], 'Account added.'); renderPortfolio();
+}
+// Import: every candidate is validated; duplicates (same account, time, type, asset, quantity, price) are skipped;
+// unknown account names are created only after the user confirms. One import-run record per import.
+function pfImportCandidates(items, source, fileHash){
+  const s = pfLoad(), newNames = [...new Set(items.map(i => i.accountName).filter(n => n && !s.accounts.some(a => a.name.toLowerCase() === n.toLowerCase())))];
+  if(newNames.length && !confirm(`Create ${newNames.length} new account(s): ${newNames.join(', ')}?`)) return { cancelled: true };
+  for(const n of newNames) s.accounts.push({ id: pfId(), name: n.slice(0, 40), kind: 'exchange', base_ccy: 'USD', created_at: Date.now() });
+  const byName = n => s.accounts.find(a => a.name.toLowerCase() === String(n).toLowerCase());
+  const seen = new Set(s.txs.map(t => pfDedupKey(t, (s.accounts.find(a => a.id === t.account_id) || {}).name)));
+  const run = { id: pfId(), source, file_hash: fileHash || null, created_at: Date.now(), rows: items.length, accepted: 0, duplicates: 0, rejected: 0, errors: [] };
+  for(const it of items){
+    const acc = byName(it.accountName), tx = { id: pfId(), created_at: Date.now(), import_run_id: run.id, ...it.tx, account_id: acc ? acc.id : null };
+    const key = pfDedupKey(tx, acc ? acc.name : it.accountName);
+    if(seen.has(key)){ run.duplicates++; continue; }
+    const e = pfValidateTx(tx, s, Date.now());
+    if(e.length){ run.rejected++; if(run.errors.length < 20) run.errors.push(`line ${it.line}: ${e.join(', ')}`); continue; }
+    s.txs.push(tx); seen.add(key); run.accepted++;
+  }
+  s.importRuns.push(run);
+  if(!pfSave()) return { error: 'could not save in this browser' };
+  return run;
+}
+function pfShowRun(r){
+  if(r.cancelled) return pfMsg('pfImportMsg', ['import cancelled']);
+  if(r.error) return pfMsg('pfImportMsg', [r.error]);
+  document.getElementById('pfImportMsg').innerHTML = `${chip(r.rejected ? 'IMPORTED WITH ERRORS' : 'IMPORTED', r.rejected ? 'warn' : 'good')} ${r.accepted} added · ${r.duplicates} duplicate skipped · ${r.rejected} rejected${r.errors.length ? `<ul class="list-disc pl-4 mt-1 text-[#FBBF24]">${r.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}`;
+  renderPortfolio();
+}
+async function pfHash(text){ try{ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join(''); }catch(e){ return null; } }
+async function pfImportFile(file){
+  if(!file) return;
+  if(file.size > 2000000) return pfMsg('pfImportMsg', ['file too large (max 2 MB)']);
+  const text = await file.text(), h = await pfHash(text);
+  if(/\.json$/i.test(file.name)){
+    let j; try{ j = JSON.parse(text); }catch(e){ return pfMsg('pfImportMsg', ['not valid JSON']); }
+    if(j && j.version === 1 && Array.isArray(j.txs) && Array.isArray(j.accounts)){   // a full V2 backup: restore as a whole, reversals included
+      const cur = pfLoad();
+      if(cur.txs.length || cur.accounts.length) return pfMsg('pfImportMsg', ['a full backup restores only into an empty portfolio (this one has data); use CSV to add rows']);
+      const probe = { accounts: j.accounts, txs: [] };
+      for(const t of j.txs){ const e = pfValidateTx(t, probe, Date.now()); if(e.length) return pfMsg('pfImportMsg', ['backup row ' + (probe.txs.length + 1) + ': ' + e.join(', ')]); probe.txs.push(t); }
+      if(!confirm(`Restore ${j.accounts.length} account(s) and ${j.txs.length} ledger row(s) from this backup?`)) return pfMsg('pfImportMsg', ['restore cancelled']);
+      _pf.store = { ...pfEmptyStore(), accounts: j.accounts, txs: j.txs, importRuns: (Array.isArray(j.importRuns) ? j.importRuns : []).concat([{ id: pfId(), source: 'json_restore', file_hash: h, created_at: Date.now(), rows: j.txs.length, accepted: j.txs.length, duplicates: 0, rejected: 0, errors: [] }]), snapshots: Array.isArray(j.snapshots) ? j.snapshots : [] };
+      if(!pfSave()) return pfMsg('pfImportMsg', ['could not save in this browser']);
+      pfMsg('pfImportMsg', [], 'Backup restored.'); return renderPortfolio();
+    }
+    const v1 = pfFromV1Backup(j); if(v1.errors.length) return pfMsg('pfImportMsg', v1.errors);
+    return pfShowRun(pfImportCandidates(v1.items, 'v1_backup_file', h));
+  }
+  const parsed = pfCsvRowsToTxs(pfParseCsv(text));
+  if(parsed.errors.length) return pfMsg('pfImportMsg', parsed.errors);
+  pfShowRun(pfImportCandidates(parsed.items, 'csv', h));
+}
+// "Import from V1": one GET of V1's backup route, only on this explicit click (S-10 in the security register).
+async function pfImportFromV1(){
+  if(!confirm('Read your latest V1 transaction backup from the V1 Worker and import its buys and sells? V1 is not changed.')) return;
+  pfMsg('pfImportMsg', [], 'Reading V1 backup…');
+  const r = await getJson(V1_WORKER_URL + '/txs-backup');
+  if(!r.ok || !r.data) return pfMsg('pfImportMsg', ['V1 backup could not be read' + (r.error ? ' (' + r.error + ')' : '')]);
+  if(r.data.found === false) return pfMsg('pfImportMsg', ['V1 has no backup stored']);
+  const v1 = pfFromV1Backup(r.data); if(v1.errors.length) return pfMsg('pfImportMsg', v1.errors);
+  pfShowRun(pfImportCandidates(v1.items, 'v1_backup_route', null));
+}
+function pfDownload(name, text, type){ const b = new Blob([text], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0); }
+function pfExport(kind){
+  const s = pfLoad(), stamp = new Date().toISOString().slice(0, 10);
+  if(kind === 'json') pfDownload(`cryptopulse-v2-portfolio-${stamp}.json`, JSON.stringify(s, null, 1), 'application/json');
+  else pfDownload(`cryptopulse-v2-transactions-${stamp}.csv`, pfToCsv(s), 'text/csv');
+}
+function renderPfPlanning(m){
+  const held = m.positions.filter(p => p.qty > PF_EPS);
+  const sel = document.getElementById('pfDryAsset'), prev = sel.value;
+  sel.innerHTML = held.map(p => `<option value="${esc(p.asset)}"${p.asset === prev ? ' selected' : ''}>${esc(p.asset)}</option>`).join('') || '<option value="">No holdings</option>';
+  const runDry = () => { const p = held.find(x => x.asset === sel.value), amt = pfNum(document.getElementById('pfDryAmount').value) || 0;
+    const r = p ? pfDryPowder(p, amt, p.price) : null, el = document.getElementById('pfDryOut');
+    if(!p) el.textContent = 'Add holdings to use the planner.';
+    else if(p.price === null) el.textContent = 'No current price for ' + p.asset + ': the planner needs one.';
+    else if(r && r.unknown) el.textContent = 'The average cost of ' + p.asset + ' is unknown (FX missing on a transaction), so the effect cannot be computed.';
+    else el.innerHTML = amt > 0 ? `Average cost ${pfMoney(r.oldAvg)} → <b>${pfMoney(r.newAvg)}</b> (${r.shiftPct >= 0 ? '+' : ''}${r.shiftPct.toFixed(2)}%) · cost basis ${pfMoney(r.oldCost)} → ${pfMoney(r.newCost)} · buys ${pfQty(r.addQty)} ${esc(p.asset)} at ${pfMoney(p.price)}` : 'Enter an amount to see the effect on the average cost.'; };
+  sel.onchange = runDry; document.getElementById('pfDryAmount').oninput = runDry; runDry();
+  document.getElementById('pfCashLine').innerHTML = `Cash recorded: ${Object.entries(m.totals.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none'}${m.totals.cashUsd.complete ? ' ≈ ' + pfMoney(m.totals.cashUsd.usd) : ''}`;
+  document.getElementById('pfBreakEven').innerHTML = held.map(p => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold">${esc(p.asset)}</td><td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? 'unknown' : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${p.price === null ? '—' : pfMoney(p.price, p.price < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${p.price === null || p.avgCostUsd === null ? '—' : ((p.avgCostUsd / p.price - 1) * 100 >= 0 ? '+' : '') + ((p.avgCostUsd / p.price - 1) * 100).toFixed(1) + '%'}</td></tr>`).join('') || '<tr><td colspan="4" class="py-2 px-2 text-[#BAC9CD]">No holdings.</td></tr>';
+  document.getElementById('pfScenarios').innerHTML = [-50, -25, -10, 0, 10, 25, 50, 100].map(pct => { const r = pfScenario(m.positions, pct);
+    return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data">${pct > 0 ? '+' : ''}${pct}%</td><td class="px-2 font-mono-data text-right">${pfMoney(r.valueUsd)}${r.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'}</td><td class="px-2 font-mono-data text-right">${pfSigned(r.pnlUsd)}</td></tr>`; }).join('');
+  const n = _pf.narrative, out = document.getElementById('pfNarrativeOut');
+  out.innerHTML = _pf.narrativeBusy ? 'Asking Gemini through V1…' : !n ? '' : n.error ? `${chip('UNAVAILABLE', 'bad')} ${esc(n.error)}` :
+    `<p class="text-[10px] text-[#8A9599] mb-1">Gemini (gemini-3.6-flash) via V1 · generated ${esc(fmtUtc(n.ts))} · an AI interpretation from the model's own knowledge, not a V2 score or advice. Sent: holding weights only.</p><p class="whitespace-pre-wrap text-[#E1E2E7]">${esc(n.analysis)}</p>`;
+  document.getElementById('pfNarrativeBtn').disabled = _pf.narrativeBusy || !m.allocation.length;
+}
+// Narrative (Gemini parity, contracts §6): V1's own POST /gemini-outlook with {portfolio:[{sym, weight}]}, exactly the
+// body V1 sends; only on this click; no amounts or transactions leave the browser.
+async function pfRunNarrative(){
+  const m = pfCompute(pfLoad(), _pf.prices, _pf.fxNow);
+  if(!m.allocation.length || _pf.narrativeBusy) return;
+  _pf.narrativeBusy = true; renderPortfolio();
+  try{ const r = await fetch(V1_WORKER_URL + '/gemini-outlook', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portfolio: m.allocation.map(a => ({ sym: a.asset, weight: +(a.share * 100).toFixed(1) })) }) });
+    const j = await r.json().catch(() => null);
+    _pf.narrative = r.ok && j && typeof j.analysis === 'string' ? { analysis: j.analysis, ts: j.ts || Date.now() } : { error: (j && j.error) || ('HTTP ' + r.status) };
+  }catch(e){ _pf.narrative = { error: e.message }; }
+  _pf.narrativeBusy = false; renderPortfolio();
 }
 // ---- Settings: display and connection preferences only; no model, weight or production configuration. ----
 function renderSettings(){
@@ -3254,6 +3827,15 @@ function renderFlLedger(){
     <td class="px-2 font-mono-data">${r.status === 'resolved' && r.predRet !== null ? (r.predRet - r.actualRet > 0 ? '+' : '') + (r.predRet - r.actualRet).toFixed(2) : '—'}</td>
     <td class="px-2">${r.status === 'resolved' ? chip(r.correct === 1 ? 'RIGHT' : 'WRONG', r.correct === 1 ? 'good' : 'bad') : chip(r.status.toUpperCase(), 'neutral')}${r.population === 'post_seal_descriptive' ? '<br>' + chip('DESCRIPTIVE', 'neutral') : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="py-3 px-2 text-[#BAC9CD]">No forecasts match these filters.</td></tr>';
 }
+document.getElementById('pfAccAdd').onclick = pfSubmitAccount;
+document.getElementById('pfTxAdd').onclick = pfSubmitTx;
+document.getElementById('pfTxType').onchange = pfTypeFields;
+document.getElementById('pfTrAdd').onclick = pfSubmitTransfer;
+document.getElementById('pfExportCsv').onclick = () => pfExport('csv');
+document.getElementById('pfExportJson').onclick = () => pfExport('json');
+document.getElementById('pfImportFile').onchange = (ev) => { pfImportFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; };
+document.getElementById('pfImportV1').onclick = pfImportFromV1;
+document.getElementById('pfNarrativeBtn').onclick = pfRunNarrative;
 buildSv2Periods();
 document.getElementById('sv2Details').addEventListener('toggle', () => loadSv2DetailsIfOpen());
 

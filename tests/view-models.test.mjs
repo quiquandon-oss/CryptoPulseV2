@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -202,8 +202,14 @@ test('alerts: passing needs no open alert and a recent successful run; unreadabl
 });
 
 test('page source: one write request, user-entered key only, no embedded secrets', () => {
+  // Exactly three POSTs, each named: the analyst relay (pre-existing), Hyperliquid allMids (a read-only market-data
+  // query that the API only offers as POST) and V1's /gemini-outlook (Narrative parity, only on an explicit click).
   const posts = SRC.match(/method:\s*['"]POST['"]/g) || [];
-  assert.equal(posts.length, 1, 'exactly one POST (analyst relay submit)');
+  assert.equal(posts.length, 3, 'three POSTs');
+  assert.match(SRC, /fetch\('https:\/\/api\.hyperliquid\.xyz\/info', \{ method: 'POST', headers: \{ 'Content-Type': 'application\/json' \}, body: JSON\.stringify\(\{ type: 'allMids' \}\) \}\)/);
+  const nar = SRC.slice(SRC.indexOf('async function pfRunNarrative()'), SRC.indexOf('// ---- Settings:'));
+  assert.match(nar, /fetch\(V1_WORKER_URL \+ '\/gemini-outlook', \{ method: 'POST'/);
+  assert.match(nar, /portfolio: m\.allocation\.map\(a => \(\{ sym: a\.asset, weight:/, 'only symbols and weights are sent');
   assert.ok(/fetch\(WORKER_URL \+ '\/analyst-relay\/submit'/.test(SRC), 'the POST bypasses the GET memo');
   assert.equal((SRC.match(/[^a-zA-Z]fetch\(WORKER_URL/g) || []).length, 1, 'every other Worker request goes through apiFetch');
   assert.ok(!/(ghp_|github_pat_|sk-[A-Za-z0-9]{20}|Bearer [A-Za-z0-9_\-]{20,})/.test(SRC), 'no token-like literal');
@@ -791,7 +797,7 @@ test('comparison (descriptive): counts only aligned pairs, never invents values'
 });
 
 test('comparison and V1 pages are read-only: no write call, no V1 write route', () => {
-  const a = SRC.indexOf('// ---- Sentiment V1 (read-only) and Comparison'), b = SRC.indexOf('// ---- Settings:', a);
+  const a = SRC.indexOf('// ---- Sentiment V1 (read-only) and Comparison'), b = SRC.indexOf('// ---- Learning & Audit: GLM-PE-1', a);
   assert.ok(a > 0 && b > a);
   const block = SRC.slice(a, b);
   assert.doesNotMatch(block, /method:\s*'(POST|PUT|DELETE)'|sentiment-ff75|txs-backup|foufi-check/);
@@ -844,7 +850,131 @@ test('page structure: backtests live in Research; Learning & Audit holds prospec
   assert.doesNotMatch(sec('view-history'), /historyBacktestTitle|regimeSplitTitle/);
   assert.match(SRC, /id="prospectiveCard"/);
   assert.equal(H.V1_WORKER_URL, 'https://sentiment-ff75.quiquandon.workers.dev');
-  const v1Calls = SRC.match(/V1_WORKER_URL \+ '[^']+'/g) || [];
-  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/foufi-latest'"], 'the only V1 call is the read-only digest route');
-  assert.doesNotMatch(SRC, /foufi-check|foufi-backfill|\/txs-backup|X-App-Secret/);
+  // V1 is called on exactly three routes (contracts §4/§6/§8): the digest (GET), the user's own backup (GET, explicit
+  // click with confirmation, security register S-10) and the Narrative (POST, explicit click). Nothing else.
+  const v1Calls = (SRC.match(/V1_WORKER_URL \+ '[^']+'/g) || []).sort();
+  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/txs-backup'"]);
+  const imp = SRC.slice(SRC.indexOf('async function pfImportFromV1()'), SRC.indexOf('function pfDownload'));
+  assert.match(imp, /if\(!confirm\(/, 'V1 backup read only after confirmation');
+  assert.match(imp, /getJson\(V1_WORKER_URL \+ '\/txs-backup'\)/, 'GET only');
+  assert.doesNotMatch(SRC, /foufi-check|foufi-backfill|X-App-Secret|portfolio-log/);
+});
+
+// ---- Stage 7: Portfolio accounting (contracts §8.4/§8.6). Synthetic data only. ----
+const PD = (d) => Date.parse(d + 'T00:00:00Z');
+const pfStore = () => ({ accounts: [{ id: 'a', name: 'Exchange', kind: 'exchange' }, { id: 'b', name: 'Wallet', kind: 'wallet' }], txs: [
+  { id: '1', account_id: 'a', ts: PD('2026-01-01'), type: 'deposit', asset: 'USD', qty: 10000 },
+  { id: '2', account_id: 'a', ts: PD('2026-01-02'), type: 'buy', asset: 'BTC', qty: 0.1, price: 50000, price_ccy: 'USD', fee: 10, fee_ccy: 'USD' },
+  { id: '3', account_id: 'a', ts: PD('2026-01-03'), type: 'buy', asset: 'BTC', qty: 0.1, price: 60000, price_ccy: 'USD' },
+  { id: '4', account_id: 'a', ts: PD('2026-01-04'), type: 'sell', asset: 'BTC', qty: 0.05, price: 70000, price_ccy: 'USD', fee: 5, fee_ccy: 'USD' },
+  { id: '5', account_id: 'a', ts: PD('2026-01-05'), type: 'transfer_out', asset: 'BTC', qty: 0.1, transfer_id: 'T1' },
+  { id: '6', account_id: 'b', ts: PD('2026-01-05'), type: 'transfer_in', asset: 'BTC', qty: 0.0999, transfer_id: 'T1' },
+  { id: '7', account_id: 'a', ts: PD('2026-01-06'), type: 'buy', asset: 'ETH', qty: 1, price: 2000, price_ccy: 'EUR' },
+  { id: '8', account_id: 'b', ts: PD('2026-01-07'), type: 'reward', asset: 'BTC', qty: 0.001, price: 65000, price_ccy: 'USD' },
+  { id: '9', account_id: 'a', ts: PD('2026-01-08'), type: 'buy', asset: 'LINK', qty: 100, price: 10, price_ccy: 'USD' },
+  { id: '10', type: 'reversal', reverses_id: '9', ts: PD('2026-01-09') }] });
+const r2 = (v) => (v === null ? null : Math.round(v * 100) / 100);
+
+test('portfolio: average cost with fees, realised P&L on a partial sell, unrealised at current price', () => {
+  const m = H.pfCompute(pfStore(), { BTC: 70000, ETH: 3000 }, 1.1);
+  const btc = m.positions.find((p) => p.asset === 'BTC');
+  // buys 5,010 (incl. fee) + 6,000; sell 0.05 removes 25% of 11,010 = 2,752.50; proceeds 3,500 − 5 = 3,495 → realised 742.50
+  assert.deepEqual([+btc.qty.toFixed(6), r2(btc.costUsd), r2(btc.realizedUsd)], [0.1509, 8322.5, 742.5]);
+  assert.deepEqual([r2(btc.valueUsd), r2(btc.unrealizedUsd)], [10563, 2240.5]);
+});
+
+test('portfolio: own-account transfer moves quantity and cost, no buy/sell, no double count; network fee raises the average', () => {
+  const m = H.pfCompute(pfStore(), { BTC: 70000 }, null);
+  const ex = m.accounts.find((a) => a.id === 'a').positions.find((p) => p.asset === 'BTC'), w = m.accounts.find((a) => a.id === 'b').positions.find((p) => p.asset === 'BTC');
+  assert.deepEqual([+ex.qty.toFixed(6), r2(ex.costUsd)], [0.05, 2752.5]);
+  assert.deepEqual([+w.qty.toFixed(6), r2(w.costUsd)], [0.1009, 5570], 'transferred cost 5,505 + reward 65');
+  assert.ok(w.avgCostUsd > ex.avgCostUsd, '0.0001 BTC network fee keeps the cost, so the average rises');
+  assert.equal(r2(ex.costUsd + w.costUsd), r2(m.positions.find((p) => p.asset === 'BTC').costUsd), 'consolidated = sum of accounts');
+  assert.equal(r2(w.realizedUsd), 0, 'a transfer realises nothing');
+});
+
+test('portfolio: missing FX is reported, never guessed; reversal removes the row without deleting it', () => {
+  const st = pfStore(), m = H.pfCompute(st, { BTC: 70000, ETH: 3000 }, 1.1);
+  const eth = m.positions.find((p) => p.asset === 'ETH');
+  assert.deepEqual([eth.costUsd, eth.unrealizedUsd, eth.avgCostUsd, eth.costByCcy.EUR], [null, null, null, 2000]);
+  assert.deepEqual(plain(m.issues.map((i) => i.code)), ['fx_missing']);
+  assert.equal(m.totals.unrealizedUsd.complete, false);
+  assert.equal(m.positions.some((p) => p.asset === 'LINK'), false, 'reversed buy has no effect');
+  assert.equal(st.txs.length, 10, 'both rows stay in the ledger');
+  st.txs[6] = { ...st.txs[6], fx_to_usd: 1.1 };
+  assert.equal(r2(H.pfCompute(st, { ETH: 3000 }, 1.1).positions.find((p) => p.asset === 'ETH').costUsd), 2200, 'with an FX rate the USD cost is known');
+});
+
+test('portfolio: cash/dry powder from deposits, buys and sells; EUR cash converted only with a current rate', () => {
+  const m = H.pfCompute(pfStore(), {}, 1.1);
+  assert.deepEqual(plain(m.totals.cash), { USD: 2485, EUR: -2000 });
+  assert.deepEqual([r2(m.totals.cashUsd.usd), m.totals.cashUsd.complete], [285, true]);
+  assert.equal(H.pfCompute(pfStore(), {}, null).totals.cashUsd.complete, false);
+});
+
+test('portfolio: oversell, unmatched and in-transit transfers, reward without price are flagged', () => {
+  const st = { accounts: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], txs: [
+    { id: '1', account_id: 'a', ts: 1, type: 'buy', asset: 'SOL', qty: 2, price: 100, price_ccy: 'USD' },
+    { id: '2', account_id: 'a', ts: 2, type: 'sell', asset: 'SOL', qty: 3, price: 150, price_ccy: 'USD' },
+    { id: '3', account_id: 'b', ts: 3, type: 'transfer_in', asset: 'ETH', qty: 1, transfer_id: 'X' },
+    { id: '4', account_id: 'a', ts: 4, type: 'reward', asset: 'HYPE', qty: 5 },
+    { id: '5', account_id: 'a', ts: 5, type: 'buy', asset: 'LINK', qty: 10, price: 10, price_ccy: 'USD' },
+    { id: '6', account_id: 'a', ts: 6, type: 'transfer_out', asset: 'LINK', qty: 4, transfer_id: 'Y' }] };
+  const m = H.pfCompute(st, {}, null);
+  assert.deepEqual(plain(m.issues.map((i) => i.code)).sort(), ['in_transit', 'oversell', 'reward_no_price', 'unmatched_transfer_in']);
+  const sol = m.positions.find((p) => p.asset === 'SOL');
+  assert.deepEqual([sol.qty, r2(sol.realizedUsd)], [0, 100], 'only the 2 held are sold: 2×150 − 200');
+  assert.equal(m.positions.find((p) => p.asset === 'HYPE').costUsd, 0, 'reward without a value counts at zero cost (flagged)');
+  assert.equal(m.positions.find((p) => p.asset === 'LINK').qty, 6, 'in-transit LINK is in no account');
+});
+
+test('portfolio: validation of new rows', () => {
+  const st = pfStore(), now = PD('2026-06-01');
+  const v = (t) => plain(H.pfValidateTx({ id: 'n', account_id: 'a', ts: PD('2026-02-01'), ...t }, st, now));
+  assert.deepEqual(v({ type: 'buy', asset: 'BTC', qty: 0.1, price: 1, price_ccy: 'USD' }), []);
+  assert.ok(v({ type: 'buy', asset: 'BTC', qty: 0, price: 1, price_ccy: 'USD' }).includes('quantity must be above 0'));
+  assert.ok(v({ type: 'buy', asset: 'EUR', qty: 1, price: 1, price_ccy: 'USD' }).some((e) => /use deposit/.test(e)));
+  assert.ok(v({ type: 'buy', asset: 'BTC', qty: 1, price: 1, price_ccy: 'JPY' }).some((e) => /price currency/.test(e)));
+  assert.ok(v({ type: 'deposit', asset: 'BTC', qty: 1 }).some((e) => /cash currency/.test(e)));
+  assert.ok(v({ type: 'transfer_out', asset: 'BTC', qty: 1 }).includes('transfer id required'));
+  assert.ok(v({ type: 'buy', asset: 'BTC', qty: 1, price: 1, price_ccy: 'USD', ts: PD('2026-07-01') }).includes('date is in the future'));
+  assert.ok(v({ type: 'buy', asset: 'BTC', qty: 1, price: 1, price_ccy: 'USD', account_id: 'zz' }).includes('unknown account'));
+  assert.ok(v({ id: '2', type: 'buy', asset: 'BTC', qty: 1, price: 1, price_ccy: 'USD' }).includes('duplicate id'));
+  assert.ok(v({ type: 'reversal', reverses_id: '9' }).includes('already reversed'));
+  assert.ok(v({ type: 'reversal', reverses_id: '10' }).some((e) => /cannot be reversed/.test(e)));
+  assert.ok(v({ type: 'reversal', reverses_id: 'nope' }).some((e) => /existing transaction/.test(e)));
+  assert.deepEqual(plain(H.PF_TYPES).sort(), ['buy', 'deposit', 'fee', 'reversal', 'reward', 'sell', 'transfer_in', 'transfer_out', 'withdrawal']);
+});
+
+test('portfolio: CSV parse/validate, export round-trip, duplicate key, V1 backup mapping', () => {
+  const rows = H.pfParseCsv('﻿date,account,type,asset,qty,price,price_ccy,note\r\n2026-02-01,Exchange,buy,btc,0.01,50000,USD,"say ""hi"", ok"\n\n2026-02-02T10:30:00,Exchange,sell,BTC,0.005,52000,,\n');
+  const p = plain(H.pfCsvRowsToTxs(rows));
+  assert.deepEqual([p.items.length, p.items[0].tx.asset, p.items[0].tx.note, p.items[1].tx.ts, p.items[1].tx.price_ccy], [2, 'BTC', 'say "hi", ok', Date.parse('2026-02-02T10:30:00Z'), 'USD']);
+  assert.deepEqual(plain(H.pfCsvRowsToTxs(H.pfParseCsv('foo,bar\n1,2'))).errors, ['missing columns: date, account, type, asset, qty']);
+  const st = pfStore(), csv = H.pfToCsv(st), back = plain(H.pfCsvRowsToTxs(H.pfParseCsv(csv)));
+  assert.equal(back.items.length, st.txs.length);
+  assert.deepEqual([back.items[1].accountName, back.items[1].tx.type, back.items[1].tx.qty, back.items[1].tx.fee], ['Exchange', 'buy', 0.1, 10]);
+  assert.equal(H.pfDedupKey(st.txs[1], 'Exchange'), H.pfDedupKey({ ...back.items[1].tx }, 'Exchange'), 'a re-import is recognised as a duplicate');
+  const v1 = plain(H.pfFromV1Backup({ txs: [{ date: '2026-04-11', asset: 'BTC', acct: 'Neverless', type: 'buy', qty: 0.019, price: 84715.15, ccy: 'EUR' }] }));
+  assert.deepEqual([v1.items[0].accountName, v1.items[0].tx.type, v1.items[0].tx.price_ccy, v1.items[0].tx.fx_to_usd, v1.items[0].tx.ts], ['Neverless', 'buy', 'EUR', null, PD('2026-04-11')]);
+  assert.deepEqual(plain(H.pfFromV1Backup({ found: false })).errors, ['not a V1 backup (no txs list)']);
+});
+
+test('portfolio: dry powder follows the V1 rule; scenarios are partial when a price or cost is missing', () => {
+  const r = plain(H.pfDryPowder({ qty: 1, avgCostUsd: 100 }, 100, 50));
+  assert.deepEqual([r.newAvg, r.oldCost, r.newCost, r.addQty, r.shiftPct], [200 / 3, 100, 200, 2, (200 / 3 - 100)]);
+  assert.equal(H.pfDryPowder({ qty: 1, avgCostUsd: null }, 100, 50).unknown, true);
+  assert.equal(H.pfDryPowder({ qty: 1, avgCostUsd: 10 }, 100, null), null);
+  const pos = [{ qty: 2, price: 100, costUsd: 150 }, { qty: 1, price: null, costUsd: 10 }];
+  const s = plain(H.pfScenario(pos, 50));
+  assert.deepEqual([s.valueUsd, s.pnlUsd, s.complete], [300, null, false]);
+  assert.deepEqual(plain(H.pfScenario([{ qty: 2, price: 100, costUsd: 150 }], -10)), { pct: -10, valueUsd: 180, pnlUsd: 30, complete: true });
+});
+
+test('portfolio: no real personal transactions and no portfolio data in source; storage key is V2-only', () => {
+  assert.doesNotMatch(SRC, /SEED_TXS|Neverless interest|84715\.15/);
+  assert.match(SRC, /var PF_STORE_KEY = 'cpv2_portfolio_v1';/);
+  assert.doesNotMatch(SRC, /localStorage\.setItem\('cp2_/, 'never writes V1 keys');
+  const pfBlock = SRC.slice(SRC.indexOf('// ---- Portfolio accounting'), SRC.indexOf('// ---- END view-model helpers ----')).split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert.doesNotMatch(pfBlock, /predictions|sentiment_v2|glm_|WORKER_URL/, 'accounting never touches the prediction domain');
 });

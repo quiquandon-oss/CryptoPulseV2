@@ -178,7 +178,7 @@ tests or fixtures (synthetic fixtures only).
 |---|---|
 | account | `id, name, kind (exchange\|wallet\|bank), base_ccy, created_at, archived` |
 | transaction (append-only) | `id (uuid), account_id, ts (ISO date-time), type, asset, qty, price, price_ccy, fee_amount, fee_ccy, fx_to_usd, fx_source (user\|frankfurter\|none), transfer_id, reverses_id, note, created_at, import_run_id` |
-| types | `buy, sell, deposit, withdrawal, transfer_out, transfer_in, reward, fee, adjustment` |
+| types | `buy, sell, deposit, withdrawal, transfer_out, transfer_in, reward, fee, reversal` (implemented 2026-11-20: a correction is a `reversal` row pointing to the original via `reverses_id`, followed by the right transaction) |
 | import_run | `id, source (csv\|v1_backup\|json), file_hash, rows_total, rows_accepted, rows_rejected, duplicates, created_at` |
 | snapshot | `ts, total_usd, by_asset[{asset, qty, price_usd, value_usd}], price_source` (computed on visit, kept locally) |
 | settings | `reporting_ccy = USD` (fixed), `display_ccy (USD\|EUR)`, `dry_powder_target`, `scenario_assumptions` |
@@ -191,10 +191,10 @@ tests or fixtures (synthetic fixtures only).
 - `reward` adds quantity at the user-entered USD fair value (counted as income); if no price is given, cost basis is 0 and the row is flagged.
 - `deposit`/`withdrawal` move cash (dry powder).
 - Corrections are new `adjustment` or reversal rows (`reverses_id`); rows are never edited or deleted.
-- A missing FX rate gives `fx_status: missing`; the row is excluded from USD totals and listed. It is never guessed.
+- A missing FX rate leaves that cost in its original currency: the USD cost, average cost and unrealised P&L of that position are shown as unknown, totals are marked *partial*, and the row is listed. It is never guessed. (Implemented: FX is entered per transaction. An automatic historical ECB rate lookup was not added, because the Frankfurter historical-series format could not be verified from this environment; the current EUR/USD rate, using the endpoint V1 already uses, converts only cash held in EUR for display.)
 - Market movement (price change) is shown separately from investment performance (cash flows).
 
-**8.5 Import:** CSV with a strict header and per-row validation report; a duplicate is the same (account, ts, type, asset, qty, price);
+**8.5 Import:** a full JSON backup restores as a whole, reversals included, and only into an empty portfolio; CSV with a strict header and per-row validation report; a duplicate is the same (account, ts, type, asset, qty, price);
 "Import from V1" is user-initiated and reads `GET /txs-backup` once (S-10), mapping `buy/sell` 1:1 with `acct` → account.
 
 **8.6 Tests:** ledger arithmetic, transfer no-double-count, fees/rewards, FX missing, average cost after partial sells, realised and unrealised P&L,

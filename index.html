@@ -869,11 +869,12 @@
           <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / XLSX / JSON…<input id="pfImportFile" type="file" accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden"></label>
           <button type="button" id="pfImportV1" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import from V1 backup</button>
           <button type="button" id="pfImportV1Embedded" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import V1 embedded data</button>
+          <button type="button" id="pfV1Check" class="px-3 py-1.5 rounded-lg border border-[#00E0FF] text-[#00E0FF]">Check against V1</button>
           <button type="button" id="pfFxFetch" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Fetch ECB reference rates</button>
         </div>
         <p class="text-[10px] text-[#8A9599] mt-2"><b>Same portfolio as V1:</b> 1) "Import from V1 backup" (what V1 already holds) and "Import V1 embedded data" (the starting transactions, Neverless interest and daily prices built into the V1 page), then 2) your Revolut and Neverless statements (CSV or XLSX, as exported for V1). They are read with V1's rules (BTC, ETH, SOL, LINK, HYPE; staking and Neverless deposits at zero cost; Neverless rows up to V1's 11 Apr 2026 starting balance skipped), and rows already in the ledger are skipped, so files can be re-imported safely.</p><p class="text-[10px] text-[#8A9599] mt-1">Generic CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
         <p id="pfFxMsg" class="text-[11px] mt-2"></p>
-        <p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
+        <div id="pfV1CheckOut" class="text-[11px] mt-2"></div><p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
       </section>
       <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfLedgerTitle"><h3 id="pfLedgerTitle" class="text-sm font-semibold mb-1">Ledger</h3><p id="pfLedgerCount" class="text-[11px] text-[#8A9599] mb-2"></p>
         <div class="overflow-x-auto max-h-[520px] overflow-y-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Date (UTC)</th><th class="py-1 px-2 font-normal ">Type</th><th class="py-1 px-2 font-normal ">Account</th><th class="py-1 px-2 font-normal ">Asset · qty</th><th class="py-1 px-2 font-normal ">Price · fee · FX</th><th class="py-1 px-2 font-normal ">Note</th><th class="py-1 px-2 font-normal "></th></tr></thead><tbody id="pfLedger"></tbody></table></div>
@@ -2436,22 +2437,49 @@ function pfV1InterestDeposits(interestEur){
   }
   return items;
 }
-// Daily value history from V1's embedded daily USD prices: for each day without a snapshot, the ledger's holdings at the
-// end of that day × that day's price. Only days before the first existing snapshot are added.
-function pfBackfillSnapshots(store, priceHistory){
-  const ph = priceHistory || {}, days = [...new Set(Object.values(ph).flatMap((o) => Object.keys(o || {})))].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
-  const snaps = (store && store.snapshots) || [], first = snaps.length ? Math.min(...snaps.map((s) => s.ts)) : Infinity;
-  const out = [];
-  for(const d of days){
-    const ts = Date.parse(d + 'T12:00:00Z'), end = Date.parse(d + 'T00:00:00Z') + 86400000;
-    if(ts >= first) break;
-    const sub = { ...store, txs: ((store && store.txs) || []).filter((t) => t.ts < end) };
-    const prices = {}; for(const [a, o] of Object.entries(ph)) if(o && pfNum(o[d]) !== null) prices[a] = o[d];
+// ---- V1 alignment. V1 always skips Neverless statement rows dated on or before its 2026-04-11 starting balance
+// (V1 NEVERLESS_SEED_CUTOFF); a ledger that took them in before that rule applied double counts. The plan lists the
+// rows to reverse (append-only: reversal rows, nothing deleted). ----
+function pfV1RepairPlan(store){
+  const s = store || {}, accs = (s.accounts || []).filter((a) => a.name.toLowerCase() === 'neverless').map((a) => a.id);
+  if(!pfHasV1NeverlessSeed(s)) return [];
+  const reversed = new Set((s.txs || []).filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
+  return (s.txs || []).filter((t) => t.type !== 'reversal' && !reversed.has(t.id) && accs.includes(t.account_id) && /^nlv:/.test(t.src_id || '')
+    && new Date(t.ts).toISOString().slice(0, 10) <= PF_NEVERLESS_V1_SEED_DATE).map((t) => t.id);
+}
+// Quantities per account and asset: V1 backup (buy +, sell −) against this ledger (pfCompute positions).
+function pfV1Compare(v1Txs, store){
+  const v1 = {};
+  for(const t of v1Txs || []){ const a = String(t.acct || 'Other'), s = pfAsset(t.asset), q = pfNum(t.qty); if(!s || q === null) continue;
+    v1[a] = v1[a] || {}; v1[a][s] = (v1[a][s] || 0) + (t.type === 'sell' ? -q : q); }
+  const m = pfCompute(store, {}, null), v2 = {};
+  for(const A of m.accounts) for(const p of A.positions) if(!pfIsFiat(p.asset)){ v2[A.name] = v2[A.name] || {}; v2[A.name][p.asset] = p.qty; }
+  const rows = [], keys = new Set();
+  for(const [a, o] of Object.entries(v1)) for(const s of Object.keys(o)) keys.add(a + '|' + s);
+  for(const [a, o] of Object.entries(v2)) for(const s of Object.keys(o)) keys.add(a + '|' + s);
+  for(const k of [...keys].sort()){ const [a, s] = k.split('|'), q1 = (v1[a] || {})[s] || 0, q2 = (v2[a] || {})[s] || 0, d = q2 - q1;
+    rows.push({ account: a, asset: s, v1: q1, v2: q2, diff: d, match: Math.abs(d) <= Math.max(1e-8, Math.abs(q1) * 1e-6) }); }
+  return { rows, allMatch: rows.every((r) => r.match), v1Rows: (v1Txs || []).length };
+}
+// Daily value history from the ledger: for each UTC day from the first transaction to `toDay`, holdings at the end of the
+// day × that day's USD price (dailyPrices = {asset: {YYYY-MM-DD: usd}}). A day missing a held asset's price is partial.
+function pfDailyHistory(store, dailyPrices, toDay){
+  const txs = ((store && store.txs) || []).filter((t) => t.type !== 'reversal'); if(!txs.length) return [];
+  const dp = dailyPrices || {}, start = new Date(Math.min(...txs.map((t) => t.ts))).toISOString().slice(0, 10), out = [];
+  for(let ms = Date.parse(start + 'T00:00:00Z'); ; ms += 86400000){
+    const d = new Date(ms).toISOString().slice(0, 10); if(d > toDay) break;
+    const sub = { ...store, txs: store.txs.filter((t) => t.type === 'reversal' || t.ts < ms + 86400000) };   // a reversal voids its row on every day
+    const prices = {}; for(const [a, o] of Object.entries(dp)) if(o && pfNum(o[d]) !== null) prices[a] = o[d];
     const m = pfCompute(sub, prices, null);
-    if(!m.positions.length || m.totals.valueUsd.value === null) continue;
-    out.push({ ts, totalUsd: m.totals.valueUsd.value, complete: m.totals.valueUsd.complete, source: 'v1_embedded_prices' });
+    if(!m.positions.some((p) => p.qty > PF_EPS && !pfIsFiat(p.asset))) continue;
+    out.push({ ts: ms + 12 * 3600000, totalUsd: m.totals.valueUsd.value, complete: m.totals.valueUsd.complete, source: 'daily' });
   }
   return out;
+}
+// Hyperliquid daily candles ([{t: open ms, c: close}]) → {YYYY-MM-DD: close} (the day's closing price).
+function pfCandlesToDaily(candles){
+  const o = {}; for(const c of Array.isArray(candles) ? candles : []){ const t = pfNum(c && c.t), v = pfNum(c && c.c); if(t !== null && v !== null && v > 0) o[new Date(t).toISOString().slice(0, 10)] = v; }
+  return o;
 }
 // ---- END view-model helpers ----
 
@@ -3813,10 +3841,41 @@ function pfSnapshot(m){
   if(s.snapshots.length > 3000) s.snapshots.splice(0, s.snapshots.length - 3000);
   pfSave();
 }
+// Daily closing prices (USD) from Hyperliquid candles, for the value history; at most every 6 hours, only the assets
+// in the ledger, from its first day. Free public endpoint (same source as current prices). Stored in this browser.
+async function pfLoadDailyPrices(force){
+  const s = pfLoad(), txs = s.txs.filter(t => t.type !== 'reversal' && t.asset && !pfIsFiat(pfAsset(t.asset)));
+  if(!txs.length) return false;
+  const h = s.dailyPricesHl || {};
+  if(!force && h.fetched_at && Date.now() - h.fetched_at < 6 * 3600000) return false;
+  const assets = [...new Set(txs.map(t => pfAsset(t.asset)).filter(Boolean))], start = Math.min(...txs.map(t => t.ts)) - 86400000, prices = {}, errs = [];
+  for(const a of assets){
+    try{ const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'candleSnapshot', req: { coin: a, interval: '1d', startTime: start, endTime: Date.now() } }) });
+      if(!r.ok) throw new Error('HTTP ' + r.status); prices[a] = pfCandlesToDaily(await r.json()); }
+    catch(e){ errs.push(a + ': ' + e.message); }
+  }
+  s.dailyPricesHl = { source: 'Hyperliquid daily candles (close, UTC days)', fetched_at: Date.now(), prices, errors: errs }; pfSave();
+  _pf.histKey = null; return true;
+}
+// Prices per day: V1's embedded prices for the days V1 covers (V1 parity), Hyperliquid closes for every other day.
+function pfMergedDailyPrices(s){
+  const out = {}, hl = (s.dailyPricesHl || {}).prices || {}, v1 = s.dailyPricesV1 || {};
+  for(const [a, o] of Object.entries(hl)) out[a] = { ...o };
+  for(const [a, o] of Object.entries(v1)) out[a] = { ...(out[a] || {}), ...o };
+  return out;
+}
+function pfValueSeries(){
+  const s = pfLoad(), today = new Date().toISOString().slice(0, 10), yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const key = [s.txs.length, (s.dailyPricesHl || {}).fetched_at, Object.keys(s.dailyPricesV1 || {}).length, yesterday].join('|');
+  if(_pf.histKey !== key){ _pf.hist = pfDailyHistory(s, pfMergedDailyPrices(s), yesterday); _pf.histKey = key; }
+  const live = s.snapshots.filter(x => x.source !== 'v1_embedded_prices' && x.ts >= Date.parse(today + 'T00:00:00Z'));
+  return _pf.hist.concat(live);
+}
 async function loadPortfolio(force){
   pfLoad(); renderPortfolio();
   await pfLoadPrices(force);
   if(activeView === 'portfolio') renderPortfolio();
+  if(await pfLoadDailyPrices(force) && activeView === 'portfolio') renderPortfolio();
 }
 function pfView(){ return _route.tab || 'holdings'; }
 function renderPortfolio(){
@@ -3871,10 +3930,11 @@ function renderPfHoldings(m){
     plugins: { legend: { position: 'right', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 10 } }, tooltip: { callbacks: { label: i => `${i.label}: ${i.parsed}%` } } } } });
     enableChartFullscreen('pfAllocChart', () => _pf.alloc); }
   buildPresetTabs('pfValuePresets', _pf.range, k => { _pf.range = k; renderPortfolio(); });
-  const now = Date.now(), clip = clipSeries(pfLoad().snapshots, 'ts', _pf.range, now);
-  const v1pts = clip.points.filter(p => p.source === 'v1_embedded_prices');
-  document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' Recorded on this device, at most hourly, only while this page is open; gaps are not filled. '
-    + (v1pts.length ? `Daily points ${fmtUtc(v1pts[0].ts, false)} → ${fmtUtc(v1pts[v1pts.length - 1].ts, false)} come from V1's embedded prices. ` : '') + (A ? 'Whole portfolio, not this account.' : '');
+  const now = Date.now(), clip = clipSeries(pfValueSeries(), 'ts', _pf.range, now);
+  const sv = pfLoad(), hl = sv.dailyPricesHl || {};
+  document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' One point per UTC day: the ledger\'s holdings at the end of the day × that day\'s price'
+    + (sv.dailyPricesV1 ? ' (V1\'s embedded prices for the days V1 covers, Hyperliquid daily closes otherwise)' : ' (Hyperliquid daily closes)') + '; today: live prices. Hollow = a price was missing that day. '
+    + (hl.errors && hl.errors.length ? 'Price history unavailable for ' + hl.errors.join(', ') + '. ' : '') + (A ? 'Whole portfolio, not this account.' : '');
   // Points more than 3 days apart are not joined (no line across a period without data); an isolated point keeps a dot.
   const PF_GAP_MS = 3 * 86400000, gapAt = (i) => i > 0 && clip.points[i].ts - clip.points[i - 1].ts > PF_GAP_MS;
   const lonely = clip.points.map((p, i) => (i === 0 || gapAt(i)) && (i === clip.points.length - 1 || gapAt(i + 1)));
@@ -4038,11 +4098,11 @@ function pfImportStatement(rows, h){
   const fmt = pfDetectStatement(rows);
   if(!fmt) return false;
   const objs = pfRowObjects(rows), s = pfLoad();
-  const cutoff = fmt === 'neverless' && pfHasV1NeverlessSeed(s) ? PF_NEVERLESS_V1_SEED_DATE : null;
+  const cutoff = fmt === 'neverless' ? PF_NEVERLESS_V1_SEED_DATE : null;   // always, as V1 (its starting balance holds that history)
   const m = fmt === 'revolut' ? pfFromRevolut(objs) : pfFromNeverless(objs, cutoff);
   const run = pfImportCandidates(m.items, fmt + '_statement', h, { v1Match: true });
   if(!run.cancelled && !run.error){ run.label = fmt === 'revolut' ? 'Revolut statement' : 'Neverless statement'; run.skipped = m.skipped; run.flags = m.flags;
-    if(fmt === 'neverless') run.cutoffNote = cutoff ? `V1's Neverless starting balances (dated ${cutoff}) are in this ledger, so statement rows up to that date were skipped, as V1 does.` : 'No V1 Neverless starting balance in this ledger, so the full statement history was imported.'; }
+    if(fmt === 'neverless') run.cutoffNote = `Statement rows up to ${cutoff} were skipped, as V1 does: V1's Neverless starting balances of that date hold them` + (pfHasV1NeverlessSeed(s) ? '.' : ' (run "Import V1 embedded data" to add those balances).'); }
   pfShowRun(run);
   return true;
 }
@@ -4115,13 +4175,32 @@ async function pfImportV1Embedded(){
   if(run.cancelled || run.error) return pfShowRun(run);
   let interest = null, added = 0;
   if(e.interestEur){ interest = pfImportCandidates(pfV1InterestDeposits(e.interestEur), 'v1_embedded_interest', null, { v1Match: true }); }
-  if(e.priceHistory){ const s = pfLoad(), extra = pfBackfillSnapshots(s, e.priceHistory);
-    if(extra.length){ s.snapshots = s.snapshots.concat(extra).sort((a, b) => a.ts - b.ts); added = extra.length; pfSave(); } }
+  if(e.priceHistory){ const s = pfLoad(); s.snapshots = s.snapshots.filter((x) => x.source !== 'v1_embedded_prices');
+    s.dailyPrices = s.dailyPrices || {}; s.dailyPricesV1 = {};
+    for(const [a, o] of Object.entries(e.priceHistory)){ s.dailyPricesV1[a] = o; added += Object.keys(o || {}).length; }
+    pfSave(); }
   run.label = 'V1 embedded data';
   run.cutoffNote = (interest && !interest.error ? `Neverless interest: ${interest.accepted} monthly EUR deposit(s) added, ${interest.duplicates} already present. ` : '')
-    + (e.priceHistory ? `Value history: ${added} daily point(s) added from V1's embedded prices (V1 interpolated them between trades).` : '')
+    + (e.priceHistory ? `Value history: V1's ${added} embedded daily prices stored (V1 interpolated them between trades); the value chart uses them for those days.` : '')
     + (e.errors.length ? ' Not found in the V1 page: ' + e.errors.join('; ') + '.' : '');
   pfShowRun(run);
+}
+// "Check against V1": V1's stored backup (one GET, as "Import from V1 backup") against this ledger, per account and asset;
+// offers the V1 Neverless rule as reversal rows when the ledger breaks it.
+async function pfV1Check(){
+  const out = document.getElementById('pfV1CheckOut'); out.textContent = 'Reading V1 backup…';
+  const r = await getJson(V1_WORKER_URL + '/txs-backup');
+  if(!r.ok || !r.data || !Array.isArray(r.data.txs)) return out.innerHTML = `${chip('UNAVAILABLE', 'neutral')} V1 backup could not be read${r.error ? ' (' + esc(r.error) + ')' : ''}.`;
+  const s = pfLoad(), c = pfV1Compare(r.data.txs, s), plan = pfV1RepairPlan(s), q = (v) => (+v).toLocaleString('en-US', { maximumFractionDigits: 8 });
+  out.innerHTML = `<p>${chip(c.allMatch ? 'SAME AS V1' : 'DIFFERS FROM V1', c.allMatch ? 'good' : 'warn')} V1 backup: ${c.v1Rows} rows${r.data.ts ? ', saved ' + esc(fmtUtc(r.data.ts)) : ''}. This ledger: ${s.txs.length} rows.</p>
+    <div class="overflow-x-auto mt-1"><table class="text-[11px]"><thead class="text-[#8A9599]"><tr><th class="text-left pr-3 font-normal">Account</th><th class="text-left pr-3 font-normal">Asset</th><th class="text-right pr-3 font-normal">V1</th><th class="text-right pr-3 font-normal">V2</th><th class="text-right font-normal">V2 − V1</th></tr></thead><tbody>
+    ${c.rows.map(x => `<tr class="${x.match ? '' : 'text-[#FBBF24]'}"><td class="pr-3">${esc(x.account)}</td><td class="pr-3">${esc(x.asset)}</td><td class="text-right pr-3 font-mono-data">${q(x.v1)}</td><td class="text-right pr-3 font-mono-data">${q(x.v2)}</td><td class="text-right font-mono-data">${x.match ? '✓' : (x.diff > 0 ? '+' : '') + q(x.diff)}</td></tr>`).join('')}</tbody></table></div>
+    ${plan.length ? `<p class="mt-2 text-[#FBBF24]">${plan.length} Neverless statement row(s) dated on or before ${PF_NEVERLESS_V1_SEED_DATE} are counted on top of V1's Neverless starting balances. V1 never imports them.</p><button type="button" id="pfV1Repair" class="mt-1 px-3 py-1.5 rounded-lg border border-[#FBBF24] text-[#FBBF24]">Apply V1 rule: reverse those ${plan.length} rows</button>` : ''}
+    <p class="text-[#8A9599] mt-1">Quantities only; differences after V1's last backup date are expected if your statements are newer than V1. Rows are never deleted: a fix adds reversal rows.</p>`;
+  const b = document.getElementById('pfV1Repair');
+  if(b) b.onclick = () => { if(!confirm(`Add ${plan.length} reversal row(s) for Neverless statement rows dated on or before ${PF_NEVERLESS_V1_SEED_DATE}?`)) return;
+    let n = 0, err = null; for(const id of plan){ const e = pfAppend({ type: 'reversal', reverses_id: id, ts: Date.now(), note: 'V1 rule: Neverless history before the ' + PF_NEVERLESS_V1_SEED_DATE + ' starting balance' }); if(e.length){ err = e.join(', '); break; } n++; }
+    _pf.histKey = null; renderPortfolio(); pfV1Check().then(() => { if(err) pfMsg('pfImportMsg', ['stopped after ' + n + ' reversals: ' + err]); else pfMsg('pfImportMsg', [], n + ' reversal row(s) added.'); }); };
 }
 // "Import from V1": one GET of V1's backup route, only on this explicit click (S-10 in the security register).
 async function pfImportFromV1(){
@@ -4573,6 +4652,7 @@ document.getElementById('pfTrAdd').onclick = pfSubmitTransfer;
 document.getElementById('pfExportCsv').onclick = () => pfExport('csv');
 document.getElementById('pfExportJson').onclick = () => pfExport('json');
 document.getElementById('pfImportV1Embedded').onclick = () => pfImportV1Embedded();
+document.getElementById('pfV1Check').onclick = () => pfV1Check();
 document.getElementById('pfImportFile').onchange = (ev) => { pfImportFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; };
 document.getElementById('pfImportV1').onclick = pfImportFromV1;
 document.getElementById('pfFxFetch').onclick = pfFetchEcbRates;

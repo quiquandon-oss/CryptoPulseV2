@@ -20,6 +20,7 @@ a row here.
 | S-10 | V2 "Import from V1" reads V1 `GET /txs-backup` on an explicit user click | V2 frontend (**implemented**: one GET after a confirmation dialog) | Phase 1 contracts §8.5 | V2, new, uses S-01 | OD-06 |
 | S-13 | V2 Narrative button POSTs holding weights (symbols and percentages only) to V1 `/gemini-outlook` | V2 frontend (implemented, click only) | contracts §6 | V2, new, uses S-08 | OD-04, OD-06 |
 | S-14 | Portfolio prices from Hyperliquid `allMids` and EUR/USD from Frankfurter are fetched from the browser (public, keyless; same providers as V1) | V2 frontend | — | V2, new | OD-06, OD-09 |
+| S-15 | V2 Alerts reads V1 `GET /alert-configs` and `GET /alert-log` (unauthenticated V1 routes; alert parameters and messages are shown) | V2 frontend (implemented, while Alerts is open) | contracts §9 | V2, new, uses an open V1 route | OD-06 |
 | S-11 | V2 public read routes (predictions, sentiment, GLM, research) are unauthenticated; operational routes use an admin token | PulseWorkerV2 | `worker.js@b640e3c` | V2, pre-existing | OD-06 |
 | S-12 | The Cloudflare connector in Claude sessions can write to production D1 | session tooling | Phase 0 F5 | tooling | Operating rule: SELECT-only unless authorised |
 

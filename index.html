@@ -3885,7 +3885,8 @@ function pfSigned(v){ return v === null ? '<span class="text-[#8A9599]">unknown<
 function pfPartial(t){ return t.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'; }
 function pfSnapshot(m){
   const s = pfLoad(), last = s.snapshots[s.snapshots.length - 1];
-  if(!m.positions.length || _pf.pricesErr || (last && Date.now() - last.ts < 3600000)) return;
+  // Only with live prices loaded: a snapshot taken before them would record an empty value and block the next hour.
+  if(!m.positions.length || !_pf.prices || _pf.pricesErr || !(m.totals.valueUsd.value > 0) || (last && last.interest && Date.now() - last.ts < 3600000)) return;
   const iu = pfInterestUsd(new Date().toISOString().slice(0, 10));
   s.snapshots.push({ ts: Date.now(), totalUsd: m.totals.valueUsd.value + (iu || 0), complete: m.totals.valueUsd.complete && iu !== null, interest: true });
   if(s.snapshots.length > 3000) s.snapshots.splice(0, s.snapshots.length - 3000);
@@ -3916,13 +3917,22 @@ function pfMergedDailyPrices(s){
 }
 // V1 rule: accrued Neverless interest (EUR) × the current EUR/USD rate; null when the rate is unknown.
 function pfInterestUsd(day){ const s = pfLoad(); if(!s.v1InterestEur) return 0; const eur = pfV1InterestAt(s.v1InterestEur, day); return eur > 0 ? (pfNum(_pf.fxNow) ? eur * _pf.fxNow : null) : 0; }
-function pfValueSeries(){
+// Daily value series for the whole portfolio, or for one account (its own rows only; the Neverless savings interest
+// belongs to the Neverless account, as in V1). Today: live prices (a stored snapshot for the whole portfolio, the
+// current account value for one account).
+function pfValueSeries(account, liveValueUsd){
   const s = pfLoad(), today = new Date().toISOString().slice(0, 10), yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const key = [s.txs.length, (s.dailyPricesHl || {}).fetched_at, Object.keys(s.dailyPricesV1 || {}).length, yesterday].join('|');
-  if(_pf.histKey !== key + '|' + _pf.fxNow){ _pf.hist = pfDailyHistory(s, pfMergedDailyPrices(s), yesterday).map((x) => { const iu = pfInterestUsd(new Date(x.ts).toISOString().slice(0, 10));
-      return { ...x, totalUsd: x.totalUsd + (iu || 0), complete: x.complete && iu !== null }; }); _pf.histKey = key + '|' + _pf.fxNow; }
-  const live = s.snapshots.filter(x => x.source !== 'v1_embedded_prices' && x.interest && x.ts >= Date.parse(today + 'T00:00:00Z'));
-  return _pf.hist.concat(live);
+  const accName = account ? ((s.accounts.find(a => a.id === account) || {}).name || '') : '', withInterest = !account || accName.toLowerCase() === 'neverless';
+  const key = [account || 'all', s.txs.length, (s.dailyPricesHl || {}).fetched_at, Object.keys(s.dailyPricesV1 || {}).length, yesterday, _pf.fxNow].join('|');
+  _pf.histCache = _pf.histKey === null ? {} : (_pf.histCache || {}); _pf.histKey = 'ok';
+  if(!_pf.histCache[key]){
+    const sub = account ? { ...s, txs: s.txs.filter(t => t.type === 'reversal' || t.account_id === account) } : s;
+    _pf.histCache[key] = pfDailyHistory(sub, pfMergedDailyPrices(s), yesterday).map((x) => { const iu = withInterest ? pfInterestUsd(new Date(x.ts).toISOString().slice(0, 10)) : 0;
+      return { ...x, totalUsd: x.totalUsd + (iu || 0), complete: x.complete && iu !== null }; });
+  }
+  const live = account ? (liveValueUsd === null || liveValueUsd === undefined ? [] : [{ ts: Date.now(), totalUsd: liveValueUsd, complete: true }])
+    : s.snapshots.filter(x => x.source !== 'v1_embedded_prices' && x.interest && x.totalUsd > 0 && x.ts >= Date.parse(today + 'T00:00:00Z'));
+  return _pf.histCache[key].concat(live);
 }
 async function loadPortfolio(force){
   pfLoad(); renderPortfolio();
@@ -3959,13 +3969,19 @@ function renderPfHoldings(m){
   const hasCash = pfLoad().txs.some(x => (x.type === 'deposit' || x.type === 'withdrawal') && !revd.has(x.id));
   const t = m.totals, today = new Date().toISOString().slice(0, 10), iEur = pfLoad().v1InterestEur ? pfV1InterestAt(pfLoad().v1InterestEur, today) : 0, iUsd = pfInterestUsd(today);
   const kpi = (k, v, sub) => `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2.5"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] text-base mt-0.5">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
-  document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' : A
-    ? kpi('Account', esc(A.name), esc(A.kind || '')) + kpi('Cash in account', A.cashUsd.complete ? pfMoney(A.cashUsd.usd) : 'partial', Object.entries(A.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none recorded')
-    : kpi('Market value', pfMoney(t.valueUsd.value + (iUsd || 0)) + pfPartial({ complete: t.valueUsd.complete && iUsd !== null }), iEur > 0 ? `current prices + Neverless interest €${iEur.toFixed(2)} (V1 accrual)` : 'current prices') +
-      kpi('Cost basis of holdings', pfMoney(t.costUsd.value) + pfPartial(t.costUsd), 'what was paid for what is still held') +
-      kpi('Unrealised P&L', pfSigned(t.unrealizedUsd.value === null ? null : t.unrealizedUsd.value + (iUsd || 0)) + pfPartial({ complete: t.unrealizedUsd.complete && iUsd !== null }), iEur > 0 ? 'market movement + Neverless interest (as V1)' : 'market movement on holdings') +
-      kpi('Realised P&L', pfSigned(t.realizedUsd.value) + pfPartial(t.realizedUsd), 'from sells, after fees') +
-      (hasCash ? kpi('Cash (dry powder)', t.cashUsd.complete ? pfMoney(t.cashUsd.usd) : 'partial', (Object.entries(t.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none') + ' · uninvested cash: deposits − buys + sells') : '');
+  // Same cards for one account as for the whole portfolio, computed from that account's positions only; the Neverless
+  // savings interest counts in the Neverless account (where V1 earns it).
+  const sumOf = (ps, k) => { let v = 0, ok = true; for(const p of ps){ if(Math.abs(p.qty) <= PF_EPS && k !== 'realizedUsd') continue; if(p[k] === null) ok = false; else v += p[k]; } return { value: v, complete: ok }; };
+  const T = A ? { valueUsd: sumOf(A.positions, 'valueUsd'), costUsd: sumOf(A.positions, 'costUsd'), unrealizedUsd: sumOf(A.positions, 'unrealizedUsd'), realizedUsd: sumOf(A.positions, 'realizedUsd') } : t;
+  const intHere = !A || A.name.toLowerCase() === 'neverless', iEurH = intHere ? iEur : 0, iUsdH = intHere ? iUsd : 0;
+  _pf.liveAccountValue = A ? (T.valueUsd.complete && iUsdH !== null ? T.valueUsd.value + (iUsdH || 0) : null) : null;
+  const cashCard = (cash, cu) => kpi(A ? 'Cash in account' : 'Cash (dry powder)', cu.complete ? pfMoney(cu.usd) : 'partial', (Object.entries(cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none') + ' · uninvested cash: deposits − buys + sells');
+  document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' :
+      kpi('Market value', pfMoney(T.valueUsd.value + (iUsdH || 0)) + pfPartial({ complete: T.valueUsd.complete && iUsdH !== null }), (A ? esc(A.name) + ' · ' : '') + (iEurH > 0 ? `current prices + Neverless interest €${iEurH.toFixed(2)} (V1 accrual)` : 'current prices')) +
+      kpi('Cost basis of holdings', pfMoney(T.costUsd.value) + pfPartial(T.costUsd), 'what was paid for what is still held') +
+      kpi('Unrealised P&L', pfSigned(T.unrealizedUsd.value === null ? null : T.unrealizedUsd.value + (iUsdH || 0)) + pfPartial({ complete: T.unrealizedUsd.complete && iUsdH !== null }), iEurH > 0 ? 'market movement + Neverless interest (as V1)' : 'market movement on holdings') +
+      kpi('Realised P&L', pfSigned(T.realizedUsd.value) + pfPartial(T.realizedUsd), 'from sells, after fees') +
+      (hasCash ? (A ? cashCard(A.cash, A.cashUsd) : cashCard(t.cash, t.cashUsd)) : '');
   const neg = hasCash ? Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9) : [];
   document.getElementById('pfIssues').innerHTML = (neg.length ? `<li>${chip('CASH', 'warn')} Buys exceed recorded deposits in ${neg.map(([c]) => esc(c)).join(', ')}: record deposits to track cash; holdings and P&L are unaffected.</li>` : '') +
     m.issues.slice(0, 12).map(i => `<li>${chip(i.code.replace(/_/g, ' ').toUpperCase(), i.code === 'fx_missing' || i.code === 'reward_no_price' || i.code === 'in_transit' ? 'warn' : 'bad')} <span class="text-[#BAC9CD]">${esc(i.text)}</span></li>`).join('') +
@@ -3977,7 +3993,7 @@ function renderPfHoldings(m){
     <td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? (p.qty > 0 ? '<span class="text-[#8A9599]">FX missing</span>' : '—') : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td>
     <td class="px-2 font-mono-data text-right">${p.costUsd === null ? Object.entries(p.costByCcy).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' + ') : pfMoney(p.costUsd)}</td>
     <td class="px-2 font-mono-data text-right">${pfSigned(p.unrealizedUsd)}</td><td class="px-2 font-mono-data text-right">${pfSigned(p.realizedUsd)}</td></tr>`).join('')
-    + (iEur > 0 && (!A || A.name.toLowerCase() === 'neverless') ? `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 font-semibold">EUR interest</td><td class="px-2 font-mono-data text-right">€${iEur.toFixed(2)}</td><td class="px-2 text-right text-[#8A9599]">EUR/USD ${pfNum(_pf.fxNow) ? _pf.fxNow.toFixed(4) : '—'}</td><td class="px-2 font-mono-data text-right">${iUsd === null ? '—' : pfMoney(iUsd)}</td><td colspan="4" class="px-2 text-[10px] text-[#8A9599]">Neverless savings interest, accrued daily as V1 does (V1's series, then ~€${(pfV1InterestAt(pfLoad().v1InterestEur, today) - pfV1InterestAt(pfLoad().v1InterestEur, new Date(Date.now() - 86400000).toISOString().slice(0, 10))).toFixed(4)}/day)</td></tr>` : '')
+    + (iEurH > 0 ? `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 font-semibold">EUR interest</td><td class="px-2 font-mono-data text-right">€${iEur.toFixed(2)}</td><td class="px-2 text-right text-[#8A9599]">EUR/USD ${pfNum(_pf.fxNow) ? _pf.fxNow.toFixed(4) : '—'}</td><td class="px-2 font-mono-data text-right">${iUsd === null ? '—' : pfMoney(iUsd)}</td><td colspan="4" class="px-2 text-[10px] text-[#8A9599]">Neverless savings interest, accrued daily as V1 does (V1's series, then ~€${(pfV1InterestAt(pfLoad().v1InterestEur, today) - pfV1InterestAt(pfLoad().v1InterestEur, new Date(Date.now() - 86400000).toISOString().slice(0, 10))).toFixed(4)}/day)</td></tr>` : '')
     || '<tr><td colspan="8" class="py-3 px-2 text-[#BAC9CD]">No holdings in this account.</td></tr>';
   // Allocation (static: full screen, no time presets) and value history (time-based: presets + full screen).
   const alloc = A ? (() => { const h = A.positions.filter(p => p.valueUsd > 0), tv = h.reduce((s, p) => s + p.valueUsd, 0); return tv > 0 ? h.map(p => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : []; })() : m.allocation;
@@ -3989,11 +4005,11 @@ function renderPfHoldings(m){
     plugins: { legend: { position: 'right', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 10 } }, tooltip: { callbacks: { label: i => `${i.label}: ${i.parsed}%` } } } } });
     enableChartFullscreen('pfAllocChart', () => _pf.alloc); }
   buildPresetTabs('pfValuePresets', _pf.range, k => { _pf.range = k; renderPortfolio(); });
-  const now = Date.now(), clip = clipSeries(pfValueSeries(), 'ts', _pf.range, now);
+  const now = Date.now(), clip = clipSeries(pfValueSeries(A ? A.id : null, _pf.liveAccountValue), 'ts', _pf.range, now);
   const sv = pfLoad(), hl = sv.dailyPricesHl || {};
   document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' One point per UTC day: the ledger\'s holdings at the end of the day × that day\'s price'
     + (sv.dailyPricesV1 ? ' (V1\'s embedded prices for the days V1 covers, Hyperliquid daily closes otherwise)' : ' (Hyperliquid daily closes)') + '; today: live prices. Hollow = a price was missing that day. '
-    + (hl.errors && hl.errors.length ? 'Price history unavailable for ' + hl.errors.join(', ') + '. ' : '') + (A ? 'Whole portfolio, not this account.' : '');
+    + (hl.errors && hl.errors.length ? 'Price history unavailable for ' + hl.errors.join(', ') + '. ' : '') + (A ? 'This account only.' : '');
   // Points more than 3 days apart are not joined (no line across a period without data); an isolated point keeps a dot.
   const PF_GAP_MS = 3 * 86400000, gapAt = (i) => i > 0 && clip.points[i].ts - clip.points[i - 1].ts > PF_GAP_MS;
   const lonely = clip.points.map((p, i) => (i === 0 || gapAt(i)) && (i === clip.points.length - 1 || gapAt(i + 1)));

@@ -77,6 +77,10 @@ async function mock(ctx){
   await p.selectOption('#pfDryAsset', 'BTC'); await p.fill('#pfDryAmount', '1000'); await p.waitForTimeout(150);
   ok(/Average cost .* → .*\(\+/.test(await p.textContent('#pfDryOut')), 'dry powder planner computes new average');
   ok((await p.$$eval('#pfScenarios tr', (t) => t.length)) === 8, 'scenario table');
+  await p.waitForTimeout(1500);
+  const be = (await p.textContent('#pfBeProb')).replace(/\s+/g, ' ');
+  ok(/6M.*9M.*1Y.*2Y.*5Y/.test(be) && /BTC → \$/.test(be) && /\d+%/.test(be), 'break-even probability table (V1 model) rendered: ' + be.slice(0, 90));
+  ok(/ETH\s*average cost unknown/.test(be), 'no probability for a position whose average cost is unknown');
   await p.click('#pfNarrativeBtn'); await p.waitForTimeout(600);
   const nar = await p.textContent('#pfNarrativeOut');
   ok(/FIXTURE NARRATIVE for BTC/.test(nar) && /Gemini \(gemini-3\.6-flash\) via V1/.test(nar), 'narrative via V1 rendered and labelled');

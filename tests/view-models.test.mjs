@@ -1287,3 +1287,23 @@ test('V1 check: compared up to V1’s last day per account; newer statement move
   assert.equal(c.allMatch, true);
 });
 
+
+test('Align with V1: up to V1’s last day, every crypto row must match one V1 row; leftovers are planned for reversal, newer rows kept', () => {
+  const day = (d) => Date.parse(d + 'T00:00:00Z');
+  const v1 = [
+    { date: '2026-07-19', asset: 'LINK', acct: 'Revolut', type: 'buy', qty: 0.05, price: 151539.49, ccy: 'EUR', eur: 8.51, srcId: 'rev:LINK:A:0.05000000' },
+    { date: '2026-08-09', asset: 'LINK', acct: 'Revolut', type: 'buy', qty: 1.2, price: 8.29, ccy: 'EUR', srcId: 'rev:LINK:C:1.20000000' },
+    { date: '2026-10-26', asset: 'ETH', acct: 'Revolut', type: 'buy', qty: 0.00001, price: 0, ccy: 'EUR', isReward: true, srcId: 'rev:ETH:D:0.00001000' }];
+  const store = { accounts: [{ id: 'r', name: 'Revolut' }], txs: [
+    { id: 'v1a', account_id: 'r', type: 'buy', asset: 'LINK', qty: 0.05, price: 8.51, ts: day('2026-07-19'), src_id: 'rev:LINK:A:0.05000000', note: 'imported from V1 backup' },
+    { id: 'stA', account_id: 'r', type: 'buy', asset: 'LINK', qty: 0.00005, price: 8.51, ts: day('2026-07-19'), src_id: 'rev:LINK:A:0.00005000', note: 'Revolut statement' },   // V1 recorded it ×1000
+    { id: 'stC', account_id: 'r', type: 'buy', asset: 'LINK', qty: 1.2, price: 8.29, ts: day('2026-08-09'), src_id: 'rev:LINK:C:1.20000000', note: 'Revolut statement' },    // matches V1 by source id
+    { id: 'stC2', account_id: 'r', type: 'buy', asset: 'LINK', qty: 1.2, price: 8.29, ts: day('2026-08-09'), note: 'imported from V1 embedded data' },                    // a second copy
+    { id: 'stD', account_id: 'r', type: 'reward', asset: 'ETH', qty: 0.00001, price: 0, ts: day('2026-10-26'), src_id: 'rev:ETH:other', note: 'Revolut statement' },       // same day/qty: matches
+    { id: 'new', account_id: 'r', type: 'buy', asset: 'LINK', qty: 3, price: 8, ts: day('2026-11-02'), src_id: 'rev:LINK:N', note: 'Revolut statement' }] };            // after V1's last day: kept
+  const plan = plain(H.pfV1RepairPlan(store, v1));
+  assert.ok(plan.includes('stA') && plan.length === 2 && (plan.includes('stC') !== plan.includes('stC2')), 'stA plus exactly one of the two copies');
+  store.txs.push(...plan.map((id, i) => ({ id: 'x' + i, type: 'reversal', reverses_id: id, ts: day('2026-11-20') })));
+  assert.deepEqual(plain(H.pfV1RepairPlan(store, v1)), []);
+  assert.equal(H.pfV1Compare(v1, store).allMatch, true);
+});

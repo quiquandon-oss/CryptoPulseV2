@@ -656,6 +656,14 @@
       </div>
     </section>
     <!-- Secondary detail, collapsed: the graph above stays the primary view (spec §7). -->
+    <section id="traderCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="traderTitle">
+      <h2 id="traderTitle" class="text-sm font-semibold mb-1">Trader analysis <span class="text-[#BAC9CD] font-normal text-xs">· Gemini via V1, on request</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-2">V1's "Gemini's independent read" capability, run through V1's existing route and free Gemini quota, only when you click. The inputs are V2's own data taken at that moment (BTC daily candles with V1's indicator formulas, V2 sentiment, V2 evidence headlines); V1-only signals are sent as unavailable, so Gemini is told not to discuss them. An AI interpretation, not a V2 score and not advice.</p>
+      <button type="button" id="traderBtn" class="px-3 py-1.5 rounded-lg border border-[#A78BFA] text-[#A78BFA] text-xs font-semibold disabled:opacity-40">Ask for the trader analysis</button>
+      <div id="traderInputs" class="mt-3 text-xs"></div>
+      <div id="traderOut" class="mt-3 text-xs" role="status"></div>
+    </section>
+
     <details id="sv2Details" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <summary class="cursor-pointer select-none text-sm font-semibold flex items-center justify-between gap-2">
         <span>Evidence, sources and AI annotation</span><span id="sv2DetailsHint" class="text-[11px] font-normal text-[#BAC9CD]"></span>
@@ -1810,6 +1818,139 @@ function cmpRecordRows(res, n){
   return recs.slice(0, n).map((r) => ({ ts: r.decision_ts, target: r.target_ts, sha: r.git_commit_sha ? String(r.git_commit_sha).slice(0, 7) : null,
     v1: r.v1 && r.v1.score !== null && r.v1.score !== undefined ? { score: r.v1.score, dir: r.v1.direction, source: r.v1.source, ageMin: r.v1.age_ms !== null ? Math.round(r.v1.age_ms / 60000) : null } : null,
     v1Missing: r.v1 ? r.v1.missing_reason : 'missing', base: r.v2_baseline || {}, fin: r.v2_final || {}, outcome: r.outcome || { status: 'pending' } }));
+}
+// ---- Trader Analysis (Gemini) parity (contracts §6). V1's technical indicator functions, copied verbatim from
+// CryptoPulse index.html@9a5810c (techSma 3613, techIchimoku 3618, techRsi 3624, findLocalExtrema, techIchimokuCloud
+// 3738, techMaCrossoverEvent 3754, techSwingStructure 3773, techRsiDivergence 3792) so V2 computes the same numbers
+// from a daily close series. V1 reads CoinGecko daily closes; V2 reads Hyperliquid BTC daily candles (stated in the UI). ----
+function techSma(values,period,endIndex){
+  if(endIndex-period+1<0)return null;
+  let sum=0;for(let i=endIndex-period+1;i<=endIndex;i++)sum+=values[i];
+  return sum/period;
+}
+function techIchimoku(closes,period,endIndex){
+  if(endIndex-period+1<0)return null;
+  let hi=-Infinity,lo=Infinity;
+  for(let i=endIndex-period+1;i<=endIndex;i++){if(closes[i]>hi)hi=closes[i];if(closes[i]<lo)lo=closes[i];}
+  return(hi+lo)/2;
+}
+function techRsi(closes,period,endIndex){
+  if(endIndex-period<0)return null;
+  let gains=0,losses=0;
+  for(let i=endIndex-period+1;i<=endIndex;i++){const diff=closes[i]-closes[i-1];if(diff>=0)gains+=diff;else losses-=diff;}
+  const avgGain=gains/period,avgLoss=losses/period;
+  if(avgLoss===0)return 100;
+  return 100-100/(1+avgGain/avgLoss);
+}
+function findLocalExtrema(values,startIdx,endIdx,k,type){
+  const out=[];
+  for(let i=startIdx+k;i<=endIdx-k;i++){
+    let isExtreme=true;
+    for(let j=i-k;j<=i+k;j++){
+      if(j===i)continue;
+      if(type==='peak'&&values[j]>=values[i]){isExtreme=false;break;}
+      if(type==='trough'&&values[j]<=values[i]){isExtreme=false;break;}
+    }
+    if(isExtreme)out.push(i);
+  }
+  return out;
+}
+function techIchimokuCloud(closes,lastIndex){
+  const cloudCalcIndex=lastIndex-26;
+  if(cloudCalcIndex<52)return{senkouA:null,senkouB:null,position:'N/A (not enough history yet)'};
+  const tenkanThen=techIchimoku(closes,9,cloudCalcIndex);
+  const kijunThen=techIchimoku(closes,26,cloudCalcIndex);
+  const senkouA=(tenkanThen!=null&&kijunThen!=null)?(tenkanThen+kijunThen)/2:null;
+  const senkouB=techIchimoku(closes,52,cloudCalcIndex);
+  if(senkouA==null||senkouB==null)return{senkouA,senkouB,position:'N/A'};
+  const price=closes[lastIndex];
+  const cloudTop=Math.max(senkouA,senkouB),cloudBottom=Math.min(senkouA,senkouB);
+  const position=price>cloudTop?'above':price<cloudBottom?'below':'inside';
+  return{senkouA,senkouB,cloudTop,cloudBottom,position};
+}
+function techMaCrossoverEvent(closes,lastIndex,lookbackDays){
+  let lastCrossType=null,daysAgo=null,prevDiff=null;
+  const start=Math.max(200,lastIndex-lookbackDays);
+  for(let i=start;i<=lastIndex;i++){
+    const ma50=techSma(closes,50,i),ma200=techSma(closes,200,i);
+    if(ma50==null||ma200==null)continue;
+    const diff=ma50-ma200;
+    if(prevDiff!=null){
+      if(prevDiff<=0&&diff>0){lastCrossType='golden';daysAgo=lastIndex-i;}
+      else if(prevDiff>=0&&diff<0){lastCrossType='death';daysAgo=lastIndex-i;}
+    }
+    prevDiff=diff;
+  }
+  return{type:lastCrossType,daysAgo};
+}
+function techSwingStructure(closes,lastIndex,lookbackDays){
+  const startIdx=Math.max(0,lastIndex-lookbackDays);
+  const peaks=findLocalExtrema(closes,startIdx,lastIndex,3,'peak');
+  const troughs=findLocalExtrema(closes,startIdx,lastIndex,3,'trough');
+  if(peaks.length<2||troughs.length<2)return{structure:'Not enough swing points yet in this window'};
+  const lastTwoPeaks=peaks.slice(-2).map(i=>closes[i]);
+  const lastTwoTroughs=troughs.slice(-2).map(i=>closes[i]);
+  const higherHighs=lastTwoPeaks[1]>lastTwoPeaks[0];
+  const higherLows=lastTwoTroughs[1]>lastTwoTroughs[0];
+  let structure;
+  if(higherHighs&&higherLows)structure='Uptrend structure (higher highs, higher lows)';
+  else if(!higherHighs&&!higherLows)structure='Downtrend structure (lower highs, lower lows)';
+  else structure='Mixed — no clear structure';
+  return{structure,higherHighs,higherLows};
+}
+function techRsiDivergence(closes,lastIndex,lookbackDays){
+  const startIdx=Math.max(52,lastIndex-lookbackDays);
+  const peaks=findLocalExtrema(closes,startIdx,lastIndex,3,'peak');
+  const troughs=findLocalExtrema(closes,startIdx,lastIndex,3,'trough');
+  const rsiAt=i=>techRsi(closes,14,i);
+  if(peaks.length>=2){
+    const[p1,p2]=peaks.slice(-2),r1=rsiAt(p1),r2=rsiAt(p2);
+    if(r1!=null&&r2!=null&&closes[p2]>closes[p1]&&r2<r1)return{type:'bearish',label:'Bearish divergence — price made a higher high, RSI did not'};
+  }
+  if(troughs.length>=2){
+    const[t1,t2]=troughs.slice(-2),r1=rsiAt(t1),r2=rsiAt(t2);
+    if(r1!=null&&r2!=null&&closes[t2]<closes[t1]&&r2>r1)return{type:'bullish',label:'Bullish divergence — price made a lower low, RSI did not'};
+  }
+  return{type:'none',label:'No clear divergence in this window'};
+}
+// V1 fetchBtcTechnicals (index.html:3943) on a candle series [{t, c, v}] (oldest first; the last candle is today's,
+// still open, exactly like CoinGecko's last point). Needs 200 closes, like V1.
+function traderTechnicals(candles){
+  const cs = (Array.isArray(candles) ? candles : []).filter((c) => c && isFinite(+c.c) && isFinite(+c.t)).sort((a, b) => a.t - b.t);
+  const closes = cs.map((c) => +c.c), volumes = cs.map((c) => +c.v);
+  if(closes.length < 200) return { ok: false, reason: 'not enough history (' + closes.length + ' daily closes, 200 needed)' };
+  const last = closes.length - 1, vol20 = volumes.length >= 20 ? techSma(volumes, 20, volumes.length - 1) : null, latestVol = volumes[last];
+  return { ok: true, asOfTs: cs[last].t, closeCount: closes.length, price: closes[last],
+    tenkan: techIchimoku(closes, 9, last), kijun: techIchimoku(closes, 26, last), ma50: techSma(closes, 50, last), ma100: techSma(closes, 100, last), ma200: techSma(closes, 200, last),
+    rsi14: techRsi(closes, 14, last), cloud: techIchimokuCloud(closes, last), crossover: techMaCrossoverEvent(closes, last, 90),
+    swing: techSwingStructure(closes, last, 60), divergence: techRsiDivergence(closes, last, 60),
+    volume: latestVol, volumeAvg20: vol20, volumeTrend: (vol20 && latestVol) ? (latestVol > vol20 ? 'above 20d average' : 'below 20d average') : 'N/A' };
+}
+// The V1 /trader-analysis-gemini body, filled only with what V2 really has at `snapshotTs`; every other V1 field is
+// left out so V1's own data block prints "Not available this session" / "N/A". Returns the body and a provenance list.
+function traderPayloadV2(tech, sv2Latest, evidenceItems, snapshotTs){
+  const prov = [], body = {};
+  if(tech && tech.ok){
+    body.price = tech.price;
+    body.technicals = { tenkan: tech.tenkan, kijun: tech.kijun, ma50: tech.ma50, ma100: tech.ma100, ma200: tech.ma200, rsi14: tech.rsi14, cloud: tech.cloud,
+      volume: { latest: tech.volume, trend: tech.volumeTrend }, maCrossover: tech.crossover, swingStructure: tech.swing ? tech.swing.structure : null, divergence: tech.divergence };
+    prov.push({ field: 'price, technicals', source: 'Hyperliquid BTC daily candles (' + tech.closeCount + ' closes, today\'s candle open ' + new Date(tech.asOfTs).toISOString().slice(0, 10) + '), V1 indicator code', asOf: snapshotTs, status: 'sent' });
+  } else prov.push({ field: 'price, technicals', source: 'Hyperliquid BTC daily candles', asOf: null, status: 'not sent: ' + ((tech && tech.reason) || 'unavailable') });
+  const sv = sv2Latest && typeof sv2Latest.sentiment_score === 'number' && sv2Latest.decision_ts <= snapshotTs ? sv2Latest : null;
+  if(sv){
+    const sources = {};
+    for(const [k, e] of Object.entries(sv.evidence || {})) if(e && e.state === 'fresh' && typeof e.value === 'number') sources['V2 ' + k.replace(/^ev:/, '')] = e.value;
+    body.sentiment = { composite: sv.sentiment_score, sources };
+    prov.push({ field: 'sentiment', source: 'V2 sentiment ' + (sv.calc_version || '') + ' (' + Object.keys(sources).length + ' fresh evidence sources)', asOf: sv.decision_ts, status: 'sent' });
+  } else prov.push({ field: 'sentiment', source: 'V2 sentiment', asOf: null, status: 'not sent: no V2 result at or before the snapshot' });
+  const ev = (Array.isArray(evidenceItems) ? evidenceItems : []).filter((i) => i && typeof i.title === 'string' && typeof i.retrieved_ts === 'number' && i.retrieved_ts <= snapshotTs && typeof i.lexicon_score === 'number')
+    .sort((a, b) => Math.abs(b.lexicon_score) - Math.abs(a.lexicon_score)).slice(0, 8);
+  body.topHeadlines = ev.map((i) => ({ category: String(i.family || 'news').replace(/_/g, ' '), score: i.lexicon_score, title: i.title.slice(0, 200) }));
+  prov.push({ field: 'topHeadlines', source: 'V2 evidence collector, last 24 h, V1 lexicon score', asOf: ev.length ? Math.max(...ev.map((i) => i.retrieved_ts)) : null, status: ev.length ? 'sent (' + ev.length + ')' : 'sent empty' });
+  body.probabilityModel = { insufficient: true, n: 0 };
+  prov.push({ field: 'probabilityModel', source: "V1's 7-day frequency model has no V2 equivalent", asOf: null, status: 'sent as insufficient: Gemini is told not to state a probability' });
+  prov.push({ field: 'liquidations, whales, buy-the-news, correlations, regime scorecard, on-chain, sector rotation, 50-week EMA, 9 Magnificent', source: 'V1 browser-only signals', asOf: null, status: 'not sent: V1 prints "Not available this session"' });
+  return { body, provenance: prov, snapshotTs };
 }
 // ---- V1 alerts, read-only (contracts §9): GET /alert-configs and GET /alert-log?limit=50. V1 evaluates them every
 // 15 min and delivers through its own Telegram integration; V2 never creates, edits, toggles or tests them. ----
@@ -3655,6 +3796,39 @@ function loadV1Alerts(force){
       `<ul class="space-y-1 max-h-[360px] overflow-y-auto">${m.log.map(l => `<li class="border-t border-[#3B494C]/60 pt-1"><span class="font-mono-data text-[#8A9599]">${esc(fmtUtc(l.ts))}</span> ${chip(l.type.replace(/_/g, ' ').toUpperCase() || 'ALERT', 'info')} <span class="text-[#E1E2E7] break-words">${esc(l.message)}</span></li>`).join('')}</ul>`;
   });
 }
+// ---- Trader Analysis (Gemini) parity: snapshot V2 inputs at click time, then V1's POST /trader-analysis-gemini. ----
+var _trader = { busy: false, result: null, snap: null };
+async function traderSnapshot(){
+  const now = Date.now();
+  let candles = null, techErr = null;
+  try{ const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'candleSnapshot', req: { coin: 'BTC', interval: '1d', startTime: now - 400 * 86400000, endTime: now } }) });
+    if(!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json(); if(!Array.isArray(j)) throw new Error('unexpected response');
+    candles = j.map(c => ({ t: +c.t, c: +c.c, v: +c.v })).filter(c => c.t <= now);
+  }catch(e){ techErr = 'price history unavailable (' + e.message + ')'; }
+  const [cmp, ev] = await Promise.all([sv2Comparison('24h', false), getJson(WORKER_URL + '/api/sentiment-v2/evidence?hours=24&limit=40')]);
+  const tech = candles ? traderTechnicals(candles) : { ok: false, reason: techErr };
+  return traderPayloadV2(tech, cmp.ok && cmp.data ? cmp.data.v2_latest : null, ev.ok && ev.data ? ev.data.items : null, now);
+}
+function renderTrader(){
+  const btn = document.getElementById('traderBtn'), inp = document.getElementById('traderInputs'), out = document.getElementById('traderOut');
+  btn.disabled = _trader.busy;
+  const s = _trader.snap;
+  inp.innerHTML = !s ? '' : `<p class="text-[#BAC9CD] mb-1">Inputs sent, snapshot ${esc(fmtUtc(s.snapshotTs))}:</p><ul class="space-y-0.5">${s.provenance.map(r => `<li><span class="text-[#E1E2E7]">${esc(r.field)}</span> <span class="text-[#8A9599]">· ${esc(r.source)}${r.asOf ? ' · as of ' + esc(fmtUtc(r.asOf)) : ''} · ${esc(r.status)}</span></li>`).join('')}</ul>`;
+  const r = _trader.result;
+  out.innerHTML = _trader.busy ? 'Taking the snapshot and asking Gemini through V1…' : !r ? '' : r.error ? `${chip('UNAVAILABLE', 'bad')} ${esc(r.error)}` :
+    `<p class="text-[10px] text-[#8A9599] mb-1">Gemini (gemini-3.6-flash) via V1 · generated ${esc(fmtUtc(r.ts))} from the snapshot above.</p><p class="whitespace-pre-wrap text-[#E1E2E7]">${esc(r.analysis)}</p>`;
+}
+async function runTraderAnalysis(){
+  if(_trader.busy) return;
+  _trader.busy = true; _trader.result = null; renderTrader();
+  try{
+    _trader.snap = await traderSnapshot(); renderTrader();
+    const r = await fetch(V1_WORKER_URL + '/trader-analysis-gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_trader.snap.body) });
+    const j = await r.json().catch(() => null);
+    _trader.result = r.ok && j && typeof j.analysis === 'string' ? { analysis: j.analysis, ts: j.ts || Date.now() } : { error: (j && j.error) || ('HTTP ' + r.status) };
+  }catch(e){ _trader.result = { error: e.message }; }
+  _trader.busy = false; renderTrader();
+}
 // ---- Settings: display and connection preferences only; no model, weight or production configuration. ----
 function renderSettings(){
   const staging = /staging/.test(WORKER_URL);
@@ -3978,6 +4152,7 @@ document.getElementById('pfExportJson').onclick = () => pfExport('json');
 document.getElementById('pfImportFile').onchange = (ev) => { pfImportFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; };
 document.getElementById('pfImportV1').onclick = pfImportFromV1;
 document.getElementById('pfNarrativeBtn').onclick = pfRunNarrative;
+document.getElementById('traderBtn').onclick = runTraderAnalysis;
 buildSv2Periods();
 document.getElementById('sv2Details').addEventListener('toggle', () => loadSv2DetailsIfOpen());
 

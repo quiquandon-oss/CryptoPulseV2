@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -205,7 +205,7 @@ test('page source: one write request, user-entered key only, no embedded secrets
   // Exactly three POSTs, each named: the analyst relay (pre-existing), Hyperliquid allMids (a read-only market-data
   // query that the API only offers as POST) and V1's /gemini-outlook (Narrative parity, only on an explicit click).
   const posts = SRC.match(/method:\s*['"]POST['"]/g) || [];
-  assert.equal(posts.length, 5, 'five POSTs: analyst relay, Hyperliquid allMids + candleSnapshot (read-only market data), V1 Narrative and Trader Analysis (clicks)');
+  assert.equal(posts.length, 6, 'six POSTs: analyst relay, Hyperliquid allMids + 2 candleSnapshot reads (read-only market data), V1 Narrative and Trader Analysis (clicks)');
   const tr = SRC.slice(SRC.indexOf('async function runTraderAnalysis()'), SRC.indexOf('// ---- Settings:'));
   assert.match(tr, /fetch\(V1_WORKER_URL \+ '\/trader-analysis-gemini', \{ method: 'POST'/);
   assert.match(SRC, /fetch\('https:\/\/api\.hyperliquid\.xyz\/info', \{ method: 'POST', headers: \{ 'Content-Type': 'application\/json' \}, body: JSON\.stringify\(\{ type: 'allMids' \}\) \}\)/);
@@ -1058,4 +1058,30 @@ test('trader parity: payload only carries V2 data available at the snapshot; the
   const late = plain(H.traderPayloadV2({ ok: false, reason: 'x' }, { ...sv, decision_ts: SNAP + 1 }, [], SNAP));
   assert.ok(!('sentiment' in late.body) && !('price' in late.body), 'a V2 result newer than the snapshot is not used');
   assert.ok(late.provenance.every((r) => typeof r.status === 'string' && r.status.length > 3));
+});
+
+// ---- Break-even probability: validated against V1's own outputs (fixture produced by executing V1's code) ----
+const BE_REF = JSON.parse(readFileSync(new URL('./fixtures/breakeven-v1-reference.json', import.meta.url), 'utf8'));
+test('break-even: normCDF and realised volatility reproduce V1 exactly', () => {
+  for (const { x, v } of BE_REF.norm) assert.equal(H.normCDF(x), v, 'normCDF(' + x + ')');
+  for (const v of BE_REF.vols) assert.equal(H.beRealizedVol(v.prices), v.sigma, v.coin + ' sigma');
+  assert.equal(H.beRealizedVol([1, 2, 3]), null, 'under 30 prices: V1 falls back');
+  assert.deepEqual(plain(H.beSigma('BTC', [1, 2])), { sigma: 0.65, isLive: false });
+  for (const [c, p] of Object.entries(BE_REF.coinParams)) assert.deepEqual([H.BE_COIN_PARAMS[c].mu, H.BE_COIN_PARAMS[c].sigma], [p.mu, p.sigma], c + ' calibration');
+});
+test('break-even: all 75 V1 reference probabilities reproduced exactly (5 coins × 3 targets × 5 horizons)', () => {
+  assert.equal(BE_REF.cases.length, 75);
+  for (const c of BE_REF.cases) assert.equal(H.beProba(c.S, c.target, c.T, c.mu, c.sigma), c.p, `${c.coin} K=${c.target} T=${c.T}`);
+  assert.deepEqual(plain(H.BE_HORIZONS).map((h) => h[1]), [0.5, 0.75, 1, 2, 5]);
+});
+test('break-even table: unknown cost not computed; portfolio row only when cost exceeds value, as in V1', () => {
+  const hist = { BTC: Array.from({ length: 60 }, (_, i) => 100 * Math.exp(0.01 * Math.sin(i))) };
+  const pos = [{ asset: 'BTC', qty: 1, price: 90, avgCostUsd: 100, costUsd: 100, valueUsd: 90 }, { asset: 'ZZZ', qty: 1, price: 10, avgCostUsd: null, costUsd: null, valueUsd: 10 }];
+  const t = plain(H.breakEvenTable(pos, hist));
+  assert.equal(t.rows[0].isLive, true);
+  assert.equal(t.rows[0].probs[2].p, H.beProba(90, 100, 1, 0.5, H.beRealizedVol(hist.BTC)));
+  assert.deepEqual([t.rows[1].breakEven, t.portfolio, t.portfolioNote], [null, null, 'cost basis incomplete (FX missing)']);
+  const t2 = plain(H.breakEvenTable([pos[0]], hist));
+  assert.ok(t2.portfolio && t2.portfolio.ratio > 1);
+  assert.equal(plain(H.breakEvenTable([{ ...pos[0], price: 120, valueUsd: 120 }], hist)).portfolioNote, 'portfolio is at or above break-even');
 });

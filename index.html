@@ -885,7 +885,9 @@
           <p id="pfDryOut" class="text-xs mt-2 text-[#BAC9CD]" role="status"></p><p class="text-[10px] text-[#8A9599] mt-1">Same rule as V1: the amount buys at the current price and is blended into the average cost.</p></section>
         <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfBeTitle"><h3 id="pfBeTitle" class="text-sm font-semibold mb-1">Break-even prices</h3>
           <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Break-even (avg cost)</th><th class="py-1 px-2 font-normal text-right">Price now</th><th class="py-1 px-2 font-normal text-right">Move needed</th></tr></thead><tbody id="pfBreakEven"></tbody></table></div>
-          <p class="text-[10px] text-[#8A9599] mt-1">The probability of reaching break-even (V1's scenario model) is not migrated yet; it is listed as a follow-up and nothing is shown in its place.</p></section>
+          <h4 class="text-xs font-semibold mt-3 mb-1">Break-even probability <span class="text-[#8A9599] font-normal">· V1's log-normal model</span></h4>
+          <div id="pfBeProb" class="overflow-x-auto text-xs" role="status"></div>
+          <p class="text-[10px] text-[#8A9599] mt-1">Chance that the price is at or above your break-even at each horizon, assuming log-normal prices with a fixed expected return (V1's 2019–2024 calibration) and volatility from daily closes since 2026-04-11 (● live, ○ calibration fallback under 30 closes). A model with strong assumptions, not a forecast and not advice. Same formula and parameters as V1.</p></section>
         <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfScTitle"><h3 id="pfScTitle" class="text-sm font-semibold mb-1">Scenarios</h3><p class="text-[11px] text-[#8A9599] mb-2">Assumption: every held asset moves by the same percentage from today's price. An illustration, not a forecast.</p>
           <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Move</th><th class="py-1 px-2 font-normal text-right">Portfolio value</th><th class="py-1 px-2 font-normal text-right">P&amp;L vs cost basis</th></tr></thead><tbody id="pfScenarios"></tbody></table></div></section>
         <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfNarrTitle"><h3 id="pfNarrTitle" class="text-sm font-semibold mb-1">Narrative <span class="text-[#BAC9CD] font-normal text-xs">· Gemini via V1</span></h3>
@@ -1951,6 +1953,62 @@ function traderPayloadV2(tech, sv2Latest, evidenceItems, snapshotTs){
   prov.push({ field: 'probabilityModel', source: "V1's 7-day frequency model has no V2 equivalent", asOf: null, status: 'sent as insufficient: Gemini is told not to state a probability' });
   prov.push({ field: 'liquidations, whales, buy-the-news, correlations, regime scorecard, on-chain, sector rotation, 50-week EMA, 9 Magnificent', source: 'V1 browser-only signals', asOf: null, status: 'not sent: V1 prints "Not available this session"' });
   return { body, provenance: prov, snapshotTs };
+}
+// ---- Break-even probability: V1's log-normal model (CryptoPulse index.html@9a5810c renderProba 9969, priceProba
+// 9833, sigmaFor 9814, computeRealizedVolatility, normCDF 9786, COIN_PARAMS 9591). Same formula and parameters:
+// P(price at T >= break-even) = N(d2), d2 = (ln(S/K) + (mu - sigma^2/2) T) / (sigma sqrt T), clamped to [0.01, 0.99];
+// sigma = annualised realised volatility of daily log returns over V1's tracking window (from 2026-04-11), sample
+// variance, sqrt(365), fallback to the 2019-2024 calibration under 30 prices; mu = V1's fixed calibration.
+// Inputs here: V2 average cost (USD) and Hyperliquid daily closes. Validated against V1's own outputs in tests. ----
+var BE_COIN_PARAMS = { BTC: { mu: 0.50, sigma: 0.65 }, ETH: { mu: 0.45, sigma: 0.85 }, SOL: { mu: 0.60, sigma: 1.20 }, LINK: { mu: 0.40, sigma: 1.10 }, HYPE: { mu: 0.55, sigma: 1.30 } };
+var BE_DEFAULT = { mu: 0.35, sigma: 1.0 }, BE_PORTFOLIO_DEFAULT_MU = 0.4;   // V1's own defaults (priceProba / renderProba)
+var BE_HORIZONS = [['6M', 0.5], ['9M', 0.75], ['1Y', 1], ['2Y', 2], ['5Y', 5]];
+var BE_WINDOW_START = '2026-04-11';   // V1 APP_TRACKING_START: the first day of V1's price history
+function normCDF(x){
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const sign=x<0?-1:1,ax=Math.abs(x);
+  const t=1/(1+p*ax);
+  const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t)*Math.exp(-ax*ax/2);
+  return 0.5*(1+sign*y);
+}
+// V1 computeRealizedVolatility on an ordered list of daily prices.
+function beRealizedVol(prices){
+  const px=(Array.isArray(prices)?prices:[]).filter(p=>p>0);
+  if(px.length<30)return null;
+  const logReturns=[];
+  for(let i=1;i<px.length;i++)logReturns.push(Math.log(px[i]/px[i-1]));
+  const mean=logReturns.reduce((a,b)=>a+b,0)/logReturns.length;
+  const variance=logReturns.reduce((a,r)=>a+(r-mean)**2,0)/(logReturns.length-1);
+  return Math.sqrt(variance)*Math.sqrt(365);
+}
+function beSigma(coin, prices){ const live = beRealizedVol(prices); return live != null ? { sigma: live, isLive: true } : { sigma: (BE_COIN_PARAMS[coin] || BE_DEFAULT).sigma, isLive: false }; }
+// V1 priceProba with its inputs passed in.
+function beProba(S, target, T, mu, sigma){
+  if(!S||S<=0||!target||target<=0||T<=0)return 0;
+  const d2=(Math.log(S/target)+(mu-0.5*sigma*sigma)*T)/(sigma*Math.sqrt(T));
+  return Math.min(0.99,Math.max(0.01,normCDF(d2)));
+}
+// Rows for the table: one per held asset with a known USD average cost and a price, plus V1's portfolio row
+// (value-weighted mu and sigma; shown only when the cost basis exceeds the value, as in V1).
+function breakEvenTable(positions, history){
+  const held = (positions || []).filter((p) => p.qty > 1e-12 && p.price !== null && p.price > 0);
+  const rows = [];
+  for(const p of held){
+    const s = beSigma(p.asset, history && history[p.asset]), mu = (BE_COIN_PARAMS[p.asset] || BE_DEFAULT).mu;
+    if(p.avgCostUsd === null || !(p.avgCostUsd > 0)){ rows.push({ asset: p.asset, breakEven: null, reason: 'average cost unknown (FX missing)' }); continue; }
+    rows.push({ asset: p.asset, breakEven: p.avgCostUsd, price: p.price, mu, sigma: s.sigma, isLive: s.isLive, calibrated: !!BE_COIN_PARAMS[p.asset],
+      probs: BE_HORIZONS.map(([k, T]) => ({ k, p: beProba(p.price, p.avgCostUsd, T, mu, s.sigma) })) });
+  }
+  const priced = held.filter((p) => p.valueUsd !== null), val = priced.reduce((a, p) => a + p.valueUsd, 0);
+  const costKnown = priced.every((p) => p.costUsd !== null), cost = priced.reduce((a, p) => a + (p.costUsd || 0), 0);
+  let portfolio = null;
+  if(val > 0 && costKnown && cost > val){
+    const ratio = cost / val;
+    const portMu = priced.reduce((a, p) => a + ((BE_COIN_PARAMS[p.asset] || {}).mu || BE_PORTFOLIO_DEFAULT_MU) * (p.valueUsd / val), 0);
+    const portSig = priced.reduce((a, p) => a + beSigma(p.asset, history && history[p.asset]).sigma * (p.valueUsd / val), 0);
+    portfolio = { ratio, mu: portMu, sigma: portSig, probs: BE_HORIZONS.map(([k, T]) => { const d2 = (Math.log(1 / ratio) + (portMu - 0.5 * portSig * portSig) * T) / (portSig * Math.sqrt(T)); return { k, p: Math.min(0.99, Math.max(0.01, normCDF(d2))) }; }) };
+  }
+  return { rows, portfolio, portfolioNote: val > 0 && !costKnown ? 'cost basis incomplete (FX missing)' : cost <= val ? 'portfolio is at or above break-even' : null };
 }
 // ---- V1 alerts, read-only (contracts §9): GET /alert-configs and GET /alert-log?limit=50. V1 evaluates them every
 // 15 min and delivers through its own Telegram integration; V2 never creates, edits, toggles or tests them. ----
@@ -3759,12 +3817,42 @@ function renderPfPlanning(m){
   sel.onchange = runDry; document.getElementById('pfDryAmount').oninput = runDry; runDry();
   document.getElementById('pfCashLine').innerHTML = `Cash recorded: ${Object.entries(m.totals.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none'}${m.totals.cashUsd.complete ? ' ≈ ' + pfMoney(m.totals.cashUsd.usd) : ''}`;
   document.getElementById('pfBreakEven').innerHTML = held.map(p => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold">${esc(p.asset)}</td><td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? 'unknown' : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${p.price === null ? '—' : pfMoney(p.price, p.price < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${p.price === null || p.avgCostUsd === null ? '—' : ((p.avgCostUsd / p.price - 1) * 100 >= 0 ? '+' : '') + ((p.avgCostUsd / p.price - 1) * 100).toFixed(1) + '%'}</td></tr>`).join('') || '<tr><td colspan="4" class="py-2 px-2 text-[#BAC9CD]">No holdings.</td></tr>';
+  renderPfBreakEvenProb(m);
   document.getElementById('pfScenarios').innerHTML = [-50, -25, -10, 0, 10, 25, 50, 100].map(pct => { const r = pfScenario(m.positions, pct);
     return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data">${pct > 0 ? '+' : ''}${pct}%</td><td class="px-2 font-mono-data text-right">${pfMoney(r.valueUsd)}${r.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'}</td><td class="px-2 font-mono-data text-right">${pfSigned(r.pnlUsd)}</td></tr>`; }).join('');
   const n = _pf.narrative, out = document.getElementById('pfNarrativeOut');
   out.innerHTML = _pf.narrativeBusy ? 'Asking Gemini through V1…' : !n ? '' : n.error ? `${chip('UNAVAILABLE', 'bad')} ${esc(n.error)}` :
     `<p class="text-[10px] text-[#8A9599] mb-1">Gemini (gemini-3.6-flash) via V1 · generated ${esc(fmtUtc(n.ts))} · an AI interpretation from the model's own knowledge, not a V2 score or advice. Sent: holding weights only.</p><p class="whitespace-pre-wrap text-[#E1E2E7]">${esc(n.analysis)}</p>`;
   document.getElementById('pfNarrativeBtn').disabled = _pf.narrativeBusy || !m.allocation.length;
+}
+var _beHist = { at: 0, data: null, err: null, busy: false };
+async function loadBeHistory(assets){
+  if(_beHist.busy || (_beHist.data && Date.now() - _beHist.at < 30 * 60000 && assets.every(a => a in _beHist.data))) return;
+  _beHist.busy = true;
+  const start = Date.parse(BE_WINDOW_START + 'T00:00:00Z'), out = { ...(_beHist.data || {}) };
+  try{
+    for(const a of assets){
+      const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'candleSnapshot', req: { coin: a, interval: '1d', startTime: start, endTime: Date.now() } }) });
+      const j = r.ok ? await r.json() : null;
+      out[a] = Array.isArray(j) ? j.filter(c => +c.t >= start).sort((x, y) => x.t - y.t).map(c => +c.c) : [];
+    }
+    _beHist.data = out; _beHist.at = Date.now(); _beHist.err = null;
+  }catch(e){ _beHist.err = e.message; }
+  _beHist.busy = false;
+  if(activeView === 'portfolio' && pfView() === 'planning') renderPortfolio();
+}
+function renderPfBreakEvenProb(m){
+  const host = document.getElementById('pfBeProb');
+  const held = m.positions.filter(p => p.qty > PF_EPS && p.price !== null);
+  if(!held.length){ host.innerHTML = '<span class="text-[#BAC9CD]">No priced holdings.</span>'; return; }
+  if(!_beHist.data || held.some(p => !(p.asset in _beHist.data))){ host.textContent = _beHist.err ? 'Price history unavailable (' + _beHist.err + '): probabilities not shown.' : 'Loading daily price history…'; loadBeHistory(held.map(p => p.asset)); if(!_beHist.data) return; }
+  const t = breakEvenTable(m.positions, _beHist.data);
+  const cell = (v) => { const pct = Math.round(v * 100); return `<span class="font-mono-data ${pct >= 60 ? 'text-[#4AE176]' : pct >= 30 ? 'text-[#FBBF24]' : 'text-[#FFB4AB]'}">${pct}%</span>`; };
+  host.innerHTML = `<table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset → break-even</th>${BE_HORIZONS.map(([k]) => `<th class="px-2 font-normal text-right">${k}</th>`).join('')}<th class="px-2 font-normal text-right">σ · μ</th></tr></thead><tbody>
+    ${t.rows.map(r => r.breakEven === null ? `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold">${esc(r.asset)}</td><td colspan="6" class="px-2 text-[#8A9599]">${esc(r.reason)}</td></tr>` :
+      `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2"><span class="font-semibold">${esc(r.asset)}</span> <span class="text-[#8A9599]">→ ${pfMoney(r.breakEven, r.breakEven < 10 ? 4 : 2)}</span></td>${r.probs.map(x => `<td class="px-2 text-right">${cell(x.p)}</td>`).join('')}<td class="px-2 text-right font-mono-data text-[10px] text-[#8A9599]">${r.isLive ? '●' : '○'} ${(r.sigma * 100).toFixed(0)}% · ${(r.mu * 100).toFixed(0)}%${r.calibrated ? '' : ' (default)'}</td></tr>`).join('')}
+    ${t.portfolio ? `<tr class="border-t-2 border-[#3B494C] font-semibold"><td class="py-1 px-2">Portfolio</td>${t.portfolio.probs.map(x => `<td class="px-2 text-right">${cell(x.p)}</td>`).join('')}<td class="px-2 text-right font-mono-data text-[10px] text-[#8A9599]">${(t.portfolio.sigma * 100).toFixed(0)}% · ${(t.portfolio.mu * 100).toFixed(0)}%</td></tr>` : `<tr class="border-t-2 border-[#3B494C]"><td colspan="7" class="py-1 px-2 text-[10px] text-[#8A9599]">Portfolio row: ${esc(t.portfolioNote || 'not applicable')}.</td></tr>`}
+  </tbody></table>`;
 }
 // Narrative (Gemini parity, contracts §6): V1's own POST /gemini-outlook with {portfolio:[{sym, weight}]}, exactly the
 // body V1 sends; only on this click; no amounts or transactions leave the browser.

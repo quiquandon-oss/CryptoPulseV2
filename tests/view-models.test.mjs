@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestDeposits, pfBackfillSnapshots };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -975,7 +975,8 @@ test('portfolio: dry powder follows the V1 rule; scenarios are partial when a pr
 });
 
 test('portfolio: no real personal transactions and no portfolio data in source; storage key is V2-only', () => {
-  assert.doesNotMatch(SRC, /SEED_TXS|Neverless interest|84715\.15/);
+  // V1's embedded portfolio data is read from V1's page at runtime ("Import V1 embedded data"); its literals must never be in V2.
+  assert.doesNotMatch(SRC, /SEED_TXS\s*=\s*\[|INTEREST_EUR\s*=\s*\{|PRICE_HISTORY\s*=\s*\{|84715\.15|"acct":"(Revolut|Neverless)"/);
   assert.match(SRC, /var PF_STORE_KEY = 'cpv2_portfolio_v1';/);
   assert.doesNotMatch(SRC, /localStorage\.setItem\('cp2_/, 'never writes V1 keys');
   const pfBlock = SRC.slice(SRC.indexOf('// ---- Portfolio accounting'), SRC.indexOf('// ---- END view-model helpers ----')).split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -1198,5 +1199,42 @@ test('portfolio import UI: accepts XLSX, explains the V1 order (backup, then sta
   assert.match(SRC, /Same portfolio as V1/);
   assert.ok(SRC.indexOf('if(pfImportStatement(csvRows, h)) return;') < SRC.indexOf('const parsed = pfCsvRowsToTxs(csvRows);'));
   assert.match(SRC, /pfImportCandidates\(v1\.items, 'v1_backup_route', null, \{ v1Match: true \}\)/);
+});
+
+// ---- V1 embedded data (synthetic page shaped like V1's embedded block) ----
+const V1_PAGE = '<script>\n// ====== EMBEDDED ======\nconst PRICE_HISTORY={"BTC":{"2026-04-10":70000,"2026-04-11":72000,"2026-04-12":73000},"LINK":{"2026-04-11":10,"2026-04-12":11}};\n'
+  + '// interest\nconst INTEREST_EUR={"2026-04-11":0.0,"2026-04-30":3.5,"2026-05-15":5.0,"2026-05-31":6.25,"2026-06-10":7.0};\n'
+  + '// seed\nconst SEED_TXS=[{"date":"2026-04-11","asset":"BTC","acct":"Neverless","type":"buy","qty":0.02,"price":84000,"ccy":"EUR"},{"date":"2026-04-12","asset":"LINK","acct":"Revolut","type":"buy","qty":3,"price":9,"ccy":"EUR"}];\n</script>';
+test('V1 embedded data: the three constants are read as JSON; missing ones are reported, not guessed', () => {
+  const e = H.pfParseV1Embedded(V1_PAGE);
+  assert.deepEqual(plain([e.seedTxs.length, Object.keys(e.interestEur).length, Object.keys(e.priceHistory), e.errors]), [2, 5, ['BTC', 'LINK'], []]);
+  const bad = H.pfParseV1Embedded('<script>\nconst SEED_TXS=[{"a":1}];\n</script>');
+  assert.deepEqual(plain(bad.errors), ['INTEREST_EUR not found in the V1 page', 'PRICE_HISTORY not found in the V1 page']);
+  assert.deepEqual(H.pfParseV1Embedded('const SEED_TXS=foo();').errors[0], 'SEED_TXS is not plain JSON');
+});
+test('V1 embedded interest: one EUR deposit per month (the month’s accrual) into Neverless, with stable source ids', () => {
+  const items = H.pfV1InterestDeposits(H.pfParseV1Embedded(V1_PAGE).interestEur);
+  assert.deepEqual(plain(items.map((i) => [i.accountName, i.tx.type, i.tx.asset, i.tx.qty, new Date(i.tx.ts).toISOString().slice(0, 10), i.tx.src_id])), [
+    ['Neverless', 'deposit', 'EUR', 3.5, '2026-04-30', 'v1int:2026-04'], ['Neverless', 'deposit', 'EUR', 2.75, '2026-05-31', 'v1int:2026-05'], ['Neverless', 'deposit', 'EUR', 0.75, '2026-06-10', 'v1int:2026-06']]);
+  const store = { accounts: [{ id: 'n', name: 'Neverless' }], txs: [] };
+  assert.equal(H.pfValidateTx({ id: 'i1', account_id: 'n', ...items[0].tx }, store, NOW + 400 * 86400000).length, 0);
+});
+test('V1 embedded prices: daily value history = holdings at the end of each day × that day’s price, only before existing snapshots', () => {
+  const e = H.pfParseV1Embedded(V1_PAGE);
+  const seed = H.pfFromV1Backup({ txs: e.seedTxs }, 'V1 embedded data');
+  assert.match(seed.items[0].tx.note, /V1 embedded data/);
+  const store = { accounts: [{ id: 'n', name: 'Neverless' }, { id: 'r', name: 'Revolut' }], snapshots: [],
+    txs: seed.items.map((it, k) => ({ id: 's' + k, account_id: it.accountName === 'Neverless' ? 'n' : 'r', ...it.tx })) };
+  assert.equal(H.pfHasV1NeverlessSeed(store), true);
+  const snaps = H.pfBackfillSnapshots(store, e.priceHistory);
+  assert.deepEqual(plain(snaps.map((x) => [new Date(x.ts).toISOString().slice(0, 10), x.totalUsd, x.complete, x.source])), [
+    ['2026-04-11', 1440, true, 'v1_embedded_prices'], ['2026-04-12', 0.02 * 73000 + 3 * 11, true, 'v1_embedded_prices']]);   // 04-10: nothing held yet
+  store.snapshots = [{ ts: Date.parse('2026-04-12T08:00:00Z'), totalUsd: 1, complete: true }];
+  assert.equal(H.pfBackfillSnapshots(store, e.priceHistory).length, 1);
+});
+test('portfolio import UI: "Import V1 embedded data" reads V1’s public page; the data is not in V2’s source', () => {
+  assert.match(SRC, /id="pfImportV1Embedded"/);
+  assert.match(SRC, /PF_V1_PAGE_URL = 'https:\/\/raw\.githubusercontent\.com\/quiquandon-oss\/CryptoPulse\/main\/index\.html'/);
+  assert.doesNotMatch(SRC, /^const (SEED_TXS|INTEREST_EUR|PRICE_HISTORY)=/m);
 });
 

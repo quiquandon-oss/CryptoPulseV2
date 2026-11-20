@@ -1307,3 +1307,7 @@ test('Align with V1: up to V1’s last day, every crypto row must match one V1 r
   assert.deepEqual(plain(H.pfV1RepairPlan(store, v1)), []);
   assert.equal(H.pfV1Compare(v1, store).allMatch, true);
 });
+
+test('portfolio value history opens on All (owner exception to the 24H default, 2026-11-20)', () => {
+  assert.match(SRC, /range: 'ALL' \/\* owner exception to OD-08/);
+});

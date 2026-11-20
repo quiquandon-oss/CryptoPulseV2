@@ -75,7 +75,7 @@ async function mock(ctx){
   ok(/1 with the ECB reference rate/.test(await p.textContent('#pfPriceNote')) && /1 with your own rate|0 with your own rate/.test(await p.textContent('#pfPriceNote')), 'FX provenance counted (own / ECB / missing)');
   ok(!/999/.test(pos), 'reversed buy not counted');
   ok(!/FX MISSING/.test(await p.textContent('#pfIssues')), 'no FX issue left once ECB rates are stored');
-  ok((await p.$eval('#pfValuePresets [aria-pressed="true"]', (b) => b.textContent.trim())) === '24H', 'value chart presets default 24H');
+  ok((await p.$eval('#pfValuePresets [aria-pressed="true"]', (b) => b.textContent.trim())) === 'All', 'value chart presets default All (owner exception to OD-08, 2026-11-20)');
   ok(await p.$('#pfValueChartFsBtn') && await p.$('#pfAllocChartFsBtn'), 'value and allocation charts have full screen');
   await p.click('#pfAllocChartFsBtn'); await p.waitForTimeout(250); ok((await p.getAttribute('#pfAllocChartFsBtn', 'aria-pressed')) === 'true', 'allocation full screen'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   await p.screenshot({ path: (process.env.SMOKE_OUT || os.tmpdir()) + '/pf-holdings.png', fullPage: true });

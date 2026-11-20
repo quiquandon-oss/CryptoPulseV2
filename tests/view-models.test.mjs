@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -696,4 +696,21 @@ test('GLM panel: three separate blocks; GLM labelled as not a forecast; escaped 
   assert.ok(!/generativelanguage|gemini-[0-9]/i.test(panel), 'no Gemini endpoint in the GLM panel');
   // every interpolated API string in the panel goes through esc() or a numeric formatter
   for (const m of panel.matchAll(/\$\{(it|g|x|f|r)\.(ref|table|claim|relation|label|gemini_ref|original_ref|run_status|baseSource)\b/g)) assert.fail('unescaped ' + m[0]);
+});
+
+test('GLM influence: active + non-zero adjustment headlines final_p_up, keeps the baseline, explains why', () => {
+  const g = { mode: 'active', baseline_p_up: 0.6, final_p_up: 0.58, adjustment: -0.02, cap: 0.03, direction: 'DOWN', strength: 'moderate',
+    explanation: { rationale: 'Fed release and both models point down', findings: [{ claim: 'TimesFM and Chronos forecast DOWN' }] } };
+  const h = H.headlineOf({ status: 'ok', p_up: 0.6, glm: g });
+  assert.equal(h.pUp, 0.58); assert.equal(h.basePUp, 0.6); assert.equal(h.glmApplied, true);
+  const n = H.glmHeadlineNote(h);
+  assert.match(n.text, /model 60% → 58% \(-2 pts, down moderate signal, capped at 3 pts\)/);
+  assert.equal(n.why, 'Fed release and both models point down');
+  assert.deepEqual(n.findings, ['TimesFM and Chronos forecast DOWN']);
+});
+test('GLM influence: shadow mode or zero adjustment never changes the headline', () => {
+  for (const g of [{ mode: 'shadow', final_p_up: 0.58, adjustment: 0 }, { mode: 'active', final_p_up: 0.6, adjustment: 0 }, { mode: 'active', final_p_up: 'x', adjustment: -0.02 }]) {
+    const h = H.headlineOf({ status: 'ok', p_up: 0.6, glm: g });
+    assert.equal(h.pUp, 0.6); assert.equal(H.glmHeadlineNote(h), null);
+  }
 });

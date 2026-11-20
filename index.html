@@ -53,7 +53,7 @@
   <header class="mb-6">
     <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
       <div>
-        <p class="text-[10px] uppercase tracking-[0.25em] text-[#00E0FF]/70 mb-1 font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px] text-[#00E0FF]">monitoring</span>CryptoPulse — Model Lab</p>
+        <p class="text-[10px] uppercase tracking-[0.25em] text-[#00E0FF]/70 mb-1 font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px] text-[#00E0FF]">monitoring</span>CryptoPulse</p>
         <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">V2<span class="text-[#00E0FF]">.</span></h1>
       </div>
       <!-- Status pill (Worker/D1/Model) removed. The refresh button stays
@@ -72,14 +72,10 @@
        does each research question stand), History (the detailed records).
        Desktop uses this pill nav; phones use the fixed bottom nav below —
        both are the same .nav-tab buttons driven by renderNav(). -->
-  <nav aria-label="Sections" class="hidden md:flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-4 w-fit">
-    <button data-view="dashboard" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="lab" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="forecast" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="experiments" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="history" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-    <button data-view="sentiment" class="nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"></button>
-  </nav>
+  <!-- Nine areas (docs/architecture/PHASE_1_ARCHITECTURE_CONTRACTS.md §2). Buttons are generated from AREAS by
+       renderNav(); the same AREAS drive the phone bar and its "More" sheet. -->
+  <nav id="areaNavDesktop" aria-label="Sections" class="hidden md:flex flex-wrap gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-3 w-fit max-w-full"></nav>
+  <div id="areaTabs" role="tablist" aria-label="Sentiment V2 sections" class="hidden flex gap-1 bg-[#191C1F] border border-[#3B494C] rounded-xl p-1 mb-4 w-fit max-w-full overflow-x-auto"></div>
 
   <!-- Coin selector: LINK added as a genuine second model, not a copy-paste
        of BTC — different data source, simpler self-bootstrapping technical
@@ -91,7 +87,7 @@
   </div>
   <!-- Lab is scoped to the coin/horizon chosen on the Dashboard or in
        History; this chip makes the active scope explicit. -->
-  <p id="scopeChip" class="hidden text-[11px] text-[#BAC9CD] mb-4">Showing <span id="scopeChipValue" class="font-mono-data text-[#E1E2E7]"></span> · change coin/horizon on the <button type="button" class="underline hover:text-[#00E0FF]" onclick="activeView='dashboard'; history.replaceState(null,'','#dashboard'); renderNav();">Dashboard</button></p>
+  <p id="scopeChip" class="hidden text-[11px] text-[#BAC9CD] mb-4">Showing <span id="scopeChipValue" class="font-mono-data text-[#E1E2E7]"></span> · change coin/horizon on the <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('overview')">Overview</button></p>
 
   <div id="view-dashboard">
 
@@ -159,7 +155,7 @@
           <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="evidenceNote">Resolved predictions only — every logged call for this coin/horizon whose horizon has passed. Accuracy is the share of correct direction calls; Brier score measures probability quality (lower is better) and is compared with the best constant guess. 50 resolved predictions is the backend's minimum before a variant is even considered for model selection; below that the sample is marked insufficient. Past resolved accuracy is not a guarantee of future accuracy, and no figure here is a test of statistical significance.</p>
           <div id="evidenceBody" class="text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
           <p id="calibNote" class="text-[10px] text-[#BAC9CD] mt-3 pt-3 border-t border-[#3B494C] leading-relaxed"></p>
-          <button type="button" onclick="activeView='lab'; history.replaceState(null,'','#lab'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
+          <button type="button" onclick="goRoute('sentiment-v2/model')" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
         </section>
         <section id="dqCard" aria-labelledby="dqTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
           <div class="flex items-center justify-between gap-2 mb-2">
@@ -194,6 +190,7 @@
         </div>
       </div>
       <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="chartNote">Every triangle is a logged prediction placed on the price line. Shape: ▲ bullish call, ▼ bearish. Fill saturation: confidence level. Ring border: green = correct, red = wrong, grey = pending.</p>
+      <p id="chartCoverage" class="text-[11px] text-[#FBBF24] mb-1" role="status"></p>
       <div id="chartContainer" class="relative" style="height:300px;">
         <canvas id="priceChart" role="img" aria-label="Price line with logged predictions and their outcomes"></canvas>
       </div>
@@ -221,7 +218,7 @@
           <tbody id="recapTbody"><tr><td colspan="4" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
         </table>
       </div>
-      <button type="button" onclick="activeView='history'; history.replaceState(null,'','#history'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Full prediction history →</button>
+      <button type="button" onclick="goRoute('learning')" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Full prediction history →</button>
     </details>
 
     <!-- Offline backtests: manually triggered runs logged to
@@ -247,7 +244,7 @@
           <tbody id="backtestTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
         </table>
       </div>
-      <button type="button" onclick="activeView='history'; history.replaceState(null,'','#history'); renderNav();" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Every backtest run →</button>
+      <button type="button" onclick="goRoute('learning')" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Every backtest run →</button>
     </details>
 
   </div>
@@ -428,6 +425,78 @@
     <!-- The former "AI Learning" view, unchanged in content: learning loop,
          model selection, learning events, analyst relay, audit trail. It is
          coin/horizon scoped and fetch-heavy, so it loads only when opened. -->
+
+  </div>
+
+  <!-- ═══ HISTORY ═══ The detailed records: every logged prediction with
+       its realized outcome and deviation, and every offline backtest run.
+       Reuses the chart's /chart-data response and the single
+       /backtest-history and /backtest-regime-split-history responses —
+       no new requests just to show the same data again. ═══ -->
+  <div id="view-history" class="hidden">
+
+    <section id="historyRecapCard" aria-labelledby="historyRecapTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <h2 id="historyRecapTitle" class="text-sm font-semibold">Prediction history <span id="historyRecapScope" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
+        <div id="historyFilter" role="group" aria-label="Filter predictions" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
+      </div>
+      <p id="historySummary" class="text-[11px] text-[#BAC9CD] mb-2 font-mono-data"></p>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every logged call for this coin/horizon, newest first. "Predicted" is the called direction, probability and expected median move; "Reality" is the realized return once the horizon passed; "Deviation" is realized minus expected. Pending rows have not reached their target time. All times UTC.</p>
+      <div class="overflow-x-auto overflow-y-auto" style="max-height:560px;">
+        <table class="w-full text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C] sticky top-0 bg-[#191C1F]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
+            <th scope="col" class="text-left font-medium px-2 py-2">Target (UTC)</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Reality</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Deviation</th>
+          </tr></thead>
+          <tbody id="historyRecapTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="historyBacktestTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <p class="text-[10px] uppercase tracking-wide text-[#00E0FF] font-bold mb-1">Offline research — not live predictions</p><h2 id="historyBacktestTitle" class="text-sm font-semibold mb-1">Offline backtest runs</h2>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every manually triggered backtest run logged by the backend (technical_score alone over years of price data; regime_mag/sentiment alone over the shorter own history; or all combined). Not part of the live cron; small samples outside technical_score are directional only.</p>
+      <div class="overflow-x-auto relative">
+        <p class="mobile-scroll-hint text-[10px] text-[#BAC9CD] text-right">scroll →</p>
+        <table class="w-full min-w-[620px] text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2 sticky left-0 bg-[#191C1F]">Run (UTC)</th>
+            <th scope="col" class="text-left font-medium px-2 py-2">Test</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
+          </tr></thead>
+          <tbody id="historyBacktestTbody"><tr><td colspan="6" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="regimeSplitTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <h2 id="regimeSplitTitle" class="text-sm font-semibold mb-1">Technical score by sentiment regime <span class="text-[#BAC9CD] font-normal text-xs">(latest run)</span></h2>
+      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">The technical_score-only walk-forward test, with each prediction tagged by that day's sentiment and split at the median. A meaningful difference between halves would suggest switching which feature leads by sentiment regime, rather than a fixed weight.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
+            <th scope="col" class="text-left font-medium px-2 py-2">Regime</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
+            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
+          </tr></thead>
+          <tbody id="regimeSplitTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are in the learning loop below.</p>
+  </div>
+
+  <!-- Learning & Audit also holds the learning loop (moved here from Experiments). -->
+  <div id="view-learningblock" class="hidden">
     <details id="learningDetails" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <summary class="flex items-center justify-between cursor-pointer select-none">
         <span class="text-sm font-semibold">Learning loop &amp; model selection <span class="text-[#BAC9CD] font-normal text-xs">(formerly "AI Learning")</span></span>
@@ -554,74 +623,6 @@
 
       </div>
     </details>
-
-  </div>
-
-  <!-- ═══ HISTORY ═══ The detailed records: every logged prediction with
-       its realized outcome and deviation, and every offline backtest run.
-       Reuses the chart's /chart-data response and the single
-       /backtest-history and /backtest-regime-split-history responses —
-       no new requests just to show the same data again. ═══ -->
-  <div id="view-history" class="hidden">
-
-    <section id="historyRecapCard" aria-labelledby="historyRecapTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
-        <h2 id="historyRecapTitle" class="text-sm font-semibold">Prediction history <span id="historyRecapScope" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
-        <div id="historyFilter" role="group" aria-label="Filter predictions" class="flex gap-1 bg-[#0B0E11] rounded-lg p-1"></div>
-      </div>
-      <p id="historySummary" class="text-[11px] text-[#BAC9CD] mb-2 font-mono-data"></p>
-      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every logged call for this coin/horizon, newest first. "Predicted" is the called direction, probability and expected median move; "Reality" is the realized return once the horizon passed; "Deviation" is realized minus expected. Pending rows have not reached their target time. All times UTC.</p>
-      <div class="overflow-x-auto overflow-y-auto" style="max-height:560px;">
-        <table class="w-full text-xs">
-          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C] sticky top-0 bg-[#191C1F]"><tr>
-            <th scope="col" class="text-left font-medium px-2 py-2">Made (UTC)</th>
-            <th scope="col" class="text-left font-medium px-2 py-2">Target (UTC)</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Predicted</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Reality</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Deviation</th>
-          </tr></thead>
-          <tbody id="historyRecapTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section aria-labelledby="historyBacktestTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <p class="text-[10px] uppercase tracking-wide text-[#00E0FF] font-bold mb-1">Offline research — not live predictions</p><h2 id="historyBacktestTitle" class="text-sm font-semibold mb-1">Offline backtest runs</h2>
-      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">Every manually triggered backtest run logged by the backend (technical_score alone over years of price data; regime_mag/sentiment alone over the shorter own history; or all combined). Not part of the live cron; small samples outside technical_score are directional only.</p>
-      <div class="overflow-x-auto relative">
-        <p class="mobile-scroll-hint text-[10px] text-[#BAC9CD] text-right">scroll →</p>
-        <table class="w-full min-w-[620px] text-xs">
-          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
-            <th scope="col" class="text-left font-medium px-2 py-2 sticky left-0 bg-[#191C1F]">Run (UTC)</th>
-            <th scope="col" class="text-left font-medium px-2 py-2">Test</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
-          </tr></thead>
-          <tbody id="historyBacktestTbody"><tr><td colspan="6" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section aria-labelledby="regimeSplitTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <h2 id="regimeSplitTitle" class="text-sm font-semibold mb-1">Technical score by sentiment regime <span class="text-[#BAC9CD] font-normal text-xs">(latest run)</span></h2>
-      <p class="text-[11px] text-[#BAC9CD] mb-3 leading-relaxed">The technical_score-only walk-forward test, with each prediction tagged by that day's sentiment and split at the median. A meaningful difference between halves would suggest switching which feature leads by sentiment regime, rather than a fixed weight.</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs">
-          <thead class="text-[#BAC9CD] uppercase tracking-wide border-b border-[#3B494C]"><tr>
-            <th scope="col" class="text-left font-medium px-2 py-2">Regime</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">n</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Accuracy</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">Brier</th>
-            <th scope="col" class="text-right font-medium px-2 py-2">vs Baseline</th>
-          </tr></thead>
-          <tbody id="regimeSplitTbody"><tr><td colspan="5" class="px-2 py-6 text-center text-[#BAC9CD]">Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <p class="text-[11px] text-[#BAC9CD] mb-6">Model-selection decisions (the audit trail) are under Experiments → Learning loop &amp; model selection.</p>
   </div>
 
   <!-- Sentiment V2: one graph comparing V1 sentiment, V2 sentiment and BTC price at the same timestamps
@@ -664,8 +665,8 @@
     <section class="rounded-2xl border border-[#A78BFA]/30 bg-[#A78BFA]/5 p-4 mb-6">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div class="min-w-0">
-          <h2 class="text-lg font-bold tracking-tight">Forecasting Lab</h2>
-          <p class="text-xs text-[#BAC9CD] mt-1 leading-relaxed">TimesFM 2.5 and Chronos-2 forecast BTC from price history alone, at 12 h and 24 h, on GitHub Actions. They are numerical research forecasts; they are also inputs to the GLM evidence layer below, which runs in shadow mode (it does not change V2 predictions). Every number below comes from a persisted forecast and its recorded outcome.</p>
+          <h2 class="text-lg font-bold tracking-tight">Forecast <span class="text-xs font-normal text-[#BAC9CD]">· Sentiment V2</span></h2>
+          <p class="text-xs text-[#BAC9CD] mt-1 leading-relaxed">TimesFM 2.5 and Chronos-2 forecast BTC from price history alone, at 12 h and 24 h, on GitHub Actions. They are numerical research forecasts; they are also inputs to the GLM evidence layer below. GLM can move the served BTC 24 h value only within its 0.03 cap, never across 50%, and only when its signal is ELIGIBLE; the pre-GLM baseline is always kept and shown. Whether a run actually adjusted anything is read from the GLM records below, never assumed from settings. Every number below comes from a persisted forecast and its recorded outcome.</p>
         </div>
         <div id="flHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 shrink-0"></div>
       </div>
@@ -737,8 +738,9 @@
 
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flSentTitle">
       <h3 id="flSentTitle" class="text-sm font-semibold mb-1">Sentiment vs forecasting</h3>
-      <p class="text-[11px] text-[#BAC9CD] mb-2">V1 and V2 sentiment (left axis) with BTC and each model's latest call per origin (▲ UP / ▼ DOWN, right axis), last 30 days.</p>
-      <div class="relative h-[260px] sm:h-[320px]"><canvas id="flSentChart" role="img" aria-label="V1 and V2 sentiment with BTC price and the models' forecast directions over the last 30 days"></canvas></div>
+      <p class="text-[11px] text-[#BAC9CD] mb-2">V1 and V2 sentiment (left axis) with BTC and each model's latest call per origin (▲ UP / ▼ DOWN, right axis), over the selected range.</p>
+      <p id="flSentCoverage" class="text-[11px] text-[#FBBF24] mb-1" role="status"></p>
+      <div class="relative h-[260px] sm:h-[320px]"><canvas id="flSentChart" role="img" aria-label="V1 and V2 sentiment with BTC price and the models' forecast directions over the selected range"></canvas></div>
       <h4 class="text-xs uppercase tracking-wide text-[#BAC9CD] mt-4 mb-2">Does sentiment add predictive value? (measured)</h4>
       <div id="flPev1" class="text-[11px]"></div>
     </section>
@@ -753,6 +755,52 @@
     </section>
   </div>
 
+  <!-- ═══ New areas (Stage 2 foundation). Each states exactly what it shows and what is not yet available. ═══ -->
+  <div id="view-sentiment-v1" class="hidden">
+    <section id="v1Card" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="v1Title">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
+        <h2 id="v1Title" class="text-lg font-bold tracking-tight">Sentiment V1 <span class="text-xs font-normal text-[#BAC9CD]">· read-only</span></h2>
+        <div class="flex items-center gap-2"><div id="v1Presets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+      </div>
+      <p class="text-xs text-[#BAC9CD] mb-3">V1 is the original, unchanged production engine (Worker <span class="font-mono-data">sentiment-ff75</span>). Values are shown exactly as V1 recorded them, as read by PulseWorkerV2 (<span class="font-mono-data">/api/sentiment-v2/comparison</span>); nothing here writes to V1 or recomputes its score.</p>
+      <div id="v1Summary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs"></div>
+      <p id="v1Coverage" class="text-[11px] text-[#8A9599] mb-2"></p>
+      <div id="v1ChartContainer" class="relative" style="height:260px"><canvas id="v1Chart" aria-label="V1 sentiment over time"></canvas></div>
+      <p id="v1Status" class="text-[11px] text-[#8A9599] mt-2" role="status">Loading…</p>
+    </section>
+  </div>
+
+  <div id="view-comparison" class="hidden">
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpTitle">
+      <h2 id="cmpTitle" class="text-lg font-bold tracking-tight mb-1">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2, read-only</span></h2>
+      <p class="text-xs text-[#BAC9CD] mb-3">Observes both engines; it never changes either. This first view is <b>descriptive and sentiment-level</b>: V1 and V2 sentiment at the same timestamps. Outcome-based evaluation (V1 vs V2 baseline vs V2 final after GLM, resolved against the market) needs a read-only backend route that is not deployed yet, so no accuracy figures are shown here.</p>
+      <div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit mb-3"></div>
+      <div id="cmpSummary" class="text-xs" role="status">Loading…</div>
+    </section>
+  </div>
+
+  <div id="view-portfolio" class="hidden">
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfTitle">
+      <h2 id="pfTitle" class="text-lg font-bold tracking-tight mb-1">Portfolio</h2>
+      <p class="text-xs text-[#BAC9CD]"><span class="inline-block px-1.5 py-0.5 rounded bg-[#3B494C]/60 text-[10px] font-semibold mr-1">NOT YET AVAILABLE</span>The V2 portfolio ledger (accounts, transactions, average cost, P&amp;L, allocation, import/export) is the next frontend stage. Nothing is shown in its place and no portfolio data is read or stored by this page yet. The V1 portfolio keeps working in V1.</p>
+    </section>
+  </div>
+
+  <div id="view-alerts" class="hidden">
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="alTitle">
+      <h2 id="alTitle" class="text-lg font-bold tracking-tight mb-1">Alerts <span class="text-xs font-normal text-[#BAC9CD]">· operational</span></h2>
+      <p class="text-xs text-[#BAC9CD] mb-3">Health of the V2 production chain, read from the same sources as the Overview status panel. V1's own price/market alerts and their Telegram delivery stay in V1 and are not shown here yet.</p>
+      <div id="alertsStatusBody" class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="status"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+  </div>
+
+  <div id="view-settings" class="hidden">
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="stTitle">
+      <h2 id="stTitle" class="text-lg font-bold tracking-tight mb-3">Settings</h2>
+      <div id="settingsBody" class="space-y-3 text-xs"></div>
+    </section>
+  </div>
+
   <footer class="mt-10 text-[11px] text-[#8A9599]">
     Backend: <a href="https://github.com/quiquandon-oss/PulseWorkerV2" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">PulseWorkerV2 ↗</a> · Data: shared with <a href="https://github.com/quiquandon-oss/CryptoPulse" target="_blank" rel="noopener noreferrer" class="underline hover:text-[#BAC9CD]">CryptoPulse ↗</a>
   </footer>
@@ -762,32 +810,9 @@
 <!-- Bottom mobile nav: the same four sections as the desktop pill nav, as
      always-visible icon buttons (no hidden desktop-only menu). Same
      .nav-tab buttons and renderNav() state, just a second surface. -->
-<nav aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-6 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50">
-  <button type="button" data-view="dashboard" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
-    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">monitoring</span>
-    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Dashboard</span>
-  </button>
-  <button type="button" data-view="lab" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
-    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">science</span>
-    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Lab</span>
-  </button>
-  <button type="button" data-view="forecast" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
-    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">insights</span>
-    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Forecast</span>
-  </button>
-  <button type="button" data-view="experiments" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
-    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">fact_check</span>
-    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Experiments</span>
-  </button>
-  <button type="button" data-view="history" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
-    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">history</span>
-    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">History</span>
-  </button>
-  <button type="button" data-view="sentiment" class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl transition-colors">
-    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">compare_arrows</span>
-    <span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap">Sentiment</span>
-  </button>
-</nav>
+<!-- Phone bar: four primary areas plus "More" (the other five), generated from AREAS by renderNav(). -->
+<nav id="areaNavMobile" aria-label="Sections" class="md:hidden fixed bottom-0 left-0 w-full grid grid-cols-5 items-center py-1.5 px-1 bg-[#0B0E11] border-t border-[#3B494C] z-50"></nav>
+<div id="moreSheet" class="hidden md:hidden fixed inset-x-0 bottom-[64px] z-50 mx-2 rounded-2xl border border-[#3B494C] bg-[#191C1F] p-2 shadow-xl" role="menu" aria-label="More sections"></div>
 
 <script>
 function toggleNote(btn, noteId){
@@ -797,6 +822,12 @@ function toggleNote(btn, noteId){
   btn.textContent = nowHidden ? 'ⓘ Info' : 'ⓘ Hide';
   btn.setAttribute('aria-expanded', String(!nowHidden));
 }
+
+// ---- Shared full-screen state for every chart (functions: chartFsEnter / chartFsExit / wireFullscreenToggle). ----
+const fullscreenState = {};
+var _fsActive = null;
+const FS_ICON_OPEN = 'open_in_full', FS_ICON_CLOSE = 'close_fullscreen';
+document.addEventListener('keydown', (ev) => { if(ev.key === 'Escape' && _fsActive) chartFsExit(); });
 
 // ---- Shared presentation helpers (no data logic) ----
 // Backend text is escaped before it goes into innerHTML.
@@ -1068,7 +1099,9 @@ function alertModel(runsRes, issuesRes, now){
   return unknown(`No alert open; latest run ended as ${latest.conclusion || 'not reported'}`);
 }
 // Sentiment V2 tab. Values are shown exactly as the Worker returns them; nothing is recomputed here.
-var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'], ['all', 'ALL']];
+// Global chart standard (OD-08): 24H / 7D / 1M / All, 24H selected first. The server keys are what
+// /api/sentiment-v2/comparison accepts; the labels are the shared preset labels.
+var SV2_PERIODS = [['24h', '24H'], ['7d', '7D'], ['30d', '1M'], ['all', 'All']];
 // V1 is recorded only when the V1 app is open, so readings can be many hours apart. A line drawn across such a gap would
 // suggest values that were never observed: the chart breaks it instead. The limit is 6 h, or 3x the median spacing when
 // points are sparser (long periods / downsampled), so ordinary spacing never breaks the line. The median is only used
@@ -1499,6 +1532,82 @@ function apiBaseFor(search){
   const q = String(search || '');
   return /(^|[?&])api=staging(&|$)/.test(q) ? 'https://pulseworker-v2-staging.quiquandon.workers.dev' : 'https://pulseworker-v2.quiquandon.workers.dev';
 }
+// ---- Global chart standard (docs/architecture/PHASE_1_ARCHITECTURE_CONTRACTS.md §5, owner decision OD-08) ----
+// One preset list for every time-based chart: same keys, labels and order everywhere; 24H is the default.
+// The display range never changes what the backend keeps or computes.
+var CHART_PRESETS = [{ key: '24H', label: '24H', ms: 24 * 3600000 }, { key: '7D', label: '7D', ms: 7 * 86400000 },
+  { key: '1M', label: '1M', ms: 30 * 86400000 }, { key: 'ALL', label: 'All', ms: Infinity }];
+var CHART_DEFAULT_PRESET = '24H';
+function chartPreset(key){ return CHART_PRESETS.find((p) => p.key === key) || CHART_PRESETS[0]; }
+// Points inside the preset window (All = every point given). Coverage describes what was actually returned,
+// so a short history is reported, never padded.
+function clipSeries(points, tsField, key, now){
+  const pr = chartPreset(key);
+  const all = (Array.isArray(points) ? points : []).filter((p) => p && typeof p[tsField] === 'number' && isFinite(p[tsField]));
+  const from = pr.ms === Infinity ? -Infinity : now - pr.ms;
+  const pts = all.filter((p) => p[tsField] >= from);
+  const ts = all.map((p) => p[tsField]);
+  const coverage = { n: pts.length, nAll: all.length, firstTs: ts.length ? Math.min(...ts) : null, lastTs: ts.length ? Math.max(...ts) : null };
+  return { points: pts, coverage, limited: pr.ms !== Infinity && coverage.firstTs !== null && coverage.firstTs > from };
+}
+function coverageNote(coverage, key, now){
+  const pr = chartPreset(key);
+  const d = (ts) => new Date(ts).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  if(!coverage || !coverage.nAll) return 'No data available yet.';
+  if(!coverage.n) return 'No data in the last ' + pr.label + ' (latest ' + d(coverage.lastTs) + '). Choose a longer range.';
+  if(pr.ms !== Infinity && coverage.firstTs > now - pr.ms) return 'Data starts ' + d(coverage.firstTs) + ', shorter than ' + pr.label + '.';
+  return '';
+}
+
+// ---- Navigation: nine areas; Forecast is a tab inside Sentiment V2 (OD-05). `views` are the page containers
+// (id view-<name>) each route shows; the first one is the internal activeView key the loaders already use. ----
+var AREAS = [
+  { key: 'overview', label: 'Overview', icon: 'monitoring', views: ['dashboard'] },
+  { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', views: ['portfolio'] },
+  { key: 'sentiment-v1', label: 'Sentiment V1', short: 'V1', icon: 'history_edu', views: ['sentiment-v1'] },
+  { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
+    { key: 'overview', label: 'Overview', views: ['sentiment'] },
+    { key: 'forecast', label: 'Forecast', views: ['forecast'] },
+    { key: 'model', label: 'Model', views: ['lab'] }] },
+  { key: 'comparison', label: 'Comparison', short: 'Compare', icon: 'compare_arrows', views: ['comparison'] },
+  { key: 'research', label: 'Research', icon: 'science', views: ['experiments'] },
+  { key: 'learning', label: 'Learning & Audit', short: 'Learning', icon: 'fact_check', views: ['history', 'learningblock'] },
+  { key: 'alerts', label: 'Alerts', icon: 'notifications', views: ['alerts'] },
+  { key: 'settings', label: 'Settings', icon: 'settings', views: ['settings'] },
+];
+var MOBILE_PRIMARY_AREAS = ['overview', 'portfolio', 'sentiment-v2', 'comparison'];
+// Old links keep working.
+var LEGACY_ROUTES = { dashboard: 'overview', lab: 'sentiment-v2/model', forecast: 'sentiment-v2/forecast', sentiment: 'sentiment-v2',
+  experiments: 'research', history: 'learning', learning: 'learning' };
+function allAreaViews(){ const out = []; for(const a of AREAS) for(const v of (a.tabs ? a.tabs.flatMap((t) => t.views) : a.views)) if(!out.includes(v)) out.push(v); return out; }
+function resolveRoute(hash){
+  let h = String(hash || '').replace(/^#/, '').trim().toLowerCase();
+  const legacy = Object.prototype.hasOwnProperty.call(LEGACY_ROUTES, h) ? h : null;
+  if(legacy) h = LEGACY_ROUTES[legacy];
+  const [ak, tk] = h.split('/');
+  const area = AREAS.find((a) => a.key === ak) || AREAS[0];
+  const tab = area.tabs ? (area.tabs.find((t) => t.key === tk) || area.tabs[0]) : null;
+  const views = tab ? tab.views : area.views;
+  return { area: area.key, tab: tab ? tab.key : null, views: views.slice(), view: views[0],
+    canonical: area.key + (tab ? '/' + tab.key : ''), legacy, openLearning: legacy === 'learning' };
+}
+
+// ---- Comparison (Stage 2, descriptive): V1 and V2 sentiment at the same timestamps, from sentimentV2Model rows.
+// No outcomes and no accuracy: those need the read-only backend comparison route (contracts §7). ----
+function cmpSentimentSummary(rows){
+  const both = (Array.isArray(rows) ? rows : []).filter((r) => r && typeof r.v1 === 'number' && typeof r.v2 === 'number');
+  if(!both.length) return { n: 0, nRows: Array.isArray(rows) ? rows.length : 0 };
+  const side = (v) => (v > 50 ? 1 : v < 50 ? -1 : 0);
+  const diffs = both.map((r) => r.v2 - r.v1);
+  const same = both.filter((r) => side(r.v1) !== 0 && side(r.v1) === side(r.v2)).length;
+  const decided = both.filter((r) => side(r.v1) !== 0 && side(r.v2) !== 0).length;
+  const last = both.reduce((a, r) => (r.ts > a.ts ? r : a), both[0]);
+  const round1 = (v) => Math.round(v * 10) / 10;
+  return { n: both.length, nRows: rows.length, meanDiff: round1(diffs.reduce((a, b) => a + b, 0) / diffs.length),
+    meanAbsDiff: round1(diffs.reduce((a, b) => a + Math.abs(b), 0) / diffs.length),
+    sameSide: same, decided, sameSideRate: decided ? same / decided : null, firstTs: Math.min(...both.map((r) => r.ts)),
+    lastTs: last.ts, last: { ts: last.ts, v1: last.v1, v2: last.v2 } };
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -1632,6 +1741,9 @@ function renderSystemStatus(){
       'covers stale predictions, stopped workflows, daily read limit' ],
       a.link ? { href: a.link, text: `Open alert #${a.number} on GitHub` } : null);
 }
+// Alerts area: the same operational cells as the Overview status panel (one renderer, one data load).
+var _renderSystemStatusBase = renderSystemStatus;
+renderSystemStatus = function(){ _renderSystemStatusBase(); const a = document.getElementById('alertsStatusBody'), h = document.getElementById('systemStatusBody'); if(a && h) a.innerHTML = h.innerHTML; };
 
 // ---- Lab: every variant for the current cycle ----
 var _variantCycleSeq = 0;
@@ -1755,7 +1867,7 @@ function refreshAll(){
   if (activeView === 'dashboard') loadDashboardIfNeeded();
   if (activeView === 'lab') loadLabIfNeeded();
   if (activeView === 'history') loadHistoryIfNeeded();
-  if (activeView === 'experiments' && _learningLoaded) loadLearningSelection();
+  if (activeView === 'history' && _learningLoaded) loadLearningSelection();
   renderScopeChip();
 }
 
@@ -1911,20 +2023,15 @@ async function loadPrediction(){
 // view is actually the one on screen, not unconditionally at parse time.
 
 // ---- Price vs predictions chart ----
-const RANGES = [
-  { key: '1D', label: '1D', ms: 24*60*60*1000 },
-  { key: '1W', label: '1W', ms: 7*24*60*60*1000 },
-  { key: '1M', label: '1M', ms: 30*24*60*60*1000 },
-  { key: 'ALL', label: 'ALL', ms: Infinity },
-];
+const RANGES = CHART_PRESETS;   // shared 24H / 7D / 1M / All (OD-08)
 let chartRaw = { prices: [], predictions: [], loadedFor: null, error: null };
 let chartInstance = null;
-let activeRange = '1M';
+let activeRange = CHART_DEFAULT_PRESET;
 
 function buildRangeTabs(){
   const host = document.getElementById('rangeTabs');
   host.innerHTML = RANGES.map(r =>
-    `<button data-range="${r.key}" class="range-tab px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${r.key===activeRange ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${r.label}</button>`
+    `<button type="button" data-range="${r.key}" aria-pressed="${r.key===activeRange}" class="range-tab px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${r.key===activeRange ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${r.label}</button>`
   ).join('');
   host.querySelectorAll('.range-tab').forEach(btn => {
     btn.onclick = () => { activeRange = btn.dataset.range; buildRangeTabs(); renderChart(); };
@@ -2064,6 +2171,8 @@ function renderChart(){
   const cutoff = range.ms === Infinity ? -Infinity : Date.now() - range.ms;
   const prices = chartRaw.prices.filter(p => p.ts >= cutoff);
   const preds = chartRaw.predictions.filter(p => p.ts >= cutoff);
+  const covEl = document.getElementById('chartCoverage');
+  if(covEl) covEl.textContent = coverageNote(clipSeries(chartRaw.prices, 'ts', activeRange, Date.now()).coverage, activeRange, Date.now());
 
   const priceData = prices.map(p => ({ x: p.ts, y: p[cfg.priceHistField] }));
   const predData = preds.map(p => ({ x: p.ts, y: p[cfg.predPriceField] }));
@@ -2402,22 +2511,12 @@ buildCoinTabs();
 buildHorizonTabs();
 // loadChart() now called from renderNav() via loadDashboardIfNeeded().
 
-// ---- Nav tabs ----
-const NAV = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'lab', label: 'Lab' },
-  { key: 'forecast', label: 'Forecasting Lab', short: 'Forecast' },
-  { key: 'experiments', label: 'Experiments', short: 'Exper.' },
-  { key: 'history', label: 'History' },
-  { key: 'sentiment', label: 'Sentiment V2', short: 'Sentiment' },
-];
-let activeView = (location.hash || '').replace('#', '') || 'dashboard';
-// Old #learning links land on Experiments with the learning block open.
+// ---- Navigation (nine areas; AREAS / resolveRoute are in the view-model helpers) ----
+let _route = resolveRoute(location.hash);
+let activeView = _route.view;   // internal key of the route's first container; the per-view loaders key off it
 document.getElementById('labDesignExperiments').classList.toggle('hidden', new URLSearchParams(location.search).get('dev') !== '1');
-
-let _openLearningOnLoad = false;
-if (activeView === 'learning') { activeView = 'experiments'; _openLearningOnLoad = true; }
-if (!NAV.some(n => n.key === activeView)) activeView = 'dashboard';
+// Old #learning links open the learning loop inside Learning & Audit.
+let _openLearningOnLoad = _route.openLearning;
 
 // ---- Lazy, per-view, per-coin/horizon loading. Previously every one of
 // loadPrediction/loadChart/loadAnalysis/loadChallenger/loadLab fired
@@ -2475,37 +2574,70 @@ function loadLabIfNeeded(){
   loadLab();
 }
 
+function navButtonHtml(a, on, mobile){
+  if(mobile) return `<button type="button" data-area="${a.key}" ${on ? 'aria-current="page"' : ''} class="nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-colors min-w-0 ${on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]'}"><span class="material-symbols-outlined text-[20px]" aria-hidden="true">${a.icon}</span><span class="text-[9px] font-semibold uppercase tracking-normal max-w-full whitespace-nowrap overflow-hidden text-ellipsis">${esc(a.short || a.label)}</span></button>`;
+  return `<button type="button" data-area="${a.key}" ${on ? 'aria-current="page"' : ''} class="nav-tab px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap ${on ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${esc(a.label)}</button>`;
+}
 function renderNav(){
-  document.querySelectorAll('.nav-tab').forEach(btn => {
-    const item = NAV.find(n => n.key === btn.dataset.view);
-    const on = btn.dataset.view === activeView;
-    if(btn.classList.contains('nav-tab-mobile')){
-      // Bottom icon nav: keep the icon+label layout, just recolor.
-      btn.querySelector('span:last-child').textContent = item.short || item.label;
-      btn.className = 'nav-tab nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-colors min-w-0 ' + (on ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]');
-    } else {
-      btn.textContent = item.label;
-      btn.className = 'nav-tab px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ' + (on ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]');
-    }
-    if (on) btn.setAttribute('aria-current', 'page'); else btn.removeAttribute('aria-current');
-  });
-  for (const n of NAV) document.getElementById('view-' + n.key).classList.toggle('hidden', activeView !== n.key);
-  // Coin/horizon toggle: on the Dashboard and on History (where it is the
-  // asset/horizon filter for the records). Lab stays scoped to whatever
-  // combo was last chosen, per the earlier explicit request, and says so
-  // in the scope chip.
+  const r = _route;
+  activeView = r.view;
+  document.getElementById('areaNavDesktop').innerHTML = AREAS.map(a => navButtonHtml(a, a.key === r.area, false)).join('');
+  const more = AREAS.filter(a => !MOBILE_PRIMARY_AREAS.includes(a.key));
+  const moreOn = more.some(a => a.key === r.area);
+  document.getElementById('areaNavMobile').innerHTML = AREAS.filter(a => MOBILE_PRIMARY_AREAS.includes(a.key)).map(a => navButtonHtml(a, a.key === r.area, true)).join('') +
+    `<button type="button" id="moreBtn" aria-haspopup="menu" aria-expanded="false" class="nav-tab-mobile flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 rounded-xl transition-colors min-w-0 ${moreOn ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#BAC9CD]'}"><span class="material-symbols-outlined text-[20px]" aria-hidden="true">menu</span><span class="text-[9px] font-semibold uppercase tracking-normal">${moreOn ? esc(AREAS.find(a => a.key === r.area).short || AREAS.find(a => a.key === r.area).label) : 'More'}</span></button>`;
+  const sheet = document.getElementById('moreSheet');
+  sheet.innerHTML = more.map(a => `<button type="button" role="menuitem" data-area="${a.key}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left ${a.key === r.area ? 'text-[#00E0FF] bg-[#00E0FF]/10' : 'text-[#E1E2E7]'}"><span class="material-symbols-outlined text-[20px]" aria-hidden="true">${a.icon}</span>${esc(a.label)}</button>`).join('');
+  sheet.classList.add('hidden');
+  const area = AREAS.find(a => a.key === r.area);
+  const tabs = document.getElementById('areaTabs');
+  tabs.classList.toggle('hidden', !area.tabs);
+  tabs.setAttribute('aria-label', area.label + ' sections');
+  tabs.innerHTML = area.tabs ? area.tabs.map(t => `<button type="button" role="tab" data-route="${area.key}/${t.key}" aria-selected="${t.key === r.tab}" class="px-3 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${t.key === r.tab ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${esc(t.label)}</button>`).join('') : '';
+  document.querySelectorAll('#areaNavDesktop [data-area], #areaNavMobile [data-area], #moreSheet [data-area]').forEach(b => { b.onclick = () => goRoute(b.dataset.area); });
+  tabs.querySelectorAll('[data-route]').forEach(b => { b.onclick = () => goRoute(b.dataset.route); });
+  document.getElementById('moreBtn').onclick = (ev) => { ev.stopPropagation(); const open = sheet.classList.toggle('hidden') === false; ev.currentTarget.setAttribute('aria-expanded', String(open)); };
+  for (const v of allAreaViews()) { const el = document.getElementById('view-' + v); if (el) el.classList.toggle('hidden', !r.views.includes(v)); }
+  document.title = 'CryptoPulse V2 · ' + area.label + (r.tab && area.tabs ? ' · ' + area.tabs.find(t => t.key === r.tab).label : '');
+  // Coin/horizon toggle: on the Overview and on Learning & Audit (where it filters the prediction records). The Model
+  // tab stays scoped to whatever combo was last chosen and says so in the scope chip.
   document.getElementById('coinHorizonToggle').classList.toggle('hidden', activeView !== 'dashboard' && activeView !== 'history');
   renderScopeChip();
-  if (activeView === 'dashboard') loadDashboardIfNeeded();
-  if (activeView === 'lab') loadLabIfNeeded();
-  if (activeView === 'history') loadHistoryIfNeeded();
-  if (activeView === 'experiments') loadExperimentsIfNeeded();
-  if (activeView === 'sentiment') loadSentimentV2IfNeeded();
-  if (activeView === 'forecast') loadForecastLabIfNeeded();
+  loadActiveView(false);
+  // Chart.js cannot size a canvas while its view is hidden: resize once the Overview is visible again.
+  requestAnimationFrame(() => { if (activeView === 'dashboard' && chartInstance) chartInstance.resize(); });
 }
+// Loads the data of whatever is on screen; force refetches (header refresh button).
+function loadActiveView(force){
+  if (force) apiCacheClear();
+  if (activeView === 'dashboard') { if (force) { _dashboardLoadedFor = null; loadSystemStatus(true); } loadDashboardIfNeeded(); }
+  if (activeView === 'lab') { if (force) _labLoadedFor = null; loadLabIfNeeded(); }
+  if (activeView === 'history') { loadHistoryIfNeeded(); if (force && _learningLoaded) loadLearningSelection(); }
+  if (activeView === 'experiments') { if (force) _experimentsLoaded = false; loadExperimentsIfNeeded(); }
+  if (activeView === 'sentiment') loadSentimentV2IfNeeded(force);
+  if (activeView === 'forecast') loadForecastLabIfNeeded(force);
+  if (activeView === 'sentiment-v1') loadSentimentV1IfNeeded(force);
+  if (activeView === 'comparison') loadComparisonIfNeeded(force);
+  if (activeView === 'alerts') loadSystemStatus(force);
+  if (activeView === 'settings') renderSettings();
+}
+function goRoute(target){
+  _route = resolveRoute(target);
+  if (location.hash !== '#' + _route.canonical) history.replaceState(null, '', '#' + _route.canonical);
+  if (_route.openLearning) document.getElementById('learningDetails').open = true;
+  renderNav();
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', () => { const r = resolveRoute(location.hash); if (r.canonical !== _route.canonical || location.hash !== '#' + r.canonical) goRoute(location.hash); });
+document.addEventListener('click', (ev) => { const sheet = document.getElementById('moreSheet'); if (!sheet.classList.contains('hidden') && !sheet.contains(ev.target)) sheet.classList.add('hidden'); });
+document.getElementById('refreshBtn').onclick = () => {
+  const icon = document.getElementById('refreshIcon');
+  icon.classList.add('animate-spin'); setTimeout(() => icon.classList.remove('animate-spin'), 800);
+  loadActiveView(true);
+};
 
 // ---- Sentiment V2 tab ----
-var _sv2Period = '7d';
+var _sv2Period = '24h';   // 24H first (OD-08)
 var _sv2LoadedAt = {};                          // per period; re-entering the tab refetches after SV2_REFRESH_MS
 var SV2_REFRESH_MS = 5 * 60 * 1000;             // matches the Worker's 5-minute cache; no polling
 var _sv2Chart = null;
@@ -2608,16 +2740,116 @@ function renderSentimentV2(res){
           } } } },
   });
   _sv2Chart.$rows = rows;
+  enableChartFullscreen('sv2Chart', () => _sv2Chart);
 }
+// ---- Sentiment V1 (read-only) and Comparison (descriptive). Both read the V2 comparison route, which passes V1
+// values through exactly as V1 stored them; nothing is written and V1 is never called for a write. ----
+var _v1 = { period: '24h', res: {}, at: {}, chart: null, seq: 0 };
+function v1Presets(hostId, current, onPick){
+  const host = document.getElementById(hostId);
+  host.innerHTML = SV2_PERIODS.map(([k, l]) => `<button type="button" data-p="${k}" aria-pressed="${k === current}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${k === current ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${l}</button>`).join('');
+  host.querySelectorAll('button').forEach(b => { b.onclick = () => onPick(b.dataset.p); });
+}
+function sv2Comparison(period, force){
+  if(!force && _v1.at[period] && Date.now() - _v1.at[period] < SV2_REFRESH_MS && _v1.res[period]) return Promise.resolve(_v1.res[period]);
+  return getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=' + period).then(res => { if(res.ok){ _v1.res[period] = res; _v1.at[period] = Date.now(); } return res; });
+}
+function loadSentimentV1IfNeeded(force){
+  v1Presets('v1Presets', _v1.period, k => { _v1.period = k; loadSentimentV1IfNeeded(); });
+  const seq = ++_v1.seq, period = _v1.period;
+  document.getElementById('v1Status').textContent = 'Loading…';
+  sv2Comparison(period, force).then(res => { if(seq === _v1.seq && activeView === 'sentiment-v1') renderSentimentV1(res, period); });
+}
+function renderSentimentV1(res, period){
+  const now = Date.now();
+  const m = sentimentV2Model(res, now);
+  const rows = m.rows.filter(r => r.v1 !== null);
+  const status = document.getElementById('v1Status'), sum = document.getElementById('v1Summary');
+  if(m.state === 'error'){
+    status.innerHTML = `${chip('ERROR', 'bad')} V1 readings could not be loaded. Use the refresh button to retry.`;
+    sum.innerHTML = ''; document.getElementById('v1Coverage').textContent = '';
+    if(_v1.chart){ _v1.chart.destroy(); _v1.chart = null; }
+    return;
+  }
+  const last = rows.length ? rows[rows.length - 1] : null;
+  const d = res.data || {};
+  const ss = (d.series_status || {}).v1 || {};
+  const cell = (k, v) => `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] mt-0.5">${v}</p></div>`;
+  sum.innerHTML = cell('Latest V1 reading', last ? esc(String(last.v1)) + (last.v1Origin === 'server' ? ' <span class="text-[10px] text-[#8A9599]">server</span>' : '') : '—') +
+    cell('Recorded at', last ? esc(fmtUtc(last.ts)) : '—') +
+    cell('Freshness', ss.stale ? chip('STALE', 'warn') : last ? chip('FRESH', 'good') : chip('NO DATA', 'neutral')) +
+    cell('Readings in range', String(rows.length));
+  // The route returns only the requested window and does not report when V1's history begins, so this states the
+  // window's actual coverage and never claims the history is shorter than the range.
+  document.getElementById('v1Coverage').textContent = rows.length
+    ? `${rows.length} reading${rows.length === 1 ? '' : 's'} in this range: ${fmtUtc(rows[0].ts)} → ${fmtUtc(rows[rows.length - 1].ts)}.`
+    : 'No V1 readings in this range. Choose a longer range.';
+  status.textContent = 'Filled points: readings written by the V1 app; hollow points: V1 hourly server readings. Gaps longer than the usual spacing are not bridged.';
+  const breakMs = sv2LineBreakMs(rows, rows.length > 1 ? rows[rows.length - 1].ts - rows[0].ts : 0);
+  const data = { datasets: [{ label: 'V1 sentiment (0–100)', data: rows.map(r => ({ x: r.ts, y: r.v1 })), borderColor: '#3B82F6', backgroundColor: '#3B82F6', borderWidth: 2,
+    pointRadius: rows.length > 150 ? 1 : 2.5, pointBackgroundColor: rows.map(r => r.v1Origin === 'server' ? 'rgba(0,0,0,0)' : '#3B82F6'), pointBorderColor: '#3B82F6', tension: 0,
+    segment: { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > breakMs ? 'transparent' : undefined) } }] };
+  if(_v1.chart){ _v1.chart.data = data; _v1.chart.update(); return; }
+  const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
+  _v1.chart = new Chart(document.getElementById('v1Chart').getContext('2d'), { type: 'line', data,
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'nearest', intersect: false },
+      scales: { x: { type: 'time', ticks: { ...tick, maxRotation: 0, maxTicksLimit: window.innerWidth < 640 ? 4 : 8 }, grid: { color: 'rgba(59,73,76,0.4)' }, title: { display: true, text: 'local time', color: '#8A9599', font: { size: 10 } } },
+        y: { min: 0, max: 100, ticks: tick, grid: { color: 'rgba(59,73,76,0.4)' }, title: { display: true, text: 'V1 sentiment', color: '#8A9599', font: { size: 10 } } } },
+      plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 } } }, tooltip: { backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1, titleColor: '#E1E2E7', bodyColor: '#BAC9CD',
+        callbacks: { title: items => items.length ? fmtUtc(items[0].parsed.x) : '' } } } } });
+  enableChartFullscreen('v1Chart', () => _v1.chart);
+}
+var _cmp = { period: '24h', seq: 0 };
+function loadComparisonIfNeeded(force){
+  v1Presets('cmpPresets', _cmp.period, k => { _cmp.period = k; loadComparisonIfNeeded(); });
+  const seq = ++_cmp.seq, period = _cmp.period;
+  document.getElementById('cmpSummary').textContent = 'Loading…';
+  sv2Comparison(period, force).then(res => { if(seq === _cmp.seq && activeView === 'comparison') renderComparison(res); });
+}
+function renderComparison(res){
+  const host = document.getElementById('cmpSummary');
+  const m = sentimentV2Model(res, Date.now());
+  if(m.state === 'error'){ host.innerHTML = `${chip('ERROR', 'bad')} The comparison data could not be loaded. Use the refresh button to retry.`; return; }
+  const c = cmpSentimentSummary(m.rows);
+  if(!c.n){ host.innerHTML = `${chip('NO ALIGNED DATA', 'neutral')} <span class="text-[#BAC9CD]">No timestamp in this range has both a V1 and a V2 value (${c.nRows} V1/BTC readings). Choose a longer range.</span>`; return; }
+  const line = (k, v) => `<div class="flex justify-between gap-3 py-1 border-b border-[#3B494C]/50"><dt class="text-[#BAC9CD]">${k}</dt><dd class="font-mono-data text-[#E1E2E7] text-right">${v}</dd></div>`;
+  host.innerHTML = `<dl class="max-w-xl">
+    ${line('Aligned timestamps (V1 and V2 both present)', `${c.n} of ${c.nRows}`)}
+    ${line('Period covered', `${esc(fmtUtc(c.firstTs))} → ${esc(fmtUtc(c.lastTs))}`)}
+    ${line('Latest pair', `V1 ${c.last.v1} · V2 ${c.last.v2} (${esc(ageStr(c.last.ts))})`)}
+    ${line('Mean V2 − V1', (c.meanDiff > 0 ? '+' : '') + c.meanDiff + ' points')}
+    ${line('Mean absolute difference', c.meanAbsDiff + ' points')}
+    ${line('Same side of 50 (both non-neutral)', c.sameSideRate === null ? '—' : `${c.sameSide} of ${c.decided} (${Math.round(c.sameSideRate * 100)}%)`)}
+  </dl>
+  <p class="text-[11px] text-[#8A9599] mt-3">Descriptive only: sentiment levels, not predictions, and no market outcomes. Sample size is shown beside every figure; ${c.n < 30 ? '<b class="text-[#FBBF24]">fewer than 30 aligned points: too few to draw any conclusion</b>' : 'no conclusion about which engine is better can be drawn from sentiment levels alone'}. The chart of both series is in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('sentiment-v2/overview')">Sentiment V2 › Overview</button>.</p>`;
+}
+// ---- Settings: display and connection preferences only; no model, weight or production configuration. ----
+function renderSettings(){
+  const staging = /staging/.test(WORKER_URL);
+  const q = new URLSearchParams(location.search);
+  const href = (on) => { const u = new URLSearchParams(location.search); if(on) u.set('api', 'staging'); else u.delete('api'); const qs = u.toString(); return location.pathname + (qs ? '?' + qs : '') + '#settings'; };
+  document.getElementById('settingsBody').innerHTML = `
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Data source</p>
+      <p class="text-[#BAC9CD] mt-1">Reading from <span class="font-mono-data">${esc(WORKER_URL)}</span> ${staging ? chip('STAGING', 'warn') : chip('PRODUCTION', 'good')}</p>
+      <p class="mt-2"><a class="text-[#00E0FF] underline" href="${esc(href(!staging))}">${staging ? 'Switch back to production' : 'Use the staging backend (testing only)'}</a></p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Charts</p>
+      <p class="text-[#BAC9CD] mt-1">Every time-based chart opens on <b>24H</b> and offers 7D, 1M and All (all available history). Expand any chart to full screen with its corner button; press Esc or the same button to return.</p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Time display</p>
+      <p class="text-[#BAC9CD] mt-1">Tables and tooltips show UTC; chart axes use your device's local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown')}).</p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Not configurable here</p>
+      <p class="text-[#BAC9CD] mt-1">Model weights, calibration, GLM influence and schedules are production settings of the backend and cannot be changed from this page.</p></div>`;
+}
+
 // ---- Forecasting Lab: loading and rendering (all analysis is in the fl* view models above) ----
 var FL_LEDGER_URL = 'https://raw.githubusercontent.com/quiquandon-oss/PulseWorkerV2/refs/heads/research-data/exp008-chronos/exp008_chronos/derived/ledger.json';
 var FL_PEV1_URL = 'https://raw.githubusercontent.com/quiquandon-oss/PulseWorkerV2/main/research/evaluations/2026-11-01-pev1-report.json';
-var FL_PERIODS = [['1d', '24H', 86400000], ['7d', '7D', 7 * 86400000], ['30d', '30D', 30 * 86400000], ['90d', '90D', 90 * 86400000], ['all', 'ALL', Infinity]];
-var _fl = { horizon: 24, period: '30d', data: null, loadedAt: 0, charts: {}, ledger: { model: '', horizon: '', status: '', population: '', from: null, to: null, text: '' } };
+var FL_PERIODS = CHART_PRESETS.map(p => [p.key, p.label, p.ms]);   // shared 24H / 7D / 1M / All (OD-08)
+var _fl = { horizon: 24, period: CHART_DEFAULT_PRESET, data: null, loadedAt: 0, charts: {}, ledger: { model: '', horizon: '', status: '', population: '', from: null, to: null, text: '' } };
 var FL_REFRESH_MS = 5 * 60 * 1000;
 function flChart(id, cfg){
   if(_fl.charts[id]){ _fl.charts[id].destroy(); }
   _fl.charts[id] = new Chart(document.getElementById(id).getContext('2d'), cfg);
+  enableChartFullscreen(id, () => _fl.charts[id]);
   return _fl.charts[id];
 }
 var FL_TICK = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
@@ -2640,7 +2872,7 @@ async function loadForecastLabIfNeeded(force){
   const [t12, t24, led, prices, pev1, sent] = await Promise.all([
     getJson(WORKER_URL + '/research/timesfm-recent?horizon=12&limit=500'), getJson(WORKER_URL + '/research/timesfm-recent?horizon=24&limit=500'),
     getJson(FL_LEDGER_URL), getJson(WORKER_URL + COIN_CONFIG.BTC.chart), getJson(FL_PEV1_URL),
-    getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=30d')]);
+    getJson(WORKER_URL + '/api/sentiment-v2/comparison?period=all')]);
   const [gStatus, gSignals, gAdj] = await Promise.all([getJson(WORKER_URL + '/api/glm/status'),
     getJson(WORKER_URL + '/api/glm/signals?horizon=24&limit=14'), getJson(WORKER_URL + '/api/glm/adjustments?limit=24')]);
   const lastRunId = gStatus.ok && gStatus.data && gStatus.data.last_run ? gStatus.data.last_run.run_id : null;
@@ -2704,7 +2936,7 @@ function renderGlmPanel(now){
   const rows = glmAdjustmentRows(G.adj);
   document.getElementById('glmAdjust').innerHTML = rows === null ? '<p class="text-[#BAC9CD]">Adjustment record unavailable.</p>' : (!rows.length ? '<p class="text-[#BAC9CD]">No adjustment recorded yet (the per-tick record is off until it is measured on staging).</p>' :
     `<ul class="space-y-1">${rows.slice(0, 8).map(r => `<li class="flex justify-between gap-2"><span class="text-[#8A9599]">${esc(fmtUtc(r.ts))}</span><span class="font-mono-data text-right">${flPct(r.base)} <span class="text-[#8A9599]">(${esc(r.baseSource || '')})</span> → ${(r.applied * 100).toFixed(2)} pp → <span class="text-[#E1E2E7]">${flPct(r.final)}</span>${r.mode === 'shadow' && r.would ? ` <span class="text-[#8A9599]">[shadow ${(r.would * 100).toFixed(2)} pp]</span>` : ''}${r.resolved ? ` · ${r.actualUp ? 'UP' : 'DOWN'}` : ''}</span></li>`).join('')}</ul>
-     <p class="text-[10px] text-[#8A9599] mt-1">Baseline is the value the dashboard shows. In shadow mode final = baseline; the shadow column is what the reference cap would have applied.</p>`);
+     <p class="text-[10px] text-[#8A9599] mt-1">Baseline is the pre-GLM headline value. When GLM applies nothing (or in shadow mode) final = baseline; the shadow column is what the reference cap would have applied.</p>`);
   // evidence drill-down
   const run = G.run.ok && G.run.data ? G.run.data.run : null;
   const groups = glmEvidenceGroups(run);
@@ -2811,7 +3043,7 @@ function renderFlPerformance(now, H){
     plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 }, filter: l => l.text !== 'y = x' } }, tooltip: { ...FL_TOOLTIP, callbacks: { label: i => (i.raw && i.raw.kind ? `${i.dataset.label} ${fmtUtc(i.raw.originTs)}: predicted ${flPp(i.raw.x)}, realised ${flPp(i.raw.y)} · ${i.raw.kind}` : '') } } } } });
   const cum = flCumulative(P);
   flChart('flTimeChart', { type: 'line', data: { datasets: ['timesfm', 'chronos'].map(m => ({ label: FL_MODELS[m].label, data: cum.map(c => ({ x: c.originTs, y: c[m] * 100, n: c.n })), borderColor: FL_MODELS[m].color, backgroundColor: FL_MODELS[m].color, pointRadius: 2.5, tension: 0, borderWidth: 2 })) },
-    options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { type: 'time', ticks: { ...FL_TICK, maxRotation: 0, maxTicksLimit: 5 }, grid: FL_GRID }, y: { min: 0, max: 100, ticks: { ...FL_TICK, callback: v => v + '%' }, grid: FL_GRID } },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { type: 'time', min: chartPreset(_fl.period).ms === Infinity ? undefined : now - chartPreset(_fl.period).ms, ticks: { ...FL_TICK, maxRotation: 0, maxTicksLimit: 5 }, grid: FL_GRID }, y: { min: 0, max: 100, ticks: { ...FL_TICK, callback: v => v + '%' }, grid: FL_GRID } },
       plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 } } }, tooltip: { ...FL_TOOLTIP, callbacks: { label: i => `${i.dataset.label}: ${i.parsed.y.toFixed(1)}% after ${i.raw.n} origins` } } } } });
   const win = [['7D', 7 * 86400000], ['30D', 30 * 86400000], ['90D', 90 * 86400000]].map(([l, ms]) => { const w = flWindowStats(P, ms, now);
     return `<span class="inline-block mr-3"><span class="text-[#8A9599]">${l}:</span> <span class="font-mono-data">${w.sufficient ? `TimesFM ${flPct(w.timesfm, 0)} · Chronos ${flPct(w.chronos, 0)} (n ${w.n})` : `insufficient (n ${w.n} < ${FL_MIN_WINDOW_N})`}</span></span>`; });
@@ -2830,8 +3062,12 @@ function renderFlAgreement(){
 }
 function renderFlSentiment(now){
   const D = _fl.data;
-  const pts = D.sent.ok && D.sent.data && Array.isArray((D.sent.data.data || D.sent.data).points) ? (D.sent.data.data || D.sent.data).points : [];
-  const from = now - 30 * 86400000;
+  const allPts = D.sent.ok && D.sent.data && Array.isArray((D.sent.data.data || D.sent.data).points) ? (D.sent.data.data || D.sent.data).points : [];
+  const clip = clipSeries(allPts, 'ts', _fl.period, now);
+  const pts = clip.points;
+  const from = chartPreset(_fl.period).ms === Infinity ? (clip.coverage.firstTs ?? now - 30 * 86400000) : now - chartPreset(_fl.period).ms;
+  const noteEl = document.getElementById('flSentCoverage');
+  if(noteEl) noteEl.textContent = coverageNote(clip.coverage, _fl.period, now);
   const calls = (m) => (m === 'timesfm' ? D.timesfm : D.chronos).filter(r => r.horizon === _fl.horizon && r.originTs >= from).map(r => ({ x: r.originTs, y: r.p0, r }));
   const ds = [
     { label: 'V1 sentiment', data: pts.filter(p => typeof p.v1 === 'number').map(p => ({ x: p.ts, y: p.v1 })), borderColor: '#3B82F6', backgroundColor: '#3B82F6', yAxisID: 'ys', pointRadius: 1.5, borderWidth: 1.5, tension: 0, spanGaps: false },
@@ -2890,15 +3126,8 @@ function renderFlLedger(){
 buildSv2Periods();
 document.getElementById('sv2Details').addEventListener('toggle', () => loadSv2DetailsIfOpen());
 
-document.querySelectorAll('.nav-tab').forEach(btn => {
-  btn.onclick = () => { activeView = btn.dataset.view; history.replaceState(null, '', '#' + activeView); renderNav(); };
-});
+if (location.hash !== '#' + _route.canonical) history.replaceState(null, '', '#' + _route.canonical);
 renderNav();
-// Chart.js can't size a canvas while its view is hidden; when the
-// Dashboard is shown again after a combo change made elsewhere, resize.
-document.querySelectorAll('.nav-tab').forEach(btn => btn.addEventListener('click', () => {
-  requestAnimationFrame(() => { if (activeView === 'dashboard' && chartInstance) chartInstance.resize(); });
-}));
 
 // Narrative Analysis (analysisList, BIAS_COLOR, renderAnalysis,
 // loadAnalysis) removed entirely along with its Lab section -- the
@@ -2915,21 +3144,8 @@ document.querySelectorAll('.nav-tab').forEach(btn => btn.addEventListener('click
 // (/run-analysis, /run-link-analysis) are untouched and still work if a
 // manual trigger is ever needed again from somewhere else.
 
-// Fullscreen chart handler
-let isFullscreen = false;
-document.getElementById('fullscreenBtn').onclick = () => {
-  const section = document.getElementById('chartSection');
-  const container = document.getElementById('chartContainer');
-  isFullscreen = !isFullscreen;
-  if(isFullscreen){
-    section.classList.add('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
-    container.style.height = 'calc(100vh - 140px)';
-  }else{
-    section.classList.remove('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
-    container.style.height = '280px';
-  }
-  requestAnimationFrame(() => chartInstance && chartInstance.resize());
-};
+// Full-screen control of the price chart: the shared implementation.
+wireFullscreenToggle('fullscreenBtn', 'chartSection', 'chartContainer', () => chartInstance, '300px');
 
 // Chart-scoped plugin (passed via options.plugins on this one instance, not
 // Chart.register'd globally) — reads each dataset's own borderColor so the
@@ -3231,24 +3447,68 @@ let labCombinedHistoryChartInstance = null;
 // instead of a bespoke handler per chart (the price chart and calibration
 // chart each had their own copy before this — this replaces both call
 // sites too, not just the new ones). ----
-const fullscreenState = {};
+// One full-screen implementation for every chart (OD-08): visible Expand / Exit control, Esc exits, page scroll
+// locked while open, chart resized. Range, coin, horizon and filters live in JS state, so they survive enter/exit.
+// (state and the Esc handler are declared at the top of the script: the price chart is wired before this block)
+function chartFsSetButton(btn, open){
+  if(!btn) return;
+  btn.setAttribute('aria-label', open ? 'Exit full screen' : 'Expand chart to full screen');
+  btn.setAttribute('aria-pressed', String(open));
+  btn.title = open ? 'Exit full screen (Esc)' : 'Full screen';
+  const ic = btn.querySelector('.material-symbols-outlined');
+  if(ic) ic.textContent = open ? FS_ICON_CLOSE : FS_ICON_OPEN;
+}
+function chartFsExit(){
+  const f = _fsActive;
+  if(!f) return;
+  _fsActive = null;
+  fullscreenState[f.sectionId] = false;
+  f.section.classList.remove('fixed', 'inset-0', 'm-0', 'rounded-none', 'overflow-auto');
+  f.section.style.zIndex = ''; f.section.style.paddingBottom = '';
+  f.container.style.height = f.normalHeight;
+  document.body.style.overflow = '';
+  chartFsSetButton(f.btn, false);
+  requestAnimationFrame(() => { const inst = f.getChart(); inst && inst.resize(); f.btn && f.btn.focus(); });
+}
+function chartFsEnter(f){
+  if(_fsActive) chartFsExit();
+  _fsActive = f;
+  fullscreenState[f.sectionId] = true;
+  f.section.classList.add('fixed', 'inset-0', 'm-0', 'rounded-none', 'overflow-auto');
+  f.section.style.zIndex = '60';   // above the phone nav bar (z-50)
+  f.section.style.paddingBottom = 'calc(1rem + env(safe-area-inset-bottom))';
+  f.container.style.height = 'calc(100dvh - 160px)';
+  document.body.style.overflow = 'hidden';
+  chartFsSetButton(f.btn, true);
+  requestAnimationFrame(() => { const inst = f.getChart(); inst && inst.resize(); });
+}
 function wireFullscreenToggle(btnId, sectionId, containerId, getChartInstance, normalHeight){
   const btn = document.getElementById(btnId);
   if(!btn) return;
-  fullscreenState[sectionId] = false;
+  if(!(sectionId in fullscreenState)) fullscreenState[sectionId] = false;
+  chartFsSetButton(btn, !!fullscreenState[sectionId]);
   btn.onclick = () => {
-    const section = document.getElementById(sectionId);
-    const container = document.getElementById(containerId);
-    fullscreenState[sectionId] = !fullscreenState[sectionId];
-    if(fullscreenState[sectionId]){
-      section.classList.add('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
-      container.style.height = 'calc(100vh - 140px)';
-    }else{
-      section.classList.remove('fixed','inset-0','z-50','m-0','rounded-none','overflow-auto');
-      container.style.height = normalHeight;
-    }
-    requestAnimationFrame(() => { const inst = getChartInstance(); inst && inst.resize(); });
+    if(_fsActive && _fsActive.sectionId === sectionId) return chartFsExit();
+    chartFsEnter({ btn, sectionId, section: document.getElementById(sectionId), container: document.getElementById(containerId), getChart: getChartInstance, normalHeight });
   };
+}
+// For charts without a hand-placed button: adds one to the chart's own box (idempotent).
+function enableChartFullscreen(canvasId, getChart){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !canvas.parentElement) return;
+  const container = canvas.parentElement;
+  if(container.querySelector(':scope > .chart-fs-btn')) return;
+  const section = container.closest('section') || container;
+  if(!section.id) section.id = canvasId + 'Section';
+  if(!container.id) container.id = canvasId + 'Box';
+  const normalHeight = container.style.height || '';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = canvasId + 'FsBtn';
+  btn.className = 'chart-fs-btn absolute top-0 right-0 z-10 p-1 rounded-md text-[#BAC9CD] hover:text-[#E1E2E7] bg-[#0B0E11]/70 border border-[#3B494C]';
+  btn.innerHTML = '<span class="material-symbols-outlined text-[16px] leading-none" aria-hidden="true">' + FS_ICON_OPEN + '</span>';
+  container.appendChild(btn);
+  wireFullscreenToggle(btn.id, section.id, container.id, getChart, normalHeight);
 }
 
 // ---- Shared, reusable range-tab builder for Lab charts. Supports
@@ -3258,19 +3518,14 @@ function wireFullscreenToggle(btnId, sectionId, containerId, getChartInstance, n
 // to ALL: analyzing since V2's actual beginning is the standing
 // expectation now, range tabs are an optional zoom-in from there, not
 // the starting view. ----
-const LAB_RANGES = [
-  { key: '1W', label: '1W', ms: 7*86400000 },
-  { key: '1M', label: '1M', ms: 30*86400000 },
-  { key: '3M', label: '3M', ms: 90*86400000 },
-  { key: 'ALL', label: 'ALL', ms: Infinity },
-];
+const LAB_RANGES = CHART_PRESETS;   // shared 24H / 7D / 1M / All (OD-08), independent state per chart
 const labChartRangeState = {};
 function buildLabRangeTabs(hostId, stateKey, onChange){
-  if(!(stateKey in labChartRangeState)) labChartRangeState[stateKey] = 'ALL';
+  if(!(stateKey in labChartRangeState)) labChartRangeState[stateKey] = CHART_DEFAULT_PRESET;
   const host = document.getElementById(hostId);
   if(!host) return;
   host.innerHTML = LAB_RANGES.map(r =>
-    `<button data-range="${r.key}" class="range-tab px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors ${r.key===labChartRangeState[stateKey] ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${r.label}</button>`
+    `<button type="button" data-range="${r.key}" aria-pressed="${r.key===labChartRangeState[stateKey]}" class="range-tab px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors ${r.key===labChartRangeState[stateKey] ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${r.label}</button>`
   ).join('');
   host.querySelectorAll('.range-tab').forEach(btn => {
     btn.onclick = () => { labChartRangeState[stateKey] = btn.dataset.range; buildLabRangeTabs(hostId, stateKey, onChange); onChange(); };

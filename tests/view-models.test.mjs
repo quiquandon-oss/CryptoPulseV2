@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -796,4 +796,55 @@ test('comparison and V1 pages are read-only: no write call, no V1 write route', 
   const block = SRC.slice(a, b);
   assert.doesNotMatch(block, /method:\s*'(POST|PUT|DELETE)'|sentiment-ff75|txs-backup|foufi-check/);
   assert.match(block, /getJson\(WORKER_URL \+ '\/api\/sentiment-v2\/comparison\?period='/);
+});
+
+// ---- Stage 3/4: Forecast coverage, Research / Learning & Audit, V1 Foufi Daily ----
+test('forecast coverage: counts per model/horizon and origins only one model covers; window respected', () => {
+  const t = (o, h, st = 'resolved') => ({ model: 'timesfm', horizon: h, originTs: o, issuedTs: o + 10, status: st });
+  const c = (o, h, st = 'resolved') => ({ model: 'chronos', horizon: h, originTs: o, issuedTs: o + 20, status: st });
+  const T = [t(100, 24), t(200, 24, 'pending'), t(300, 24), t(100, 12)], C = [c(100, 24), c(300, 24, 'unreadable'), c(400, 24, 'pending')];
+  const cov = plain(H.flCoverage(T, C, null));
+  const get = (m, h) => cov.find((r) => r.model === m && r.horizon === h);
+  assert.deepEqual([get('timesfm', 24).n, get('timesfm', 24).resolved, get('timesfm', 24).pending, get('timesfm', 24).onlyThis], [3, 2, 1, 1]);
+  assert.deepEqual([get('chronos', 24).n, get('chronos', 24).unreadable, get('chronos', 24).onlyThis, get('chronos', 24).lastOrigin, get('chronos', 24).lastIssued], [3, 1, 1, 400, 420]);
+  assert.equal(get('both', 24).n, 2);
+  assert.deepEqual([get('chronos', 12).n, get('chronos', 12).lastOrigin, get('timesfm', 12).onlyThis], [0, null, 1], 'missing stays missing');
+  assert.equal(plain(H.flCoverage(T, C, 250)).find((r) => r.model === 'timesfm' && r.horizon === 24).n, 1, 'window by input cutoff');
+});
+
+test('GLM-PE-1: no claim before 30 applied ticks, whatever the Worker flag says; errors are explicit', () => {
+  const ev = (o, suff = false) => ({ ok: true, data: { ok: true, evaluation: { overall: o, sufficient_for_claims: suff, note: 'n' } } });
+  const zero = H.glmEvalModel(ev({ ticks: 0, resolved: 0, applied_ticks: 0, directional_accuracy: { baseline: null, final: null }, brier: {} }));
+  assert.deepEqual([zero.state, zero.verdict, zero.sufficient, zero.accFinal], ['ok', 'NO APPLIED ADJUSTMENT YET', false, null]);
+  const few = H.glmEvalModel(ev({ ticks: 40, resolved: 35, applied_ticks: 12, directional_accuracy: { baseline: 0.5, final: 0.55 } }, true));
+  assert.deepEqual([few.verdict, few.sufficient], ['INSUFFICIENT SAMPLE', false], 'Worker flag alone is not enough');
+  assert.equal(H.glmEvalModel(ev({ applied_ticks: H.GLM_PE1_MIN_APPLIED }, true)).sufficient, true);
+  assert.equal(H.glmEvalModel({ ok: false, error: 'HTTP 500' }).state, 'error');
+});
+
+test('Foufi Daily: V1 values as stored, invalid scores dropped, unstructured summaries not invented, stale flagged', () => {
+  const NOW2 = NOW;
+  const row = (over = {}) => ({ videoId: 'abc', title: 'T', url: 'https://www.youtube.com/watch?v=abc', publishedTs: NOW2 - 5 * HOUR, status: 'ok',
+    summary: { market_summary: 'BTC fell.', macro: { lean: 'bearish', text: 'x' }, micro: { lean: 'weird', text: '' }, coins: { BTC: { score: -1, note: 'n' }, ETH: { score: 7 }, SOL: null }, dominant_driver: 'macro' }, ...over });
+  const m = plain(H.foufiModel({ ok: true, data: { latest: [row(), row({ videoId: 'old', publishedTs: NOW2 - 20 * HOUR, summary: { raw: 'text' }, status: 'unstructured' })] } }, NOW2));
+  assert.deepEqual([m.state, m.stale, m.items.length, m.items[0].videoId], ['ok', false, 2, 'abc']);
+  assert.deepEqual(m.items[0].coins, [{ coin: 'BTC', score: -1, note: 'n' }], 'out-of-range and empty scores dropped');
+  assert.deepEqual([m.items[0].macro.lean, m.items[0].micro.lean, m.items[0].driver], ['bearish', null, 'macro']);
+  assert.deepEqual([m.items[1].structured, m.items[1].summaryText, m.items[1].coins.length], [false, null, 0]);
+  assert.equal(plain(H.foufiModel({ ok: true, data: { latest: [row({ url: 'javascript:alert(1)' })] } }, NOW2)).items[0].url, null, 'only YouTube links');
+  assert.equal(H.foufiModel({ ok: true, data: { latest: [row({ publishedTs: NOW2 - 40 * HOUR })] } }, NOW2).stale, true);
+  assert.equal(H.foufiModel({ ok: true, data: { latest: [] } }, NOW2).state, 'empty');
+  assert.equal(H.foufiModel({ ok: false, error: 'CORS' }, NOW2).state, 'error');
+});
+
+test('page structure: backtests live in Research; Learning & Audit holds prospective evaluations; V1 is read with GET only', () => {
+  const sec = (id) => { const a = SRC.indexOf('<div id="' + id + '"'); const b = SRC.indexOf('\n  </div>\n', a); return SRC.slice(a, b); };
+  assert.match(sec('view-experiments'), /historyBacktestTitle/);
+  assert.match(sec('view-experiments'), /regimeSplitTitle/);
+  assert.doesNotMatch(sec('view-history'), /historyBacktestTitle|regimeSplitTitle/);
+  assert.match(SRC, /id="prospectiveCard"/);
+  assert.equal(H.V1_WORKER_URL, 'https://sentiment-ff75.quiquandon.workers.dev');
+  const v1Calls = SRC.match(/V1_WORKER_URL \+ '[^']+'/g) || [];
+  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/foufi-latest'"], 'the only V1 call is the read-only digest route');
+  assert.doesNotMatch(SRC, /foufi-check|foufi-backfill|\/txs-backup|X-App-Secret/);
 });

@@ -18,6 +18,7 @@ decision as a blocker; change it only through a new owner entry.
 | OD-10 | 2026-11-20 | **Existing production approval gate.** Backend deploys go through the GitHub `production` environment (required reviewer). Frontend deploys on merge to `main` (GitHub Pages) after the `Test` workflow | Repo workflows; prompt §5, §7 | "Deployed" is claimed only from deployed version and runtime evidence, never from a checkmark |
 | OD-11 | 2026-11-20 | **Autonomous in-scope execution.** Claude may branch, PR, test, fix, merge and deploy in-scope work after the required checks pass. Escalate only for spend, V1 change, V2-engine change beyond additive integration, new credentials or access boundaries, destructive data change, unapproved production schedule change, frozen-protocol change, irreversible action or material ambiguity | Plan §20; prompt §9 | — |
 | OD-12 | 2026-11-20 | **Comparison V1 threshold is a proposed convention only.** V1 score > 55 = UP, < 45 = DOWN, 45–55 = no call, used **only** inside the read-only Comparison and reported with sensitivity bands. Never production logic | Prompt §4.7 | Owner may confirm or replace the convention; until then it is labelled "proposed" in the UI |
+| OD-13 | 2026-11-20 | **Portfolio value history opens on All.** Exception to OD-08 for this one chart; the 24H/7D/1M/All presets and full screen stay | Owner request (backend session, 2026-11-20) | `_pf.range` starts at `ALL`; every other chart keeps 24H |
 
 ## Frozen items (changes need explicit owner approval)
 

@@ -3848,7 +3848,7 @@ function loadGlmEvaluation(force){
 // ---- Portfolio: storage and UI. The ledger lives only in this browser (same model as V1, owner decision OD-06;
 // see docs/security/POST_PRODUCTION_SECURITY_REVIEW.md S-09/S-10). Export regularly: clearing site data deletes it. ----
 var PF_STORE_KEY = 'cpv2_portfolio_v1';
-var _pf = { store: null, prices: null, pricesAt: 0, pricesErr: null, fxNow: null, fxDate: null, fxErr: null, account: '', chart: null, alloc: null, range: CHART_DEFAULT_PRESET, narrative: null, narrativeBusy: false };
+var _pf = { store: null, prices: null, pricesAt: 0, pricesErr: null, fxNow: null, fxDate: null, fxErr: null, account: '', chart: null, alloc: null, range: 'ALL' /* owner exception to OD-08 (2026-11-20): portfolio value history opens on All */, narrative: null, narrativeBusy: false };
 function pfEmptyStore(){ return { version: 1, accounts: [], txs: [], importRuns: [], snapshots: [] }; }
 function pfLoad(){
   if(_pf.store) return _pf.store;

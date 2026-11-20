@@ -127,6 +127,7 @@
           <span id="predCalibBadge"></span>
         </div>
         <p id="predVariantLabel" class="hidden text-[11px] text-[#00E0FF] font-semibold mb-2"></p>
+        <div id="predGlmNote" class="hidden text-[11px] text-[#FFD166] mb-2"><p id="predGlmNoteText" class="font-semibold"></p><p id="predGlmNoteWhy" class="text-[#c9d1d9]"></p><ul id="predGlmNoteFindings" class="list-disc ml-4 text-[#9aa4b2]"></ul></div>
         <div id="predSignalFooter" class="mt-3"></div>
         <div id="predNoteCallout" class="hidden mt-3 rounded-lg border border-[#FFB020]/40 bg-[#FFB020]/5 px-3 py-2 text-[11px] text-[#FFB020] leading-relaxed"><span class="material-symbols-outlined text-[15px] mr-1" aria-hidden="true">warning</span><span class="font-semibold">Reliability caution:</span> <span id="predNote"></span></div>
         <p class="text-[11px] text-[#BAC9CD] mt-3">This is the model's current read, not its track record — see <button type="button" class="text-[#00E0FF] underline" onclick="document.getElementById('evidenceCard').scrollIntoView({behavior:'smooth', block:'start'})">Evidence</button> for how its past calls actually scored.</p>
@@ -851,8 +852,21 @@ function headlineOf(d){
   const selection = (d && d.selection && d.selection.ok && d.selection.chosen_variant) ? d.selection : null;
   const usingNonOriginal = !!selection && selection.chosen_variant !== 'original';
   const hasCycleValue = usingNonOriginal && typeof selection.cycle_p_up === 'number';
-  const pUp = usingNonOriginal ? (hasCycleValue ? selection.cycle_p_up : selection.chosen_p_up) : (d ? d.p_up : null);
-  return { selection, usingNonOriginal, hasCycleValue, pUp, variant: selection ? selection.chosen_variant : 'original' };
+  const basePUp = usingNonOriginal ? (hasCycleValue ? selection.cycle_p_up : selection.chosen_p_up) : (d ? d.p_up : null);
+  // GLM production influence (active mode): the served headline is glm.final_p_up; the V2 baseline is kept alongside.
+  const g = d && d.glm && typeof d.glm === 'object' ? d.glm : null;
+  const glmApplied = !!g && g.mode === 'active' && typeof g.final_p_up === 'number' && isFinite(g.final_p_up)
+    && typeof g.adjustment === 'number' && g.adjustment !== 0;
+  const pUp = glmApplied ? g.final_p_up : basePUp;
+  return { selection, usingNonOriginal, hasCycleValue, pUp, basePUp, glm: g, glmApplied, variant: selection ? selection.chosen_variant : 'original' };
+}
+// Plain-language line for the GLM influence on a headline (null when GLM did not change it).
+function glmHeadlineNote(h){
+  if(!h || !h.glmApplied) return null;
+  const g = h.glm, pts = Math.round(g.adjustment * 1000) / 10;
+  const why = g.explanation && g.explanation.rationale ? g.explanation.rationale : null;
+  return { text: `Includes the AI evidence review: model ${Math.round(h.basePUp * 100)}% → ${Math.round(h.pUp * 100)}% (${pts > 0 ? '+' : ''}${pts} pts, ${String(g.direction || '').toLowerCase()} ${g.strength || ''} signal, capped at ${Math.round((g.cap || 0) * 1000) / 10} pts)`,
+    why, findings: g.explanation && Array.isArray(g.explanation.findings) ? g.explanation.findings.map((f) => f.claim).filter(Boolean).slice(0, 3) : [] };
 }
 var FRESH_MAX_AGE_HOURS = 6; // same rule as the backend's FRESH status
 // One overview tile. `res` is { ok, data } | { ok:false, error } | null (still loading); `fresh` is the coin's entry of
@@ -1415,7 +1429,7 @@ var GLM_REASON_TEXT = {
   contradicted: 'contradicting evidence at least as broad as the support', models_oppose: 'both forecasting models point the other way',
   models_oppose_downgraded: 'both models oppose: strength reduced', first_day_candidate: 'first day in this direction (needs 2 consecutive days)',
   persistent_2_days: 'same direction 2 days in a row', expired_or_not_yet_valid: 'outside the signal validity window', shadow_cap_0: 'shadow mode: not applied',
-  candidate_not_applied: 'candidate: never applied', applied: 'applied within the cap', asset_out_of_scope: 'asset not in GLM scope', no_signal: 'no signal',
+  candidate_not_applied: 'candidate: never applied', applied: 'applied within the cap', applied_no_flip_capped: 'applied, stopped at 50% (GLM never reverses the model call)', asset_out_of_scope: 'asset not in GLM scope', no_signal: 'no signal',
 };
 function glmReasonText(code){ return GLM_REASON_TEXT[code] || String(code || ''); }
 function glmStatusModel(res){
@@ -1801,7 +1815,19 @@ async function loadPrediction(){
     // RESOLVED prediction at selection time (backend semantics since the
     // selection layer was introduced), so it is shown only as a fallback for
     // older responses, and labelled as such. ----
-    const { selection, usingNonOriginal, hasCycleValue, pUp: headlinePUp } = headlineOf(d);
+    const headline = headlineOf(d);
+    const { selection, usingNonOriginal, hasCycleValue, pUp: headlinePUp } = headline;
+    const glmNote = glmHeadlineNote(headline);
+    const glmNoteEl = document.getElementById('predGlmNote');
+    if (glmNoteEl) {
+      if (glmNote) {
+        document.getElementById('predGlmNoteText').textContent = glmNote.text;
+        document.getElementById('predGlmNoteWhy').textContent = glmNote.why ? 'Why: ' + glmNote.why : '';
+        const ul = document.getElementById('predGlmNoteFindings'); ul.textContent = '';
+        for (const c of glmNote.findings) { const li = document.createElement('li'); li.textContent = c; ul.appendChild(li); }
+        glmNoteEl.classList.remove('hidden');
+      } else glmNoteEl.classList.add('hidden');
+    }
 
     document.getElementById('predPUp').textContent = Math.round(headlinePUp * 100) + '%';
     document.getElementById('predAsOf').textContent = !d.ts ? 'Computation time not reported'

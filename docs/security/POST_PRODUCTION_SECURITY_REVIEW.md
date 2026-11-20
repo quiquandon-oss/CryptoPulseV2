@@ -24,6 +24,8 @@ a row here.
 | S-16 | V2 Trader Analysis POSTs a market snapshot (price, technicals, V2 sentiment, public headlines; no personal data) to V1 `/trader-analysis-gemini` | V2 frontend (implemented, click only) | contracts §6 | V2, new, uses S-08 | OD-04, OD-06 |
 | S-11 | V2 public read routes (predictions, sentiment, GLM, research) are unauthenticated; operational routes use an admin token | PulseWorkerV2 | `worker.js@b640e3c` | V2, pre-existing | OD-06 |
 | S-12 | The Cloudflare connector in Claude sessions can write to production D1 | session tooling | Phase 0 F5 | tooling | Operating rule: SELECT-only unless authorised |
+| S-17 | Portfolio fetches ECB euro reference rates from the browser (`data-api.ecb.europa.eu`, public, keyless, CORS open) when the user clicks; the request reveals only the date range and currencies used, not amounts | V2 frontend (implemented, click only) | contracts §8.4 | V2, new | OD-06, OD-09 |
+| S-18 | Sandbox network allowlist extended 2026-11-20 (owner-approved prompt) with `api.frankfurter.dev` and `data-api.ecb.europa.eu` to verify FX sources | session environment | — | tooling | Owner-approved |
 
 ## 2. Review scope (to run after production readiness)
 
@@ -36,6 +38,21 @@ a row here.
 6. Secrets inventory: repository secrets, Worker secrets, the environment-injected credential that fails authentication (Phase 0 F6).
 7. Logging review: no portfolio, evidence text or prompts in logs.
 8. Dependency and CDN review (Tailwind/Chart.js from CDNs; versions are pinned).
+
+## 2b. Findings and recommendations (documented 2026-11-20; nothing implemented, nothing required now)
+
+Ordered by impact. Each is a recommendation for the post-production review, not a blocker (OD-06/OD-07). Costs are $0 unless stated.
+
+| # | Finding | Evidence | Recommendation | Touches V1? |
+|---|---|---|---|---|
+| R1 | The full personal transaction ledger is readable by anyone who knows the V1 URL (S-01), and real transactions are in the public V1 repository (S-05) | V1 code; public repo | Highest priority. (a) Make the V1 repository private or purge `SEED_TXS` from history; (b) gate `/txs-backup` and `/portfolio-*` with a secret header checked server-side, or remove the server copy and rely on V2's browser ledger and exports | Yes: needs an OD-01 exception |
+| R2 | V1 Gemini routes can be called by anyone, spending the free quota (S-07, S-08, S-13, S-16) | V1 code | Enforce the already-sent `X-App-Secret`, or a per-day call cap in D1 like V2's `gemini_quota_ledger`; V2's own buttons already call only on a click | Yes |
+| R3 | No private-access boundary for V2 Portfolio (S-09) | design | Cloudflare Access (Zero Trust free tier, ≤ 50 users) in front of a private route if a server copy is ever wanted; otherwise keep the browser-only ledger and add optional passphrase-encrypted JSON export (WebCrypto, no server) | No |
+| R4 | Wildcard CORS on V1 and V2 (S-04, S-11) | headers | Restrict to `https://quiquandon-oss.github.io` for write and personal-data routes; keep public read routes open | V1: yes; V2: no |
+| R5 | Third-party calls from the browser (Hyperliquid, Frankfurter, ECB; S-14, S-17) | code | Acceptable (public data, no personal amounts); add Subresource Integrity to the Chart.js/Tailwind CDN tags and a Content-Security-Policy `connect-src` allow-list | No |
+| R6 | The environment-injected Cloudflare credential fails authentication (Phase 0 F6) | REST 10000/9109 | Remove or rotate it in the environment settings | No |
+| R7 | The session's Cloudflare connector can write to production D1 (S-12) | tooling | Prefer a read-only D1 token for audit sessions | No |
+| R8 | Local data in the browser can be lost (clearing site data) | design | Keep the export reminder; consider a periodic export prompt | No |
 
 ## 3. Rules that still apply now (not deferred)
 

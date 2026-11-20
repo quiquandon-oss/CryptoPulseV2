@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -1084,4 +1084,39 @@ test('break-even table: unknown cost not computed; portfolio row only when cost 
   const t2 = plain(H.breakEvenTable([pos[0]], hist));
   assert.ok(t2.portfolio && t2.portfolio.ratio > 1);
   assert.equal(plain(H.breakEvenTable([{ ...pos[0], price: 120, valueUsd: 120 }], hist)).portfolioNote, 'portfolio is at or above break-even');
+});
+
+// ---- Historical FX: ECB euro reference rates (real ECB response saved 2026-11-20 from data-api.ecb.europa.eu) ----
+const ECB_CSV = readFileSync(new URL('./fixtures/ecb-exr-usd-gbp-chf-2026-04.csv', import.meta.url), 'utf8');
+test('ECB FX: parses the official CSV; USD per EUR as published, GBP/CHF as cross rates via EUR', () => {
+  const r = plain(H.pfParseEcbCsv(ECB_CSV));
+  assert.equal(r.EUR['2026-04-10'], 1.1711, 'ECB published 1.1711 USD per EUR on 10 Apr 2026');
+  assert.equal(r.EUR['2026-04-14'], 1.1793);
+  assert.equal(r.EUR['2026-04-11'], undefined, 'no ECB fixing on a Saturday');
+  const gbp = ECB_CSV.split('\n').find((l) => l.includes('D.GBP.EUR') && l.includes(',2026-04-10,'));
+  assert.ok(Math.abs(r.GBP['2026-04-10'] - 1.1711 / Number(gbp.split(',')[7])) < 1e-12);
+  assert.equal(H.pfParseEcbCsv('foo,bar\n1,2'), null);
+});
+test('ECB FX: rate of the date or the last business day before it, never a later one, at most 10 days back', () => {
+  const t = { rates: H.pfParseEcbCsv(ECB_CSV) };
+  const at = (d) => plain(H.pfFxLookup(t, 'EUR', Date.parse(d)));
+  assert.deepEqual(at('2026-04-11T15:00:00Z'), { rate: 1.1711, date: '2026-04-10', cross: false }, 'Saturday -> Friday');
+  assert.deepEqual(at('2026-04-13T23:59:00Z'), { rate: 1.1684, date: '2026-04-13', cross: false });
+  assert.equal(H.pfFxLookup(t, 'EUR', Date.parse('2026-03-01T00:00:00Z')), null, 'before the table: missing, not the first later rate');
+  assert.equal(H.pfFxLookup(t, 'EUR', Date.parse('2026-05-15T00:00:00Z')), null, 'more than 10 days after the last rate: missing');
+  assert.equal(H.pfFxLookup(t, 'JPY', Date.parse('2026-04-10T00:00:00Z')), null);
+});
+test('ECB FX in the accounting: manual rate wins, ECB fills the rest, the ledger is not modified', () => {
+  const st = { accounts: [{ id: 'a', name: 'A' }], fxRates: { source: 'ECB', fetched_at: 1, rates: H.pfParseEcbCsv(ECB_CSV) }, txs: [
+    { id: '1', account_id: 'a', ts: Date.parse('2026-04-11T10:00:00Z'), type: 'buy', asset: 'BTC', qty: 1, price: 60000, price_ccy: 'EUR' },
+    { id: '2', account_id: 'a', ts: Date.parse('2026-04-14T10:00:00Z'), type: 'buy', asset: 'ETH', qty: 1, price: 2000, price_ccy: 'EUR', fx_to_usd: 1.2 },
+    { id: '3', account_id: 'a', ts: Date.parse('2026-02-01T10:00:00Z'), type: 'buy', asset: 'SOL', qty: 1, price: 100, price_ccy: 'EUR' }] };
+  const before = JSON.stringify(st.txs);
+  const m = H.pfCompute(st, { BTC: 80000, ETH: 3000, SOL: 100 }, null);
+  const pos = (a) => m.positions.find((p) => p.asset === a);
+  assert.equal(pos('BTC').costUsd, 60000 * 1.1711, 'Saturday buy at Friday\'s ECB rate');
+  assert.equal(pos('ETH').costUsd, 2400, 'own rate wins over ECB');
+  assert.equal(pos('SOL').costUsd, null, 'no ECB rate on or before the date: still missing');
+  assert.deepEqual(plain(m.fxUse), { manual: 1, ecb: 1, missing: 1 });
+  assert.equal(JSON.stringify(st.txs), before, 'transactions unchanged');
 });

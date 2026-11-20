@@ -57,6 +57,11 @@ async function mock(ctx){
   // V1 import (fixture)
   await p.click('#pfImportV1'); await p.waitForTimeout(600);
   ok(/2 added/.test(await p.textContent('#pfImportMsg')), 'V1 backup imported (2 synthetic rows)');
+  // Historical FX from the real ECB API (not mocked): the V1 EUR buy of 2026-03-02 gets that day's ECB rate.
+  await p.click('#pfFxFetch');
+  await p.waitForFunction(() => !/Fetching ECB/.test(document.getElementById('pfFxMsg').textContent), null, { timeout: 75000 }).catch(() => {});
+  const fxm = (await p.textContent('#pfFxMsg')).replace(/\s+/g, ' ');
+  ok(/ECB rates stored: \d+ business days/.test(fxm), 'real ECB reference rates fetched and stored: ' + fxm.slice(0, 110));
   // export CSV
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#pfExportCsv')]);
   const out = fs.readFileSync(await dl.path(), 'utf8');
@@ -65,9 +70,11 @@ async function mock(ctx){
   await p.click('#areaTabs [data-route="portfolio/holdings"]'); await p.waitForTimeout(800);
   const pos = (await p.textContent('#pfPositions')).replace(/\s+/g, ' ');
   ok(/BTC\s*0\.1009/.test(pos), 'BTC consolidated qty 0.1 − 0.0001 network fee + 0.001 reward = 0.1009: ' + pos.slice(0, 80));
-  ok(/FX missing/.test(pos) && /EUR 900\.00/.test(pos), 'V1 EUR buy keeps its cost in EUR, flagged FX missing');
+  const ethCost = /ETH\s*0\.5 \$3,000\.00\$1,500\.00 \$([\d,.]+)/.exec(pos);
+  ok(ethCost && !/FX missing/.test(pos), 'V1 EUR buy now costed in USD with the ECB rate of 2026-03-02 (avg $' + (ethCost && ethCost[1]) + ')');
+  ok(/1 with the ECB reference rate/.test(await p.textContent('#pfPriceNote')) && /1 with your own rate|0 with your own rate/.test(await p.textContent('#pfPriceNote')), 'FX provenance counted (own / ECB / missing)');
   ok(!/999/.test(pos), 'reversed buy not counted');
-  ok(/FX MISSING/.test(await p.textContent('#pfIssues')), 'FX issue listed');
+  ok(!/FX MISSING/.test(await p.textContent('#pfIssues')), 'no FX issue left once ECB rates are stored');
   ok((await p.$eval('#pfValuePresets [aria-pressed="true"]', (b) => b.textContent.trim())) === '24H', 'value chart presets default 24H');
   ok(await p.$('#pfValueChartFsBtn') && await p.$('#pfAllocChartFsBtn'), 'value and allocation charts have full screen');
   await p.click('#pfAllocChartFsBtn'); await p.waitForTimeout(250); ok((await p.getAttribute('#pfAllocChartFsBtn', 'aria-pressed')) === 'true', 'allocation full screen'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
@@ -80,7 +87,7 @@ async function mock(ctx){
   await p.waitForTimeout(1500);
   const be = (await p.textContent('#pfBeProb')).replace(/\s+/g, ' ');
   ok(/6M.*9M.*1Y.*2Y.*5Y/.test(be) && /BTC → \$/.test(be) && /\d+%/.test(be), 'break-even probability table (V1 model) rendered: ' + be.slice(0, 90));
-  ok(/ETH\s*average cost unknown/.test(be), 'no probability for a position whose average cost is unknown');
+  ok(/ETH\s*→ \$/.test(be), 'ETH break-even probability available once its cost is known in USD');
   await p.click('#pfNarrativeBtn'); await p.waitForTimeout(600);
   const nar = await p.textContent('#pfNarrativeOut');
   ok(/FIXTURE NARRATIVE for BTC/.test(nar) && /Gemini \(gemini-3\.6-flash\) via V1/.test(nar), 'narrative via V1 rendered and labelled');

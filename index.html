@@ -868,8 +868,10 @@
           <button type="button" id="pfExportJson" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export full backup (JSON)</button>
           <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / JSON…<input id="pfImportFile" type="file" accept=".csv,.json,text/csv,application/json" class="hidden"></label>
           <button type="button" id="pfImportV1" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import from V1 backup</button>
+          <button type="button" id="pfFxFetch" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Fetch ECB reference rates</button>
         </div>
         <p class="text-[10px] text-[#8A9599] mt-2">CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
+        <p id="pfFxMsg" class="text-[11px] mt-2"></p>
         <p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
       </section>
       <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfLedgerTitle"><h3 id="pfLedgerTitle" class="text-sm font-semibold mb-1">Ledger</h3><p id="pfLedgerCount" class="text-[11px] text-[#8A9599] mb-2"></p>
@@ -2073,7 +2075,48 @@ function pfValidateTx(tx, store, now){
 // Amount in USD: USD as is; another currency only with a positive rate (the transaction's own, or the store's
 // rate table for that currency and day if the user supplied one). Otherwise null = unknown.
 function pfUsd(amount, ccy, fx){ if(amount === null) return null; if(ccy === 'USD') return amount; return fx !== null && fx > 0 ? amount * fx : null; }
+// ---- Historical FX (owner task 4): ECB euro reference rates from the ECB's official free data API
+// (data-api.ecb.europa.eu, EXR daily SP00 series; verified 2026-11-20, CORS open, no key). Market data kept in its own
+// table, never written into transactions. Convention: the latest ECB rate on or before the transaction's UTC date
+// (ECB publishes on business days), at most 10 days back; a later rate is never used. GBP and CHF are ECB cross rates
+// via EUR. A rate entered on the transaction always wins. ----
+var PF_FX_MAX_GAP_DAYS = 10;
+function pfParseEcbCsv(text){
+  const rows = pfParseCsv(text);
+  if(!rows.length) return null;
+  const h = rows[0].map((x) => x.trim()), iC = h.indexOf('CURRENCY'), iD = h.indexOf('CURRENCY_DENOM'), iT = h.indexOf('TIME_PERIOD'), iV = h.indexOf('OBS_VALUE');
+  if(iC < 0 || iD < 0 || iT < 0 || iV < 0) return null;
+  const perEur = {};   // currency -> date -> units of currency per 1 EUR
+  for(const r of rows.slice(1)){
+    const v = pfNum(r[iV]); if(r[iD] !== 'EUR' || v === null || v <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(r[iT])) continue;
+    (perEur[r[iC]] = perEur[r[iC]] || {})[r[iT]] = v;
+  }
+  const usd = perEur.USD || {}, out = { EUR: {}, GBP: {}, CHF: {} };
+  for(const [d, u] of Object.entries(usd)){
+    out.EUR[d] = u;                                                  // USD per EUR
+    if(perEur.GBP && perEur.GBP[d]) out.GBP[d] = u / perEur.GBP[d];  // USD per GBP, cross via EUR
+    if(perEur.CHF && perEur.CHF[d]) out.CHF[d] = u / perEur.CHF[d];
+  }
+  return Object.keys(out.EUR).length ? out : null;
+}
+function pfFxLookup(fxTable, ccy, ts){
+  const tbl = fxTable && fxTable.rates && fxTable.rates[ccy];
+  if(!tbl || !isFinite(ts)) return null;
+  const day = new Date(ts).toISOString().slice(0, 10);
+  for(let k = 0; k <= PF_FX_MAX_GAP_DAYS; k++){
+    const d = new Date(Date.parse(day + 'T00:00:00Z') - k * 86400000).toISOString().slice(0, 10);
+    if(tbl[d] > 0) return { rate: tbl[d], date: d, cross: ccy !== 'EUR' };
+  }
+  return null;
+}
 function pfCompute(store, prices, fxNow){
+  const fxTable = store && store.fxRates ? store.fxRates : null, fxUse = { manual: 0, ecb: 0, missing: 0 };
+  const fxFor = (ccy, manual, ts) => {
+    if(!ccy || ccy === 'USD') return null;
+    if(manual !== null){ fxUse.manual++; return manual; }
+    const l = pfFxLookup(fxTable, ccy, ts); if(l){ fxUse.ecb++; return l.rate; }
+    fxUse.missing++; return null;
+  };
   const accounts = (store && store.accounts) || [], all = (store && store.txs) || [];
   const reversed = new Set(all.filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
   const ORDER = { deposit: 0, transfer_out: 1, transfer_in: 2, buy: 3, reward: 4, sell: 5, fee: 6, withdrawal: 7 };
@@ -2094,11 +2137,12 @@ function pfCompute(store, prices, fxNow){
   for(const t of active){
     const A = acc[t.account_id];
     if(!A){ issues.push({ id: t.id, code: 'unknown_account', text: 'Transaction for an account that does not exist; ignored.' }); continue; }
-    const asset = pfAsset(t.asset), qty = pfNum(t.qty) || 0, price = pfNum(t.price), fx = pfNum(t.fx_to_usd);
+    const asset = pfAsset(t.asset), qty = pfNum(t.qty) || 0, price = pfNum(t.price), fxManual = pfNum(t.fx_to_usd);
+    const fx = (t.type === 'buy' || t.type === 'sell' || (t.type === 'reward' && price !== null)) ? fxFor(t.price_ccy, fxManual, t.ts) : fxManual;
     const fee = pfNum(t.fee) || 0, feeCcy = t.fee_ccy ? String(t.fee_ccy).toUpperCase() : t.price_ccy;
     const feeInAsset = fee > 0 && feeCcy === asset, feeQuote = fee > 0 && !feeInAsset && feeCcy === t.price_ccy ? fee : 0;
     const feeOther = fee > 0 && !feeInAsset && !feeQuote ? fee : 0;
-    if(feeOther){ A.cash[feeCcy] = (A.cash[feeCcy] || 0) - feeOther; const u = pfUsd(feeOther, feeCcy, feeCcy === t.price_ccy ? fx : null); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
+    if(feeOther){ A.cash[feeCcy] = (A.cash[feeCcy] || 0) - feeOther; const u = pfUsd(feeOther, feeCcy, feeCcy === t.price_ccy ? fx : (pfIsFiat(feeCcy) && feeCcy !== 'USD' ? (pfFxLookup(fxTable, feeCcy, t.ts) || {}).rate ?? null : null)); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
     if(t.type === 'deposit' || t.type === 'withdrawal'){ A.cash[asset] = (A.cash[asset] || 0) + (t.type === 'deposit' ? qty : -qty); continue; }
     if(t.type === 'buy'){
       const p = P(A, asset), total = qty * price + feeQuote, u = pfUsd(total, t.price_ccy, fx);
@@ -2142,7 +2186,7 @@ function pfCompute(store, prices, fxNow){
       continue;
     }
     if(t.type === 'fee'){
-      if(pfIsFiat(asset)){ A.cash[asset] = (A.cash[asset] || 0) - qty; const u = pfUsd(qty, asset, fx); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
+      if(pfIsFiat(asset)){ A.cash[asset] = (A.cash[asset] || 0) - qty; const u = pfUsd(qty, asset, fxFor(asset, fxManual, t.ts)); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
       else { const p = P(A, asset); p.qty -= Math.min(qty, Math.max(0, p.qty)); }   // a fee in the asset leaves the cost, raising the average
       continue;
     }
@@ -2173,7 +2217,8 @@ function pfCompute(store, prices, fxNow){
   const held = positions.filter((p) => p.qty > PF_EPS && p.valueUsd !== null && p.valueUsd > 0);
   const tv = held.reduce((s, p) => s + p.valueUsd, 0);
   const allocation = tv > 0 ? held.map((p) => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : [];
-  return { accounts: outAccounts, positions, totals, allocation, issues, nActive: active.length, nReversed: reversed.size };
+  return { accounts: outAccounts, positions, totals, allocation, issues, nActive: active.length, nReversed: reversed.size, fxUse,
+    fxSource: fxTable ? { source: fxTable.source, fetchedAt: fxTable.fetched_at, from: fxTable.from, to: fxTable.to } : null };
 }
 // V1 Dry Powder Planner rule (CryptoPulse index.html renderDryPowder): deploy `amountUsd` at the current price.
 function pfDryPowder(position, amountUsd, priceUsd){
@@ -3606,7 +3651,8 @@ function renderPortfolio(){
     : `Stored only in this browser (same model as V1; no server copy). ${s.txs.length} ledger row${s.txs.length === 1 ? '' : 's'} · ${s.accounts.length} account${s.accounts.length === 1 ? '' : 's'}. Export regularly: clearing site data deletes the ledger.`;
   const priceLine = _pf.pricesErr ? `${chip('PRICES UNAVAILABLE', 'bad')} ${esc(_pf.pricesErr)}: values are not shown rather than guessed.` :
     _pf.prices ? `Prices: Hyperliquid mid prices (USD), fetched ${esc(fmtUtc(_pf.pricesAt))}.` : 'Loading prices…';
-  document.getElementById('pfPriceNote').innerHTML = priceLine + (_pf.fxNow ? ` · EUR/USD ${_pf.fxNow.toFixed(4)} (ECB via Frankfurter${_pf.fxDate ? ', ' + esc(_pf.fxDate) : ''}), used only to show cash held in EUR.` : _pf.fxErr ? ' · EUR/USD unavailable: EUR cash is not converted.' : '');
+  const fxLine = m.fxUse.ecb || m.fxUse.manual || m.fxUse.missing ? ` · Currency conversion: ${m.fxUse.manual} with your own rate, ${m.fxUse.ecb} with the ECB reference rate${m.fxSource ? ' (fetched ' + esc(fmtUtc(m.fxSource.fetchedAt)) + ')' : ''}, ${m.fxUse.missing} missing${m.fxUse.missing ? ' (<button type="button" class="underline" onclick="goRoute(\'portfolio/transactions\')">fetch ECB rates</button>)' : ''}.` : '';
+  document.getElementById('pfPriceNote').innerHTML = priceLine + fxLine + (_pf.fxNow ? ` · EUR/USD ${_pf.fxNow.toFixed(4)} (ECB via Frankfurter${_pf.fxDate ? ', ' + esc(_pf.fxDate) : ''}), used only to show cash held in EUR.` : _pf.fxErr ? ' · EUR/USD unavailable: EUR cash is not converted.' : '');
   for(const k of ['holdings', 'transactions', 'planning']) document.getElementById('pf-' + k).classList.toggle('hidden', k !== tab);
   if(tab === 'holdings') renderPfHoldings(m);
   if(tab === 'transactions') renderPfTransactions(m);
@@ -3787,6 +3833,30 @@ async function pfImportFile(file){
   const parsed = pfCsvRowsToTxs(pfParseCsv(text));
   if(parsed.errors.length) return pfMsg('pfImportMsg', parsed.errors);
   pfShowRun(pfImportCandidates(parsed.items, 'csv', h));
+}
+// ECB reference rates for every non-USD currency the ledger uses, from the earliest such transaction (minus the
+// look-back gap) to today. Stored as market data in store.fxRates; transactions are not touched.
+async function pfFetchEcbRates(){
+  const s = pfLoad();
+  const need = s.txs.filter(t => t.type !== 'reversal' && ((t.price_ccy && t.price_ccy !== 'USD' && pfIsFiat(t.price_ccy)) || (t.fee_ccy && t.fee_ccy !== 'USD' && pfIsFiat(t.fee_ccy)) || (t.type === 'fee' && pfIsFiat(pfAsset(t.asset)) && pfAsset(t.asset) !== 'USD')));
+  if(!need.length) return pfMsg('pfFxMsg', [], 'No transaction needs a currency conversion.');
+  // Only the range and currencies the ledger needs: no rate after the last such transaction can ever be used.
+  const from = new Date(Math.min(...need.map(t => t.ts)) - PF_FX_MAX_GAP_DAYS * 86400000).toISOString().slice(0, 10), to = new Date(Math.max(...need.map(t => t.ts))).toISOString().slice(0, 10);
+  const used = new Set(need.flatMap(t => [t.price_ccy, t.fee_ccy, t.type === 'fee' ? pfAsset(t.asset) : null]).filter(c => c === 'GBP' || c === 'CHF'));
+  const series = ['USD', ...used].join('+');
+  document.getElementById('pfFxMsg').textContent = 'Fetching ECB reference rates ' + from + ' → ' + to + ' (the ECB service can take up to a minute)…';
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, timer = ctl ? setTimeout(() => ctl.abort(), 60000) : null;
+  try{
+    const r = await fetch('https://data-api.ecb.europa.eu/service/data/EXR/D.' + series + '.EUR.SP00.A?startPeriod=' + from + '&endPeriod=' + to + '&format=csvdata&detail=dataonly', ctl ? { signal: ctl.signal } : undefined);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const rates = pfParseEcbCsv(await r.text());
+    if(!rates) throw new Error('no rates in the response');
+    s.fxRates = { source: 'ECB euro reference rates (data-api.ecb.europa.eu, EXR D.*.EUR.SP00.A)', fetched_at: Date.now(), from, to, rates };
+    if(!pfSave()) throw new Error('could not save in this browser');
+    pfMsg('pfFxMsg', [], `ECB rates stored: ${Object.keys(rates.EUR).length} business days (${from} → ${to}). Transactions without their own rate now use the ECB rate of their date or the last business day before it.`);
+  }catch(e){ pfMsg('pfFxMsg', ['ECB rates unavailable (' + (e.name === 'AbortError' ? 'no answer within 60 s' : e.message) + '); transactions keep their own rates and missing ones stay missing; try again later']); }
+  if(timer) clearTimeout(timer);
+  renderPortfolio();
 }
 // "Import from V1": one GET of V1's backup route, only on this explicit click (S-10 in the security register).
 async function pfImportFromV1(){
@@ -4239,6 +4309,7 @@ document.getElementById('pfExportCsv').onclick = () => pfExport('csv');
 document.getElementById('pfExportJson').onclick = () => pfExport('json');
 document.getElementById('pfImportFile').onchange = (ev) => { pfImportFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; };
 document.getElementById('pfImportV1').onclick = pfImportFromV1;
+document.getElementById('pfFxFetch').onclick = pfFetchEcbRates;
 document.getElementById('pfNarrativeBtn').onclick = pfRunNarrative;
 document.getElementById('traderBtn').onclick = runTraderAnalysis;
 buildSv2Periods();

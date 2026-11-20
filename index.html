@@ -2278,10 +2278,20 @@ function pfFromV1Backup(json, label){
   if(!list) return { items: [], errors: ['not a V1 backup (no txs list)'] };
   // V1 stores staking rewards and Neverless deposits as zero-price buys (isReward): they become zero-cost rewards here,
   // as V1 counts them (holdings up, invested capital unchanged), instead of being rejected as buys without a price.
+  // V1 values every row from its own converted fields (t.eur, t.usd), not from `price`: IDR-priced Revolut rows keep the
+  // raw IDR number in `price` (e.g. 151,539) with the EUR value in `eur`. So the price is V1's `usd` for USD rows and V1's
+  // `eur` for the others, falling back to `price` only when V1 stored no converted value.
   return { errors: [], items: list.map((t, k) => { const reward = t.type === 'buy' && (t.isReward === true || pfNum(t.price) === 0);
+    const ccy = String(t.ccy || 'USD').toUpperCase(), raw = pfNum(t.price), eur = pfNum(t.eur), usd = pfNum(t.usd);
+    let price = raw, pccy = ccy, note = 'imported from ' + from;
+    if(!reward){
+      if(ccy === 'USD' && usd !== null && usd > 0) price = usd;
+      else if(ccy !== 'USD' && eur !== null && eur > 0){ price = eur; pccy = 'EUR'; }
+      if(raw !== null && price !== null && price > 0 && raw / price > 1000) note += ' (V1 price field ' + raw + ' was not in ' + pccy + '; V1\u2019s converted ' + pccy + ' value used)';
+    }
     return { line: k + 1, accountName: String(t.acct || 'V1').trim() || 'V1', tx: { ts: pfDateMs(t.date), type: reward ? 'reward' : t.type,
-    asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: reward ? 0 : pfNum(t.price), price_ccy: reward ? 'USD' : String(t.ccy || 'USD').toUpperCase(), fee: null, fee_ccy: null,
-    fx_to_usd: null, transfer_id: null, note: reward ? 'imported from ' + from + ' (reward, zero cost)' : 'imported from ' + from, src_id: t.srcId ? String(t.srcId) : null } }; }) };
+    asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: reward ? 0 : price, price_ccy: reward ? 'USD' : pccy, fee: null, fee_ccy: null,
+    fx_to_usd: null, transfer_id: null, note: reward ? 'imported from ' + from + ' (reward, zero cost)' : note, src_id: t.srcId ? String(t.srcId) : null } }; }) };
 }
 // ---- Revolut / Neverless statements (V1 parity). Ports V1's mapRevolut / mapNeverless rules (CryptoPulse
 // index.html, "CSV / XLSX IMPORT") so the same files give the same portfolio: V1's five tracked assets, staking and
@@ -2447,19 +2457,35 @@ function pfV1RepairPlan(store){
   return (s.txs || []).filter((t) => t.type !== 'reversal' && !reversed.has(t.id) && accs.includes(t.account_id) && /^nlv:/.test(t.src_id || '')
     && new Date(t.ts).toISOString().slice(0, 10) <= PF_NEVERLESS_V1_SEED_DATE).map((t) => t.id);
 }
-// Quantities per account and asset: V1 backup (buy +, sell −) against this ledger (pfCompute positions).
+// Quantities per account and asset: V1 backup (buy +, sell −) against this ledger, counted only up to the last day V1's
+// backup has for that account (must match), with this ledger's newer movements shown apart (statements newer than V1).
+function pfQtyDelta(t){
+  const q = pfNum(t.qty) || 0, fee = pfNum(t.fee) || 0, a = pfAsset(t.asset);
+  if(t.type === 'buy') return q - (fee && pfAsset(t.fee_ccy) === a ? fee : 0);
+  if(t.type === 'reward' || t.type === 'transfer_in') return q;
+  if(t.type === 'sell' || t.type === 'transfer_out') return -q;
+  if(t.type === 'fee') return pfIsFiat(a) ? 0 : -q;
+  return 0;
+}
 function pfV1Compare(v1Txs, store){
-  const v1 = {};
-  for(const t of v1Txs || []){ const a = String(t.acct || 'Other'), s = pfAsset(t.asset), q = pfNum(t.qty); if(!s || q === null) continue;
-    v1[a] = v1[a] || {}; v1[a][s] = (v1[a][s] || 0) + (t.type === 'sell' ? -q : q); }
-  const m = pfCompute(store, {}, null), v2 = {};
-  for(const A of m.accounts) for(const p of A.positions) if(!pfIsFiat(p.asset)){ v2[A.name] = v2[A.name] || {}; v2[A.name][p.asset] = p.qty; }
-  const rows = [], keys = new Set();
-  for(const [a, o] of Object.entries(v1)) for(const s of Object.keys(o)) keys.add(a + '|' + s);
-  for(const [a, o] of Object.entries(v2)) for(const s of Object.keys(o)) keys.add(a + '|' + s);
-  for(const k of [...keys].sort()){ const [a, s] = k.split('|'), q1 = (v1[a] || {})[s] || 0, q2 = (v2[a] || {})[s] || 0, d = q2 - q1;
-    rows.push({ account: a, asset: s, v1: q1, v2: q2, diff: d, match: Math.abs(d) <= Math.max(1e-8, Math.abs(q1) * 1e-6) }); }
-  return { rows, allMatch: rows.every((r) => r.match), v1Rows: (v1Txs || []).length };
+  const v1 = {}, last = {};
+  for(const t of v1Txs || []){ const a = String(t.acct || 'Other'), s = pfAsset(t.asset), q = pfNum(t.qty), d = String(t.date || '').slice(0, 10); if(!s || q === null) continue;
+    v1[a] = v1[a] || {}; v1[a][s] = (v1[a][s] || 0) + (t.type === 'sell' ? -q : q); if(!last[a] || d > last[a]) last[a] = d; }
+  const st = store || {}, names = {}; for(const a of st.accounts || []) names[a.id] = a.name;
+  const reversed = new Set((st.txs || []).filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
+  const upto = {}, newer = {};
+  for(const t of st.txs || []){
+    if(t.type === 'reversal' || reversed.has(t.id)) continue;
+    const a = names[t.account_id], s = pfAsset(t.asset); if(!a || !s || pfIsFiat(s)) continue;
+    const dq = pfQtyDelta(t); if(!dq) continue;
+    const day = new Date(t.ts).toISOString().slice(0, 10), bucket = last[a] && day > last[a] ? newer : upto;
+    bucket[a] = bucket[a] || {}; bucket[a][s] = (bucket[a][s] || 0) + dq;
+  }
+  const keys = new Set();
+  for(const o of [v1, upto, newer]) for(const [a, m] of Object.entries(o)) for(const s of Object.keys(m)) keys.add(a + '|' + s);
+  const rows = [...keys].sort().map((k) => { const [a, s] = k.split('|'), q1 = (v1[a] || {})[s] || 0, q2 = (upto[a] || {})[s] || 0, d = q2 - q1;
+    return { account: a, asset: s, v1: q1, v2: q2, diff: d, newer: (newer[a] || {})[s] || 0, lastV1Day: last[a] || null, match: Math.abs(d) <= Math.max(1e-8, Math.abs(q1) * 1e-6) }; });
+  return { rows, allMatch: rows.every((r) => r.match), v1Rows: (v1Txs || []).length, lastV1Day: last };
 }
 // Daily value history from the ledger: for each UTC day from the first transaction to `toDay`, holdings at the end of the
 // day × that day's USD price (dailyPrices = {asset: {YYYY-MM-DD: usd}}). A day missing a held asset's price is partial.
@@ -4185,22 +4211,34 @@ async function pfImportV1Embedded(){
     + (e.errors.length ? ' Not found in the V1 page: ' + e.errors.join('; ') + '.' : '');
   pfShowRun(run);
 }
-// "Check against V1": V1's stored backup (one GET, as "Import from V1 backup") against this ledger, per account and asset;
-// offers the V1 Neverless rule as reversal rows when the ledger breaks it.
-async function pfV1Check(){
-  const out = document.getElementById('pfV1CheckOut'); out.textContent = 'Reading V1 backup…';
+// "Check against V1": V1's stored backup (one GET, as "Import from V1 backup") against this ledger, per account and asset.
+// "Align with V1" does both fixes in one save: reversal rows for Neverless statement rows V1 never imports, and the V1
+// backup rows this ledger lacks (V1's duplicate rule, so nothing already here is added twice).
+async function pfV1Check(note){
+  const out = document.getElementById('pfV1CheckOut'); out.innerHTML = (note || '') + '<p>Reading V1 backup…</p>';
   const r = await getJson(V1_WORKER_URL + '/txs-backup');
-  if(!r.ok || !r.data || !Array.isArray(r.data.txs)) return out.innerHTML = `${chip('UNAVAILABLE', 'neutral')} V1 backup could not be read${r.error ? ' (' + esc(r.error) + ')' : ''}.`;
-  const s = pfLoad(), c = pfV1Compare(r.data.txs, s), plan = pfV1RepairPlan(s), q = (v) => (+v).toLocaleString('en-US', { maximumFractionDigits: 8 });
-  out.innerHTML = `<p>${chip(c.allMatch ? 'SAME AS V1' : 'DIFFERS FROM V1', c.allMatch ? 'good' : 'warn')} V1 backup: ${c.v1Rows} rows${r.data.ts ? ', saved ' + esc(fmtUtc(r.data.ts)) : ''}. This ledger: ${s.txs.length} rows.</p>
-    <div class="overflow-x-auto mt-1"><table class="text-[11px]"><thead class="text-[#8A9599]"><tr><th class="text-left pr-3 font-normal">Account</th><th class="text-left pr-3 font-normal">Asset</th><th class="text-right pr-3 font-normal">V1</th><th class="text-right pr-3 font-normal">V2</th><th class="text-right font-normal">V2 − V1</th></tr></thead><tbody>
-    ${c.rows.map(x => `<tr class="${x.match ? '' : 'text-[#FBBF24]'}"><td class="pr-3">${esc(x.account)}</td><td class="pr-3">${esc(x.asset)}</td><td class="text-right pr-3 font-mono-data">${q(x.v1)}</td><td class="text-right pr-3 font-mono-data">${q(x.v2)}</td><td class="text-right font-mono-data">${x.match ? '✓' : (x.diff > 0 ? '+' : '') + q(x.diff)}</td></tr>`).join('')}</tbody></table></div>
-    ${plan.length ? `<p class="mt-2 text-[#FBBF24]">${plan.length} Neverless statement row(s) dated on or before ${PF_NEVERLESS_V1_SEED_DATE} are counted on top of V1's Neverless starting balances. V1 never imports them.</p><button type="button" id="pfV1Repair" class="mt-1 px-3 py-1.5 rounded-lg border border-[#FBBF24] text-[#FBBF24]">Apply V1 rule: reverse those ${plan.length} rows</button>` : ''}
-    <p class="text-[#8A9599] mt-1">Quantities only; differences after V1's last backup date are expected if your statements are newer than V1. Rows are never deleted: a fix adds reversal rows.</p>`;
-  const b = document.getElementById('pfV1Repair');
-  if(b) b.onclick = () => { if(!confirm(`Add ${plan.length} reversal row(s) for Neverless statement rows dated on or before ${PF_NEVERLESS_V1_SEED_DATE}?`)) return;
-    let n = 0, err = null; for(const id of plan){ const e = pfAppend({ type: 'reversal', reverses_id: id, ts: Date.now(), note: 'V1 rule: Neverless history before the ' + PF_NEVERLESS_V1_SEED_DATE + ' starting balance' }); if(e.length){ err = e.join(', '); break; } n++; }
-    _pf.histKey = null; renderPortfolio(); pfV1Check().then(() => { if(err) pfMsg('pfImportMsg', ['stopped after ' + n + ' reversals: ' + err]); else pfMsg('pfImportMsg', [], n + ' reversal row(s) added.'); }); };
+  if(!r.ok || !r.data || !Array.isArray(r.data.txs)) return out.innerHTML = (note || '') + `${chip('UNAVAILABLE', 'neutral')} V1 backup could not be read${r.error ? ' (' + esc(r.error) + ')' : ''}.`;
+  const v1Txs = r.data.txs, s = pfLoad(), c = pfV1Compare(v1Txs, s), plan = pfV1RepairPlan(s), q = (v) => (+v).toLocaleString('en-US', { maximumFractionDigits: 8 });
+  const lastTxt = Object.entries(c.lastV1Day).map(([a, d]) => esc(a) + ' ' + esc(d)).join(', ');
+  out.innerHTML = (note || '') + `<p>${chip(c.allMatch ? 'SAME AS V1' : 'DIFFERS FROM V1', c.allMatch ? 'good' : 'warn')} V1 backup: ${c.v1Rows} rows${r.data.ts ? ', saved ' + esc(fmtUtc(r.data.ts)) : ''}. This ledger: ${s.txs.length} rows. Compared up to V1's last day per account (${lastTxt}).</p>
+    <div class="overflow-x-auto mt-1"><table class="text-[11px]"><thead class="text-[#8A9599]"><tr><th class="text-left pr-2 font-normal">Account</th><th class="text-left pr-2 font-normal">Asset</th><th class="text-right pr-2 font-normal">V1</th><th class="text-right pr-2 font-normal">V2</th><th class="text-right pr-2 font-normal">V2 − V1</th><th class="text-right font-normal">Newer than V1</th></tr></thead><tbody>
+    ${c.rows.map(x => `<tr class="${x.match ? '' : 'text-[#FBBF24]'}"><td class="pr-2">${esc(x.account)}</td><td class="pr-2">${esc(x.asset)}</td><td class="text-right pr-2 font-mono-data">${q(x.v1)}</td><td class="text-right pr-2 font-mono-data">${q(x.v2)}</td><td class="text-right pr-2 font-mono-data">${x.match ? '✓' : (x.diff > 0 ? '+' : '') + q(x.diff)}</td><td class="text-right font-mono-data text-[#8A9599]">${x.newer ? (x.newer > 0 ? '+' : '') + q(x.newer) : '—'}</td></tr>`).join('')}</tbody></table></div>
+    ${c.allMatch ? '' : `<button type="button" id="pfV1Align" class="mt-2 px-3 py-1.5 rounded-lg border border-[#FBBF24] text-[#FBBF24] font-semibold">Align with V1${plan.length ? ` (reverse ${plan.length} old Neverless rows + add missing V1 rows)` : ' (add missing V1 rows)'}</button>`}
+    <p class="text-[#8A9599] mt-1">Quantities only. "Newer than V1" = movements in your statements after V1's last day for that account (not compared). Rows are never deleted: a fix adds reversal rows.</p>`;
+  const b = document.getElementById('pfV1Align');
+  if(b) b.onclick = () => pfV1Align(v1Txs, plan);
+}
+function pfV1Align(v1Txs, plan){
+  if(!confirm(`Align this ledger with V1?${plan.length ? `\n• reverse ${plan.length} Neverless statement rows dated on or before ${PF_NEVERLESS_V1_SEED_DATE}` : ''}\n• add the V1 backup rows this ledger does not have`)) return;
+  const s = pfLoad(), before = s.txs.length, errs = []; let n = 0;
+  for(const id of plan){ const tx = { id: pfId(), created_at: Date.now(), type: 'reversal', reverses_id: id, ts: Date.now(), note: 'V1 rule: Neverless history before the ' + PF_NEVERLESS_V1_SEED_DATE + ' starting balance' };
+    const e = pfValidateTx(tx, s, Date.now()); if(e.length){ if(errs.length < 5) errs.push(id + ': ' + e.join(', ')); continue; } s.txs.push(tx); n++; }
+  if(!pfSave()){ s.txs.length = before; return pfV1Check(`<p>${chip('NOT SAVED', 'bad')} This browser refused to save (storage full or blocked). Export a backup and try again.</p>`); }
+  const v1 = pfFromV1Backup({ txs: v1Txs });
+  const run = v1.errors.length ? { error: v1.errors.join(', ') } : pfImportCandidates(v1.items, 'v1_backup_align', null, { v1Match: true });
+  _pf.histKey = null; renderPortfolio();
+  const note = `<p>${chip(errs.length || run.error || run.rejected ? 'PARTLY DONE' : 'DONE', errs.length || run.error || run.rejected ? 'warn' : 'good')} ${n} reversal row(s) added${errs.length ? ' (' + errs.length + ' refused: ' + esc(errs.join('; ')) + ')' : ''}; V1 backup: ${run.error ? 'not imported (' + esc(run.error) + ')' : run.cancelled ? 'cancelled' : `${run.accepted} row(s) added, ${run.duplicates} already here, ${run.rejected} rejected`}${run.errors && run.errors.length ? ' — ' + esc(run.errors.slice(0, 3).join('; ')) : ''}.</p>`;
+  pfV1Check(note);
 }
 // "Import from V1": one GET of V1's backup route, only on this explicit click (S-10 in the security register).
 async function pfImportFromV1(){

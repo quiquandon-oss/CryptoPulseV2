@@ -1261,3 +1261,23 @@ test('portfolio import UI: "Import V1 embedded data" reads V1’s public page; t
   assert.doesNotMatch(SRC, /^const (SEED_TXS|INTEREST_EUR|PRICE_HISTORY)=/m);
 });
 
+test('V1 backup: prices come from V1’s converted fields (IDR rows keep the raw IDR number in price)', () => {
+  const v = H.pfFromV1Backup({ txs: [
+    { date: '2026-07-19', asset: 'LINK', acct: 'Revolut', type: 'buy', qty: 0.05, price: 151539.49, ccy: 'EUR', eur: 8.5134, usd: 9.75, srcId: 'rev:LINK:a:0.05000000' },
+    { date: '2026-07-02', asset: 'LINK', acct: 'Revolut', type: 'buy', qty: 2, price: 7.75, ccy: 'USD', eur: 6.77, usd: 7.75 },
+    { date: '2026-05-03', asset: 'LINK', acct: 'Revolut', type: 'buy', qty: 1, price: 7.93, ccy: 'EUR' }] });
+  assert.deepEqual(plain(v.items.map((i) => [i.tx.price, i.tx.price_ccy])), [[8.5134, 'EUR'], [7.75, 'USD'], [7.93, 'EUR']]);
+  assert.match(v.items[0].tx.note, /151539\.49 was not in EUR/);
+});
+test('V1 check: compared up to V1’s last day per account; newer statement movements shown apart; reversed rows ignored', () => {
+  const day = (d) => Date.parse(d + 'T00:00:00Z');
+  const store = { accounts: [{ id: 'r', name: 'Revolut' }], txs: [
+    { id: 'a', account_id: 'r', type: 'buy', asset: 'BTC', qty: 0.0007, ts: day('2026-10-01') },
+    { id: 'b', account_id: 'r', type: 'buy', asset: 'BTC', qty: 0.0001, ts: day('2026-11-02') },
+    { id: 'c', account_id: 'r', type: 'buy', asset: 'BTC', qty: 5, ts: day('2026-09-01') }, { id: 'x', type: 'reversal', reverses_id: 'c', ts: day('2026-11-20') },
+    { id: 'd', account_id: 'r', type: 'sell', asset: 'BTC', qty: 0.0002, fee: 0.00001, fee_ccy: 'BTC', ts: day('2026-10-10') }] };
+  const c = H.pfV1Compare([{ acct: 'Revolut', asset: 'BTC', type: 'buy', qty: 0.0007, date: '2026-10-01' }, { acct: 'Revolut', asset: 'BTC', type: 'sell', qty: 0.0002, date: '2026-10-23' }], store);
+  assert.deepEqual(plain(c.rows.map((r) => [r.account, r.asset, +r.v1.toFixed(8), +r.v2.toFixed(8), r.match, +r.newer.toFixed(8), r.lastV1Day])), [['Revolut', 'BTC', 0.0005, 0.0005, true, 0.0001, '2026-10-23']]);
+  assert.equal(c.allMatch, true);
+});
+

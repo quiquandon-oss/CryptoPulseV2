@@ -817,26 +817,20 @@
   </div>
 
   <div id="view-portfolio" class="hidden">
-    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfTitle">
-      <h2 id="pfTitle" class="text-lg font-bold tracking-tight">Portfolio <span class="text-xs font-normal text-[#BAC9CD]">· personal accounting, USD reporting</span></h2>
-      <p id="pfStorageNote" class="text-[11px] text-[#8A9599] mt-1"></p>
-      <p id="pfPriceNote" class="text-[11px] text-[#8A9599] mt-0.5" role="status"></p>
-      <p class="text-[10px] text-[#8A9599] mt-0.5">Separate from the prediction engines: nothing here reads or changes sentiment, predictions or model settings. Not investment advice.</p>
-    </section>
 
     <div id="pf-holdings">
       <div class="flex items-center gap-2 mb-3 flex-wrap"><label class="flex flex-col gap-0.5 min-w-0 w-64 max-w-full"><span class="text-[10px] text-[#8A9599]">View</span><select id="pfAccountFilter" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label></div>
-      <div id="pfKpis" class="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 text-xs"></div>
+      <div id="pfKpis" class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3 text-xs"></div>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfValueTitle"><div class="flex items-center justify-between flex-wrap gap-2 mb-1"><h3 id="pfValueTitle" class="text-sm font-semibold">Value history</h3><div id="pfValuePresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+          <p id="pfValueNote" class="text-[11px] text-[#8A9599] mb-2"></p><div class="relative h-[260px]"><canvas id="pfValueChart" role="img" aria-label="Portfolio value over time, recorded on this device"></canvas></div></section>
       <ul id="pfIssues" class="space-y-1 text-[11px] mb-3"></ul>
       <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfPosTitle"><h3 id="pfPosTitle" class="text-sm font-semibold mb-2">Holdings</h3>
         <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Quantity</th><th class="py-1 px-2 font-normal text-right">Price</th><th class="py-1 px-2 font-normal text-right">Value</th><th class="py-1 px-2 font-normal text-right">Avg cost</th><th class="py-1 px-2 font-normal text-right">Cost basis</th><th class="py-1 px-2 font-normal text-right">Unrealised</th><th class="py-1 px-2 font-normal text-right">Realised</th></tr></thead><tbody id="pfPositions"></tbody></table></div>
         <p class="text-[10px] text-[#8A9599] mt-2">Average-cost method. Fees paid in the price currency are part of the cost; a fee paid in the asset reduces the quantity. Internal transfers move quantity and cost between accounts without a buy or a sell. A cost recorded in another currency without an FX rate stays in that currency and is never converted with a guessed rate.</p>
       </section>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div>
         <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfAllocTitle"><h3 id="pfAllocTitle" class="text-sm font-semibold mb-1">Allocation</h3><p id="pfAllocNote" class="text-[11px] text-[#8A9599] mb-2"></p>
           <div class="relative h-[240px]"><canvas id="pfAllocChart" role="img" aria-label="Allocation of priced holdings by market value"></canvas></div></section>
-        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfValueTitle"><div class="flex items-center justify-between flex-wrap gap-2 mb-1"><h3 id="pfValueTitle" class="text-sm font-semibold">Value history</h3><div id="pfValuePresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
-          <p id="pfValueNote" class="text-[11px] text-[#8A9599] mb-2"></p><div class="relative h-[240px]"><canvas id="pfValueChart" role="img" aria-label="Portfolio value over time, recorded on this device"></canvas></div></section>
       </div>
     </div>
 
@@ -900,6 +894,12 @@
           <div id="pfNarrativeOut" class="text-xs mt-2" role="status"></div></section>
       </div>
     </div>
+    <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6"><summary class="cursor-pointer text-sm font-semibold text-[#BAC9CD]">About this portfolio <span class="text-xs font-normal text-[#8A9599]">· storage, prices, currency conversion</span></summary><div class="mt-2">
+      <h2 id="pfTitle" class="text-sm font-semibold">Portfolio <span class="text-xs font-normal text-[#BAC9CD]">· personal accounting, USD reporting</span></h2>
+      <p id="pfStorageNote" class="text-[11px] text-[#8A9599] mt-1"></p>
+      <p id="pfPriceNote" class="text-[11px] text-[#8A9599] mt-0.5" role="status"></p>
+      <p class="text-[10px] text-[#8A9599] mt-0.5">Separate from the prediction engines: nothing here reads or changes sentiment, predictions or model settings. Not investment advice.</p>
+    </div></details>
   </div>
 
   <div id="view-alerts" class="hidden">
@@ -3953,6 +3953,10 @@ function renderPfHoldings(m){
   sel.onchange = () => { _pf.account = sel.value; renderPortfolio(); };
   const A = _pf.account ? m.accounts.find(a => a.id === _pf.account) : null;
   const positions = A ? A.positions : m.positions;
+  // Cash (dry powder) is meaningful only when cash movements are recorded (deposits/withdrawals); otherwise it would only
+  // show the total spent as a negative balance.
+  const revd = new Set(pfLoad().txs.filter(x => x.type === 'reversal').map(x => x.reverses_id));
+  const hasCash = pfLoad().txs.some(x => (x.type === 'deposit' || x.type === 'withdrawal') && !revd.has(x.id));
   const t = m.totals, today = new Date().toISOString().slice(0, 10), iEur = pfLoad().v1InterestEur ? pfV1InterestAt(pfLoad().v1InterestEur, today) : 0, iUsd = pfInterestUsd(today);
   const kpi = (k, v, sub) => `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2.5"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] text-base mt-0.5">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
   document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' : A
@@ -3961,8 +3965,8 @@ function renderPfHoldings(m){
       kpi('Cost basis of holdings', pfMoney(t.costUsd.value) + pfPartial(t.costUsd), 'what was paid for what is still held') +
       kpi('Unrealised P&L', pfSigned(t.unrealizedUsd.value === null ? null : t.unrealizedUsd.value + (iUsd || 0)) + pfPartial({ complete: t.unrealizedUsd.complete && iUsd !== null }), iEur > 0 ? 'market movement + Neverless interest (as V1)' : 'market movement on holdings') +
       kpi('Realised P&L', pfSigned(t.realizedUsd.value) + pfPartial(t.realizedUsd), 'from sells, after fees') +
-      kpi('Cash (dry powder)', t.cashUsd.complete ? pfMoney(t.cashUsd.usd) : 'partial', Object.entries(t.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'no deposits recorded');
-  const neg = Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9);
+      (hasCash ? kpi('Cash (dry powder)', t.cashUsd.complete ? pfMoney(t.cashUsd.usd) : 'partial', (Object.entries(t.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none') + ' · uninvested cash: deposits − buys + sells') : '');
+  const neg = hasCash ? Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9) : [];
   document.getElementById('pfIssues').innerHTML = (neg.length ? `<li>${chip('CASH', 'warn')} Buys exceed recorded deposits in ${neg.map(([c]) => esc(c)).join(', ')}: record deposits to track cash; holdings and P&L are unaffected.</li>` : '') +
     m.issues.slice(0, 12).map(i => `<li>${chip(i.code.replace(/_/g, ' ').toUpperCase(), i.code === 'fx_missing' || i.code === 'reward_no_price' || i.code === 'in_transit' ? 'warn' : 'bad')} <span class="text-[#BAC9CD]">${esc(i.text)}</span></li>`).join('') +
     (m.issues.length > 12 ? `<li class="text-[#8A9599]">…and ${m.issues.length - 12} more.</li>` : '');

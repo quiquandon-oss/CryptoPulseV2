@@ -792,9 +792,18 @@
   </div>
 
   <div id="view-comparison" class="hidden">
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpOutTitle">
+      <h2 id="cmpOutTitle" class="text-lg font-bold tracking-tight mb-1">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2 baseline vs V2 final, read-only</span></h2>
+      <p class="text-xs text-[#BAC9CD] mb-3">Each V2 decision (BTC) is paired with the V1 reading available at that moment (at most 3 h old) and scored against the market once it resolves. Observes both engines and never changes either. V1 is not probabilistic, so its direction uses a <b>proposed</b> convention (above 55 = up, below 45 = down, otherwise no call; owner decision OD-12, not production logic), shown with the 50/50 and 40/60 bands beside it.</p>
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        <div id="cmpHorizon" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit"></div>
+        <div id="cmpOutPresets" role="group" aria-label="Decision period" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit"></div>
+      </div>
+      <div id="cmpOutBody" class="text-xs" role="status">Loading…</div>
+    </section>
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpTitle">
-      <h2 id="cmpTitle" class="text-lg font-bold tracking-tight mb-1">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2, read-only</span></h2>
-      <p class="text-xs text-[#BAC9CD] mb-3">Observes both engines; it never changes either. This first view is <b>descriptive and sentiment-level</b>: V1 and V2 sentiment at the same timestamps. Outcome-based evaluation (V1 vs V2 baseline vs V2 final after GLM, resolved against the market) needs a read-only backend route that is not deployed yet, so no accuracy figures are shown here.</p>
+      <h2 id="cmpTitle" class="text-base font-bold tracking-tight mb-1">Sentiment levels <span class="text-xs font-normal text-[#BAC9CD]">· descriptive</span></h2>
+      <p class="text-xs text-[#BAC9CD] mb-3">V1 and V2 sentiment at the same timestamps. Levels only, no market outcomes; the outcome-based figures are above.</p>
       <div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit mb-3"></div>
       <div id="cmpSummary" class="text-xs" role="status">Loading…</div>
     </section>
@@ -1628,6 +1637,47 @@ function cmpSentimentSummary(rows){
     meanAbsDiff: round1(diffs.reduce((a, b) => a + Math.abs(b), 0) / diffs.length),
     sameSide: same, decided, sameSideRate: decided ? same / decided : null, firstTs: Math.min(...both.map((r) => r.ts)),
     lastTs: last.ts, last: { ts: last.ts, v1: last.v1, v2: last.v2 } };
+}
+// ---- Outcome-based V1/V2 comparison (contracts §7, OD-12): view model for GET /api/comparison/v1-v2/summary and
+// /api/comparison/v1-v2 (PulseWorkerV2, read-only). Figures are passed through from the backend; this only labels
+// them, keeps n and the Wilson interval beside every rate and never ranks below the backend's sample rule. ----
+var CMP_STATUS_TEXT = { insufficient_sample: 'Insufficient sample: fewer than 30 resolved decisions with a V1 reading. No ranking is possible yet.',
+  no_supported_difference: 'No supported difference: the Wilson 95% intervals overlap, or n is below 100.',
+  v1_higher_observational: 'V1 higher (observational, not pre-registered).', v2_higher_observational: 'V2 final higher (observational, not pre-registered).' };
+var CMP_FINAL_REASON = { glm_applied: 'GLM applied', no_adjustment: 'no GLM adjustment', glm_out_of_scope: 'GLM out of scope (BTC 24h only)' };
+function cmpOutcomeModel(summaryRes, recordsRes){
+  const fail = (res) => {
+    const e = String((res && res.error) || '');
+    return /404|not found/i.test(e) ? { state: 'unavailable', note: 'The outcome comparison route is not deployed on this backend yet.' }
+      : { state: 'error', note: 'The outcome comparison could not be loaded' + (res && res.data && res.data.reason ? ` (${res.data.reason})` : '') + '.' };
+  };
+  if(!summaryRes || !summaryRes.ok) return fail(summaryRes);
+  const d = summaryRes.data || {}, s = d.summary;
+  if(!s || typeof s !== 'object') return { state: 'error', note: 'The comparison response has an unexpected shape.' };
+  const pct = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v * 1000) / 10 : null);
+  const accRow = (label, a, extra) => ({ label, n: a ? a.n : 0, correct: a ? a.correct : 0, ratePct: pct(a && a.rate),
+    ciPct: a && Array.isArray(a.ci95) ? a.ci95.map(pct) : null, ...extra });
+  const acc = s.accuracy || {};
+  const recs = recordsRes && recordsRes.ok && Array.isArray((recordsRes.data || {}).records) ? recordsRes.data.records : [];
+  return {
+    state: 'ok', status: s.status, claim: s.claim, claimText: CMP_STATUS_TEXT[s.claim] || CMP_STATUS_TEXT[s.status] || String(s.claim || ''),
+    sufficient: s.status === 'ok', asset: d.asset, horizon: d.horizon_hours, period: d.period, truncated: !!d.truncated, generatedTs: d.generated_ts,
+    counts: { aligned: s.n_aligned || 0, resolved: s.n_resolved || 0, pairs: s.n_resolved_pairs || 0, v1CoveragePct: pct(s.v1_coverage),
+      fromComposite: (s.v1_sources || {}).server_composite_readings || 0, fromHistory: (s.v1_sources || {}).history || 0, v1Missing: (s.v1_sources || {}).missing || 0 },
+    accuracy: [accRow('V1 (proposed 45/55)', acc.v1, { proposed: true }), accRow('V2 baseline (before GLM)', acc.v2_baseline), accRow('V2 final (after GLM)', acc.v2_final)],
+    noCallPct: { v1: pct((s.no_call_rate || {}).v1), v2b: pct((s.no_call_rate || {}).v2_baseline), v2f: pct((s.no_call_rate || {}).v2_final) },
+    agreement: [['V1 ↔ V2 baseline', (s.agreement || {}).v1_v2_baseline], ['V1 ↔ V2 final', (s.agreement || {}).v1_v2_final], ['V2 baseline ↔ V2 final', (s.agreement || {}).v2_baseline_v2_final]]
+      .map(([label, a]) => ({ label, n: a ? a.n : 0, ratePct: pct(a && a.rate) })),
+    brier: { v2b: (s.brier || {}).v2_baseline || { n: 0, score: null }, v2f: (s.brier || {}).v2_final || { n: 0, score: null } },
+    bands: (Array.isArray(s.v1_bands) ? s.v1_bands : []).map((b) => ({ band: b.band, proposed: !!b.proposed, coveragePct: pct(b.coverage),
+      noCallPct: pct(b.no_call_rate), acc: accRow(b.band, b.accuracy) })),
+    glm: s.glm || { rows_in_scope: 0, adjusted: 0, changed_calls: 0, mean_abs_adjustment: null },
+    records: recs.slice(0, 25).map((r) => ({ ts: r.decision_ts, v1: r.v1 && r.v1.score != null ? r.v1.score : null, v1Source: r.v1 ? r.v1.source : null,
+      v1Dir: r.v1 ? r.v1.direction : null, v2b: r.v2_baseline ? r.v2_baseline.p_up : null, v2bDir: r.v2_baseline ? r.v2_baseline.direction : null,
+      v2f: r.v2_final ? r.v2_final.p_up : null, v2fDir: r.v2_final ? r.v2_final.direction : null,
+      finalReason: r.v2_final ? (CMP_FINAL_REASON[r.v2_final.reason] || r.v2_final.reason) : null,
+      outcome: r.outcome && r.outcome.status === 'resolved' ? r.outcome.direction : 'pending' })),
+  };
 }
 // ---- Forecast coverage (contracts §4.4): per model and horizon, what exists in the window and which origins only
 // one model covers. Counts persisted forecasts only; a missing forecast is reported, never filled. ----
@@ -2905,10 +2955,62 @@ function renderSentimentV1(res, period){
 }
 var _cmp = { period: '24h', seq: 0 };
 function loadComparisonIfNeeded(force){
+  loadOutcomeComparison(force);
   v1Presets('cmpPresets', _cmp.period, k => { _cmp.period = k; loadComparisonIfNeeded(); });
   const seq = ++_cmp.seq, period = _cmp.period;
   document.getElementById('cmpSummary').textContent = 'Loading…';
   sv2Comparison(period, force).then(res => { if(seq === _cmp.seq && activeView === 'comparison') renderComparison(res); });
+}
+// ---- Outcome comparison (read-only GETs of /api/comparison/v1-v2[/summary]). Default period All: shorter windows rarely
+// reach the 30-pair minimum, and the period here selects decisions, not a chart range. ----
+var _cmpOut = { period: 'all', horizon: 24, seq: 0 };
+function loadOutcomeComparison(force){
+  const hz = document.getElementById('cmpHorizon');
+  hz.innerHTML = [24, 12].map(h => `<button type="button" data-h="${h}" aria-pressed="${h === _cmpOut.horizon}" class="px-2.5 py-1 rounded-md text-xs font-semibold ${h === _cmpOut.horizon ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${h}h</button>`).join('');
+  hz.querySelectorAll('button').forEach(b => { b.onclick = () => { _cmpOut.horizon = Number(b.dataset.h); loadOutcomeComparison(); }; });
+  v1Presets('cmpOutPresets', _cmpOut.period, k => { _cmpOut.period = k; loadOutcomeComparison(); });
+  const seq = ++_cmpOut.seq, q = `asset=BTC&horizon=${_cmpOut.horizon}&period=${_cmpOut.period}`;
+  document.getElementById('cmpOutBody').textContent = 'Loading…';
+  Promise.all([getJson(WORKER_URL + '/api/comparison/v1-v2/summary?' + q), getJson(WORKER_URL + '/api/comparison/v1-v2?' + q + '&limit=25')])
+    .then(([sum, recs]) => { if(seq === _cmpOut.seq && activeView === 'comparison') renderOutcomeComparison(cmpOutcomeModel(sum, recs)); });
+}
+function renderOutcomeComparison(m){
+  const host = document.getElementById('cmpOutBody');
+  if(m.state !== 'ok'){ host.innerHTML = `${chip(m.state === 'unavailable' ? 'NOT AVAILABLE' : 'ERROR', m.state === 'unavailable' ? 'neutral' : 'bad')} <span class="text-[#BAC9CD]">${esc(m.note)}</span>`; return; }
+  const f = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d));
+  const ci = (c) => (c ? `${f(c[0])}–${f(c[1])}%` : '—');
+  const th = (t) => `<th scope="col" class="text-left font-semibold text-[#8A9599] px-2 py-1">${t}</th>`;
+  const td = (t, mono = true) => `<td class="px-2 py-1 ${mono ? 'font-mono-data' : ''} text-[#E1E2E7]">${t}</td>`;
+  const table = (head, rows) => `<div class="overflow-x-auto"><table class="min-w-full text-xs border-collapse"><thead><tr class="border-b border-[#3B494C]">${head.map(th).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  const tr = (cells) => `<tr class="border-b border-[#3B494C]/40">${cells.join('')}</tr>`;
+  const c = m.counts;
+  const prop = (on) => (on ? ' ' + chip('PROPOSED', 'warn') : '');
+  host.innerHTML = `
+    <p class="mb-2">${chip(m.sufficient ? 'SAMPLE ≥ 30' : 'INSUFFICIENT SAMPLE', m.sufficient ? 'info' : 'neutral')} <span class="text-[#BAC9CD]">${esc(m.claimText)}</span></p>
+    <p class="text-[#BAC9CD] mb-3">${c.aligned} decisions${m.truncated ? ' (newest 500 only)' : ''} · ${c.resolved} resolved · ${c.pairs} resolved with a V1 reading · V1 coverage ${f(c.v1CoveragePct)}% (${c.fromComposite} server composite, ${c.fromHistory} history, ${c.v1Missing} missing)</p>
+    <h3 class="text-xs font-semibold text-[#E1E2E7] mb-1">Directional accuracy (resolved, called decisions)</h3>
+    ${table(['Series', 'n', 'Correct', 'Accuracy', 'Wilson 95%'], m.accuracy.map(a => tr([td(esc(a.label) + prop(a.proposed), false), td(a.n), td(a.correct), td(f(a.ratePct) + (a.ratePct === null ? '' : '%')), td(ci(a.ciPct))])))}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+      <div><h3 class="text-xs font-semibold text-[#E1E2E7] mb-1">V1 threshold sensitivity</h3>
+        ${table(['Band', 'Coverage', 'No call', 'n', 'Accuracy', 'Wilson 95%'], m.bands.map(b => tr([td(esc(b.band) + prop(b.proposed), false), td(f(b.coveragePct) + '%'), td(f(b.noCallPct) + '%'), td(b.acc.n), td(f(b.acc.ratePct) + (b.acc.ratePct === null ? '' : '%')), td(ci(b.acc.ciPct))])))}</div>
+      <div><h3 class="text-xs font-semibold text-[#E1E2E7] mb-1">Agreement, calibration and GLM</h3>
+        ${table(['Measure', 'n', 'Value'], [
+          ...m.agreement.map(a => tr([td(esc(a.label), false), td(a.n), td(f(a.ratePct) + (a.ratePct === null ? '' : '%'))])),
+          tr([td('Brier · V2 baseline', false), td(m.brier.v2b.n), td(f(m.brier.v2b.score, 4))]),
+          tr([td('Brier · V2 final', false), td(m.brier.v2f.n), td(f(m.brier.v2f.score, 4))]),
+          tr([td('No-call rate · V1 / V2b / V2f', false), td('—'), td(`${f(m.noCallPct.v1)} / ${f(m.noCallPct.v2b)} / ${f(m.noCallPct.v2f)}%`)]),
+          tr([td('GLM adjusted decisions · changed calls', false), td(m.glm.rows_in_scope), td(`${m.glm.adjusted} · ${m.glm.changed_calls}`)]),
+          tr([td('GLM mean |adjustment|', false), td(m.glm.adjusted), td(m.glm.mean_abs_adjustment === null ? '—' : f(m.glm.mean_abs_adjustment * 100, 2) + ' pp')])])}
+        <p class="text-[10px] text-[#8A9599] mt-1">Brier is for V2 only (V1 is not a probability). GLM is BTC 24h only and never flips a call, so changed calls should stay 0.</p></div>
+    </div>
+    <h3 class="text-xs font-semibold text-[#E1E2E7] mt-4 mb-1">Latest decisions</h3>
+    ${m.records.length ? table(['Decision (UTC)', 'V1', 'V2 baseline', 'V2 final', 'Outcome'], m.records.map(r => tr([
+      td(esc(fmtUtc(r.ts)), false),
+      td(r.v1 === null ? '<span class="text-[#8A9599]">missing</span>' : `${esc(String(r.v1))} <span class="text-[10px] text-[#8A9599]">${esc(r.v1Dir || '')}${r.v1Source === 'history' ? ' · history' : ''}</span>`),
+      td(r.v2b === null ? '—' : `${f(r.v2b * 100)}% <span class="text-[10px] text-[#8A9599]">${esc(r.v2bDir || '')}</span>`),
+      td(r.v2f === null ? '—' : `${f(r.v2f * 100)}% <span class="text-[10px] text-[#8A9599]">${esc(r.finalReason || '')}</span>`),
+      td(esc(r.outcome))]))) : '<p class="text-[#BAC9CD]">No decisions in this period.</p>'}
+    <p class="text-[10px] text-[#8A9599] mt-3">Read-only; computed by the backend (${esc(m.asset)} ${m.horizon}h, period ${esc(m.period)}, generated ${esc(fmtUtc(m.generatedTs))}, cached up to 5 min). A difference is claimed only with n ≥ 100 per series and non-overlapping Wilson intervals, and is observational.</p>`;
 }
 function renderComparison(res){
   const host = document.getElementById('cmpSummary');

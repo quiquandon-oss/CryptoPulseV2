@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, cmpOutcomeModel, CMP_STATUS_TEXT };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -848,3 +848,52 @@ test('page structure: backtests live in Research; Learning & Audit holds prospec
   assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/foufi-latest'"], 'the only V1 call is the read-only digest route');
   assert.doesNotMatch(SRC, /foufi-check|foufi-backfill|\/txs-backup|X-App-Secret/);
 });
+
+// ---- Outcome comparison (contracts §7): passes backend figures through with n and CI, labels the proposed V1 band ----
+const cmpSummary = (over = {}) => ({ ok: true, data: { ok: true, asset: 'BTC', horizon_hours: 24, period: 'all', truncated: false, generated_ts: NOW,
+  summary: { status: 'insufficient_sample', claim: 'insufficient_sample', n_aligned: 41, n_resolved: 40, n_resolved_pairs: 29, v1_coverage: 0.878,
+    v1_sources: { server_composite_readings: 20, history: 16, missing: 5 }, no_call_rate: { v1: 0.1389, v2_baseline: 0, v2_final: 0 },
+    agreement: { v1_v2_baseline: { n: 31, rate: 0.6774 }, v1_v2_final: { n: 31, rate: 0.6774 }, v2_baseline_v2_final: { n: 41, rate: 1 } },
+    accuracy: { v1: { n: 30, correct: 20, rate: 0.6667, ci95: [0.4878, 0.8077] }, v2_baseline: { n: 40, correct: 35, rate: 0.875, ci95: [0.7393, 0.9454] }, v2_final: { n: 40, correct: 35, rate: 0.875, ci95: [0.7393, 0.9454] } },
+    brier: { v2_baseline: { n: 40, score: 0.1 }, v2_final: { n: 40, score: 0.1 }, v1: null },
+    v1_bands: [{ band: '50/50', proposed: false, coverage: 1, no_call_rate: 0, accuracy: { n: 31, correct: 20, rate: 0.645, ci95: [0.47, 0.79] } },
+      { band: '45/55', proposed: true, coverage: 0.86, no_call_rate: 0.14, accuracy: { n: 30, correct: 20, rate: 0.6667, ci95: [0.4878, 0.8077] } },
+      { band: '40/60', proposed: false, coverage: 0.5, no_call_rate: 0.5, accuracy: { n: 0, correct: 0, rate: null, ci95: null } }],
+    glm: { rows_in_scope: 41, adjusted: 0, changed_calls: 0, mean_abs_adjustment: null }, ...over } } });
+const cmpRecords = { ok: true, data: { records: [{ decision_ts: NOW - HOUR, v1: { score: 35, source: 'server_composite_readings', direction: 'DOWN' },
+  v2_baseline: { p_up: 0.2222, direction: 'DOWN' }, v2_final: { p_up: 0.2222, direction: 'DOWN', reason: 'no_adjustment' }, outcome: { status: 'pending' } },
+  { decision_ts: NOW - 4 * HOUR, v1: { score: null, source: null, direction: null }, v2_baseline: { p_up: 0.6, direction: 'UP' },
+    v2_final: { p_up: 0.6, direction: 'UP', reason: 'glm_out_of_scope' }, outcome: { status: 'resolved', direction: 'UP' } }] } };
+
+test('outcome comparison: insufficient sample is labelled, n and Wilson CI kept beside every rate, V1 45/55 marked proposed', () => {
+  const m = plain(H.cmpOutcomeModel(cmpSummary(), cmpRecords));
+  assert.equal(m.state, 'ok');
+  assert.equal(m.sufficient, false);
+  assert.match(m.claimText, /Insufficient sample/);
+  assert.deepEqual(m.accuracy.map((a) => [a.label, a.n, a.ratePct, a.ciPct]), [
+    ['V1 (proposed 45/55)', 30, 66.7, [48.8, 80.8]], ['V2 baseline (before GLM)', 40, 87.5, [73.9, 94.5]], ['V2 final (after GLM)', 40, 87.5, [73.9, 94.5]]]);
+  assert.deepEqual(m.bands.map((b) => [b.band, b.proposed, b.coveragePct, b.acc.n, b.acc.ratePct]), [['50/50', false, 100, 31, 64.5], ['45/55', true, 86, 30, 66.7], ['40/60', false, 50, 0, null]]);
+  assert.deepEqual(m.counts, { aligned: 41, resolved: 40, pairs: 29, v1CoveragePct: 87.8, fromComposite: 20, fromHistory: 16, v1Missing: 5 });
+  assert.deepEqual(m.records.map((r) => [r.v1, r.finalReason, r.outcome]), [[35, 'no GLM adjustment', 'pending'], [null, 'GLM out of scope (BTC 24h only)', 'UP']]);
+});
+test('outcome comparison: a supported claim is passed through as observational; records failing alone keep the summary', () => {
+  const m = H.cmpOutcomeModel(cmpSummary({ status: 'ok', claim: 'v2_higher_observational' }), { ok: false, error: 'HTTP 503' });
+  assert.equal(m.sufficient, true);
+  assert.match(m.claimText, /observational/);
+  assert.equal(m.records.length, 0);
+});
+test('outcome comparison: route not deployed (404) is NOT AVAILABLE, other failures are errors, bad shapes are errors', () => {
+  assert.equal(H.cmpOutcomeModel({ ok: false, error: 'HTTP 404' }, null).state, 'unavailable');
+  assert.equal(H.cmpOutcomeModel({ ok: false, error: 'not found' }, null).state, 'unavailable');
+  const e = H.cmpOutcomeModel({ ok: false, error: 'comparison data unavailable', data: { reason: 'transient' } }, null);
+  assert.deepEqual([e.state, /transient/.test(e.note)], ['error', true]);
+  assert.equal(H.cmpOutcomeModel({ ok: true, data: { ok: true } }, null).state, 'error');
+});
+test('comparison view: outcome section first, proposed convention stated, no write call to the comparison route', () => {
+  const view = SRC.slice(SRC.indexOf('<div id="view-comparison"'), SRC.indexOf('<div id="view-portfolio"'));
+  assert.ok(view.indexOf('cmpOutBody') < view.indexOf('cmpSummary'));
+  assert.match(view, /proposed/);
+  assert.match(view, /OD-12/);
+  assert.doesNotMatch(SRC, /fetch\([^)]*comparison\/v1-v2[^)]*method/);
+});
+

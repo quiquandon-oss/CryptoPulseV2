@@ -792,28 +792,100 @@
   </div>
 
   <div id="view-comparison" class="hidden">
-    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpOutTitle">
-      <h2 id="cmpOutTitle" class="text-lg font-bold tracking-tight mb-1">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2 baseline vs V2 final, read-only</span></h2>
-      <p class="text-xs text-[#BAC9CD] mb-3">Each V2 decision (BTC) is paired with the V1 reading available at that moment (at most 3 h old) and scored against the market once it resolves. Observes both engines and never changes either. V1 is not probabilistic, so its direction uses a <b>proposed</b> convention (above 55 = up, below 45 = down, otherwise no call; owner decision OD-12, not production logic), shown with the 50/50 and 40/60 bands beside it.</p>
-      <div class="flex flex-wrap items-center gap-2 mb-3">
-        <div id="cmpHorizon" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit"></div>
-        <div id="cmpOutPresets" role="group" aria-label="Decision period" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit"></div>
-      </div>
-      <div id="cmpOutBody" class="text-xs" role="status">Loading…</div>
-    </section>
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpTitle">
-      <h2 id="cmpTitle" class="text-base font-bold tracking-tight mb-1">Sentiment levels <span class="text-xs font-normal text-[#BAC9CD]">· descriptive</span></h2>
-      <p class="text-xs text-[#BAC9CD] mb-3">V1 and V2 sentiment at the same timestamps. Levels only, no market outcomes; the outcome-based figures are above.</p>
-      <div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit mb-3"></div>
-      <div id="cmpSummary" class="text-xs" role="status">Loading…</div>
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0"><h2 id="cmpTitle" class="text-lg font-bold tracking-tight">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2 baseline vs V2 final, read-only</span></h2>
+        <p class="text-xs text-[#BAC9CD] mt-1">BTC. Each V2 prediction is a decision; V1's reading at or before it (at most 3 h old) is aligned to it, and all three are scored against the same resolved market outcome. Read from the backend's comparison route; nothing here changes either engine.</p></div>
+        <div class="flex gap-2 flex-wrap"><div id="cmpHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div><div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+      </div>
+      <div id="cmpOutcome" class="mt-3 text-xs" role="status">Loading…</div>
     </section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpRecTitle"><h3 id="cmpRecTitle" class="text-sm font-semibold mb-1">Recent aligned decisions</h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Newest first, up to 50. V1 direction uses the proposed 45/55 band; "—" means V1 had no reading within 3 h. Outcomes appear only after resolution.</p>
+      <div id="cmpRecords" class="overflow-x-auto text-xs">Loading…</div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpSentTitle"><h3 id="cmpSentTitle" class="text-sm font-semibold mb-1">Sentiment levels <span class="text-[#BAC9CD] font-normal text-xs">· descriptive</span></h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">V1 and V2 sentiment at the same timestamps (no outcomes). Same range as above.</p>
+      <div id="cmpSummary" class="text-xs" role="status">Loading…</div></section>
   </div>
 
   <div id="view-portfolio" class="hidden">
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfTitle">
-      <h2 id="pfTitle" class="text-lg font-bold tracking-tight mb-1">Portfolio</h2>
-      <p class="text-xs text-[#BAC9CD]"><span class="inline-block px-1.5 py-0.5 rounded bg-[#3B494C]/60 text-[10px] font-semibold mr-1">NOT YET AVAILABLE</span>The V2 portfolio ledger (accounts, transactions, average cost, P&amp;L, allocation, import/export) is the next frontend stage. Nothing is shown in its place and no portfolio data is read or stored by this page yet. The V1 portfolio keeps working in V1.</p>
+      <h2 id="pfTitle" class="text-lg font-bold tracking-tight">Portfolio <span class="text-xs font-normal text-[#BAC9CD]">· personal accounting, USD reporting</span></h2>
+      <p id="pfStorageNote" class="text-[11px] text-[#8A9599] mt-1"></p>
+      <p id="pfPriceNote" class="text-[11px] text-[#8A9599] mt-0.5" role="status"></p>
+      <p class="text-[10px] text-[#8A9599] mt-0.5">Separate from the prediction engines: nothing here reads or changes sentiment, predictions or model settings. Not investment advice.</p>
     </section>
+
+    <div id="pf-holdings">
+      <div class="flex items-center gap-2 mb-3 flex-wrap"><label class="flex flex-col gap-0.5 min-w-0 w-64 max-w-full"><span class="text-[10px] text-[#8A9599]">View</span><select id="pfAccountFilter" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label></div>
+      <div id="pfKpis" class="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 text-xs"></div>
+      <ul id="pfIssues" class="space-y-1 text-[11px] mb-3"></ul>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfPosTitle"><h3 id="pfPosTitle" class="text-sm font-semibold mb-2">Holdings</h3>
+        <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Quantity</th><th class="py-1 px-2 font-normal text-right">Price</th><th class="py-1 px-2 font-normal text-right">Value</th><th class="py-1 px-2 font-normal text-right">Avg cost</th><th class="py-1 px-2 font-normal text-right">Cost basis</th><th class="py-1 px-2 font-normal text-right">Unrealised</th><th class="py-1 px-2 font-normal text-right">Realised</th></tr></thead><tbody id="pfPositions"></tbody></table></div>
+        <p class="text-[10px] text-[#8A9599] mt-2">Average-cost method. Fees paid in the price currency are part of the cost; a fee paid in the asset reduces the quantity. Internal transfers move quantity and cost between accounts without a buy or a sell. A cost recorded in another currency without an FX rate stays in that currency and is never converted with a guessed rate.</p>
+      </section>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfAllocTitle"><h3 id="pfAllocTitle" class="text-sm font-semibold mb-1">Allocation</h3><p id="pfAllocNote" class="text-[11px] text-[#8A9599] mb-2"></p>
+          <div class="relative h-[240px]"><canvas id="pfAllocChart" role="img" aria-label="Allocation of priced holdings by market value"></canvas></div></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfValueTitle"><div class="flex items-center justify-between flex-wrap gap-2 mb-1"><h3 id="pfValueTitle" class="text-sm font-semibold">Value history</h3><div id="pfValuePresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+          <p id="pfValueNote" class="text-[11px] text-[#8A9599] mb-2"></p><div class="relative h-[240px]"><canvas id="pfValueChart" role="img" aria-label="Portfolio value over time, recorded on this device"></canvas></div></section>
+      </div>
+    </div>
+
+    <div id="pf-transactions" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfAccTitle"><h3 id="pfAccTitle" class="text-sm font-semibold mb-2">Accounts</h3>
+          <ul id="pfAccountsList" class="text-xs space-y-0.5 mb-3"></ul>
+          <div class="grid grid-cols-2 gap-2"><label class="flex flex-col gap-0.5 min-w-0 col-span-2"><span class="text-[10px] text-[#8A9599]">Name</span><input id="pfAccName" maxlength="40" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="e.g. Revolut"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Kind</span><select id="pfAccKind" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option>exchange</option><option>wallet</option><option>bank</option></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Base currency</span><select id="pfAccCcy" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option>USD</option><option>EUR</option><option>GBP</option><option>CHF</option></select></label></div>
+          <button type="button" id="pfAccAdd" class="mt-2 px-3 py-1.5 rounded-lg bg-[#00E0FF] text-[#0B0E11] text-xs font-semibold">Add account</button><p id="pfAccMsg" class="text-[11px] mt-1"></p>
+        </section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6 lg:col-span-2" aria-labelledby="pfTxTitle"><h3 id="pfTxTitle" class="text-sm font-semibold mb-2">Add a transaction <span class="text-[#8A9599] font-normal text-[11px]">(rows are never edited; use Reverse to correct)</span></h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Account</span><select id="pfTxAccount" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Type</span><select id="pfTxType" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option value="buy">Buy</option><option value="sell">Sell</option><option value="deposit">Deposit (cash)</option><option value="withdrawal">Withdrawal (cash)</option><option value="reward">Reward / staking</option><option value="fee">Fee</option></select></label>
+            <label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Date and time (UTC)</span><input id="pfTxDate" type="datetime-local" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0"><span id="pfTxAssetLabel" class="text-[10px] text-[#8A9599]">Asset</span><input id="pfTxAsset" maxlength="10" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full uppercase" placeholder="BTC"></label>
+            <label class="flex flex-col gap-0.5 min-w-0"><span id="pfTxQtyLabel" class="text-[10px] text-[#8A9599]">Quantity</span><input id="pfTxQty" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label>
+            <div id="pfFieldPrice" class="contents"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Price per unit</span><input id="pfTxPrice" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Price currency</span><select id="pfTxPriceCcy" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"><option>USD</option><option>EUR</option><option>GBP</option><option>CHF</option></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">FX to USD (if not USD)</span><input id="pfTxFx" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="e.g. 1.0812"></label></div>
+            <div id="pfFieldFee" class="contents"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Fee</span><input id="pfTxFee" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Fee currency</span><input id="pfTxFeeCcy" maxlength="10" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full uppercase" placeholder="price ccy or asset"></label></div>
+            <label class="flex flex-col gap-0.5 min-w-0 col-span-2"><span class="text-[10px] text-[#8A9599]">Note</span><input id="pfTxNote" maxlength="200" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label>
+          </div>
+          <button type="button" id="pfTxAdd" class="mt-2 px-3 py-1.5 rounded-lg bg-[#00E0FF] text-[#0B0E11] text-xs font-semibold">Add transaction</button><p id="pfTxMsg" class="text-[11px] mt-1"></p>
+          <h4 class="text-xs font-semibold mt-4 mb-2">Transfer between my accounts</h4>
+          <div class="grid grid-cols-2 sm:grid-cols-6 gap-2"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">From</span><select id="pfTrFrom" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">To</span><select id="pfTrTo" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Asset</span><input id="pfTrAsset" maxlength="10" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full uppercase" placeholder="BTC"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Sent</span><input id="pfTrSent" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Received (if less: network fee)</span><input id="pfTrRecv" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Date (UTC)</span><input id="pfTrDate" type="datetime-local" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></label></div>
+          <button type="button" id="pfTrAdd" class="mt-2 px-3 py-1.5 rounded-lg border border-[#00E0FF] text-[#00E0FF] text-xs font-semibold">Record transfer</button><p id="pfTrMsg" class="text-[11px] mt-1"></p>
+        </section>
+      </div>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfIoTitle"><h3 id="pfIoTitle" class="text-sm font-semibold mb-2">Import and export</h3>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <button type="button" id="pfExportCsv" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export CSV</button>
+          <button type="button" id="pfExportJson" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export full backup (JSON)</button>
+          <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / JSON…<input id="pfImportFile" type="file" accept=".csv,.json,text/csv,application/json" class="hidden"></label>
+          <button type="button" id="pfImportV1" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import from V1 backup</button>
+        </div>
+        <p class="text-[10px] text-[#8A9599] mt-2">CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
+        <p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
+      </section>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfLedgerTitle"><h3 id="pfLedgerTitle" class="text-sm font-semibold mb-1">Ledger</h3><p id="pfLedgerCount" class="text-[11px] text-[#8A9599] mb-2"></p>
+        <div class="overflow-x-auto max-h-[520px] overflow-y-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Date (UTC)</th><th class="py-1 px-2 font-normal ">Type</th><th class="py-1 px-2 font-normal ">Account</th><th class="py-1 px-2 font-normal ">Asset · qty</th><th class="py-1 px-2 font-normal ">Price · fee · FX</th><th class="py-1 px-2 font-normal ">Note</th><th class="py-1 px-2 font-normal "></th></tr></thead><tbody id="pfLedger"></tbody></table></div>
+      </section>
+    </div>
+
+    <div id="pf-planning" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfDryTitle"><h3 id="pfDryTitle" class="text-sm font-semibold mb-1">Dry powder planner</h3>
+          <p id="pfCashLine" class="text-[11px] text-[#8A9599] mb-2"></p>
+          <div class="grid grid-cols-2 gap-2"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Asset</span><select id="pfDryAsset" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Amount to deploy (USD)</span><input id="pfDryAmount" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="1000"></label></div>
+          <p id="pfDryOut" class="text-xs mt-2 text-[#BAC9CD]" role="status"></p><p class="text-[10px] text-[#8A9599] mt-1">Same rule as V1: the amount buys at the current price and is blended into the average cost.</p></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfBeTitle"><h3 id="pfBeTitle" class="text-sm font-semibold mb-1">Break-even prices</h3>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Break-even (avg cost)</th><th class="py-1 px-2 font-normal text-right">Price now</th><th class="py-1 px-2 font-normal text-right">Move needed</th></tr></thead><tbody id="pfBreakEven"></tbody></table></div>
+          <p class="text-[10px] text-[#8A9599] mt-1">The probability of reaching break-even (V1's scenario model) is not migrated yet; it is listed as a follow-up and nothing is shown in its place.</p></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfScTitle"><h3 id="pfScTitle" class="text-sm font-semibold mb-1">Scenarios</h3><p class="text-[11px] text-[#8A9599] mb-2">Assumption: every held asset moves by the same percentage from today's price. An illustration, not a forecast.</p>
+          <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Move</th><th class="py-1 px-2 font-normal text-right">Portfolio value</th><th class="py-1 px-2 font-normal text-right">P&amp;L vs cost basis</th></tr></thead><tbody id="pfScenarios"></tbody></table></div></section>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfNarrTitle"><h3 id="pfNarrTitle" class="text-sm font-semibold mb-1">Narrative <span class="text-[#BAC9CD] font-normal text-xs">· Gemini via V1</span></h3>
+          <p class="text-[11px] text-[#8A9599] mb-2">The V1 Narrative capability: Gemini's own read of 2–3 medium/long-term themes for your holdings. Runs only when you click, through V1's existing route and free Gemini quota; only holding weights are sent.</p>
+          <button type="button" id="pfNarrativeBtn" class="px-3 py-1.5 rounded-lg border border-[#A78BFA] text-[#A78BFA] text-xs font-semibold disabled:opacity-40">Ask for the narrative</button>
+          <div id="pfNarrativeOut" class="text-xs mt-2" role="status"></div></section>
+      </div>
+    </div>
   </div>
 
   <div id="view-alerts" class="hidden">
@@ -821,6 +893,13 @@
       <h2 id="alTitle" class="text-lg font-bold tracking-tight mb-1">Alerts <span class="text-xs font-normal text-[#BAC9CD]">· operational</span></h2>
       <p class="text-xs text-[#BAC9CD] mb-3">Health of the V2 production chain, read from the same sources as the Overview status panel. V1's own price/market alerts and their Telegram delivery stay in V1 and are not shown here yet.</p>
       <div id="alertsStatusBody" class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="status"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
+    </section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="v1AlTitle">
+      <h2 id="v1AlTitle" class="text-sm font-semibold mb-1">V1 market alerts <span class="text-[#BAC9CD] font-normal text-xs">· read-only</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-3">Configured and evaluated in V1 (every 15 minutes) and delivered by V1's Telegram integration. Shown as V1 stores them; to create, change or test an alert use V1. Nothing here sends a message or changes V1.</p>
+      <div id="v1AlConfigs" class="text-xs mb-3" role="status">Loading…</div>
+      <h3 class="text-xs font-semibold mb-1">Recent alerts fired</h3>
+      <div id="v1AlLog" class="text-xs" role="status">Loading…</div>
     </section>
   </div>
 
@@ -1593,7 +1672,10 @@ function coverageNote(coverage, key, now){
 // (id view-<name>) each route shows; the first one is the internal activeView key the loaders already use. ----
 var AREAS = [
   { key: 'overview', label: 'Overview', icon: 'monitoring', views: ['dashboard'] },
-  { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', views: ['portfolio'] },
+  { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', tabs: [
+    { key: 'holdings', label: 'Holdings', views: ['portfolio'] },
+    { key: 'transactions', label: 'Transactions', views: ['portfolio'] },
+    { key: 'planning', label: 'Planning', views: ['portfolio'] }] },
   { key: 'sentiment-v1', label: 'Sentiment V1', short: 'V1', icon: 'history_edu', views: ['sentiment-v1'] },
   { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
     { key: 'overview', label: 'Overview', views: ['sentiment'] },
@@ -1637,47 +1719,6 @@ function cmpSentimentSummary(rows){
     meanAbsDiff: round1(diffs.reduce((a, b) => a + Math.abs(b), 0) / diffs.length),
     sameSide: same, decided, sameSideRate: decided ? same / decided : null, firstTs: Math.min(...both.map((r) => r.ts)),
     lastTs: last.ts, last: { ts: last.ts, v1: last.v1, v2: last.v2 } };
-}
-// ---- Outcome-based V1/V2 comparison (contracts §7, OD-12): view model for GET /api/comparison/v1-v2/summary and
-// /api/comparison/v1-v2 (PulseWorkerV2, read-only). Figures are passed through from the backend; this only labels
-// them, keeps n and the Wilson interval beside every rate and never ranks below the backend's sample rule. ----
-var CMP_STATUS_TEXT = { insufficient_sample: 'Insufficient sample: fewer than 30 resolved decisions with a V1 reading. No ranking is possible yet.',
-  no_supported_difference: 'No supported difference: the Wilson 95% intervals overlap, or n is below 100.',
-  v1_higher_observational: 'V1 higher (observational, not pre-registered).', v2_higher_observational: 'V2 final higher (observational, not pre-registered).' };
-var CMP_FINAL_REASON = { glm_applied: 'GLM applied', no_adjustment: 'no GLM adjustment', glm_out_of_scope: 'GLM out of scope (BTC 24h only)' };
-function cmpOutcomeModel(summaryRes, recordsRes){
-  const fail = (res) => {
-    const e = String((res && res.error) || '');
-    return /404|not found/i.test(e) ? { state: 'unavailable', note: 'The outcome comparison route is not deployed on this backend yet.' }
-      : { state: 'error', note: 'The outcome comparison could not be loaded' + (res && res.data && res.data.reason ? ` (${res.data.reason})` : '') + '.' };
-  };
-  if(!summaryRes || !summaryRes.ok) return fail(summaryRes);
-  const d = summaryRes.data || {}, s = d.summary;
-  if(!s || typeof s !== 'object') return { state: 'error', note: 'The comparison response has an unexpected shape.' };
-  const pct = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v * 1000) / 10 : null);
-  const accRow = (label, a, extra) => ({ label, n: a ? a.n : 0, correct: a ? a.correct : 0, ratePct: pct(a && a.rate),
-    ciPct: a && Array.isArray(a.ci95) ? a.ci95.map(pct) : null, ...extra });
-  const acc = s.accuracy || {};
-  const recs = recordsRes && recordsRes.ok && Array.isArray((recordsRes.data || {}).records) ? recordsRes.data.records : [];
-  return {
-    state: 'ok', status: s.status, claim: s.claim, claimText: CMP_STATUS_TEXT[s.claim] || CMP_STATUS_TEXT[s.status] || String(s.claim || ''),
-    sufficient: s.status === 'ok', asset: d.asset, horizon: d.horizon_hours, period: d.period, truncated: !!d.truncated, generatedTs: d.generated_ts,
-    counts: { aligned: s.n_aligned || 0, resolved: s.n_resolved || 0, pairs: s.n_resolved_pairs || 0, v1CoveragePct: pct(s.v1_coverage),
-      fromComposite: (s.v1_sources || {}).server_composite_readings || 0, fromHistory: (s.v1_sources || {}).history || 0, v1Missing: (s.v1_sources || {}).missing || 0 },
-    accuracy: [accRow('V1 (proposed 45/55)', acc.v1, { proposed: true }), accRow('V2 baseline (before GLM)', acc.v2_baseline), accRow('V2 final (after GLM)', acc.v2_final)],
-    noCallPct: { v1: pct((s.no_call_rate || {}).v1), v2b: pct((s.no_call_rate || {}).v2_baseline), v2f: pct((s.no_call_rate || {}).v2_final) },
-    agreement: [['V1 ↔ V2 baseline', (s.agreement || {}).v1_v2_baseline], ['V1 ↔ V2 final', (s.agreement || {}).v1_v2_final], ['V2 baseline ↔ V2 final', (s.agreement || {}).v2_baseline_v2_final]]
-      .map(([label, a]) => ({ label, n: a ? a.n : 0, ratePct: pct(a && a.rate) })),
-    brier: { v2b: (s.brier || {}).v2_baseline || { n: 0, score: null }, v2f: (s.brier || {}).v2_final || { n: 0, score: null } },
-    bands: (Array.isArray(s.v1_bands) ? s.v1_bands : []).map((b) => ({ band: b.band, proposed: !!b.proposed, coveragePct: pct(b.coverage),
-      noCallPct: pct(b.no_call_rate), acc: accRow(b.band, b.accuracy) })),
-    glm: s.glm || { rows_in_scope: 0, adjusted: 0, changed_calls: 0, mean_abs_adjustment: null },
-    records: recs.slice(0, 25).map((r) => ({ ts: r.decision_ts, v1: r.v1 && r.v1.score != null ? r.v1.score : null, v1Source: r.v1 ? r.v1.source : null,
-      v1Dir: r.v1 ? r.v1.direction : null, v2b: r.v2_baseline ? r.v2_baseline.p_up : null, v2bDir: r.v2_baseline ? r.v2_baseline.direction : null,
-      v2f: r.v2_final ? r.v2_final.p_up : null, v2fDir: r.v2_final ? r.v2_final.direction : null,
-      finalReason: r.v2_final ? (CMP_FINAL_REASON[r.v2_final.reason] || r.v2_final.reason) : null,
-      outcome: r.outcome && r.outcome.status === 'resolved' ? r.outcome.direction : 'pending' })),
-  };
 }
 // ---- Forecast coverage (contracts §4.4): per model and horizon, what exists in the window and which origins only
 // one model covers. Counts persisted forecasts only; a missing forecast is reported, never filled. ----
@@ -1739,6 +1780,258 @@ function foufiModel(res, now){
   if(!items.length) return { state: 'empty', items: [], note: 'V1 has no Foufi digest yet.' };
   const stale = now - items[0].publishedTs > FOUFI_STALE_HOURS * 3600000;
   return { state: 'ok', items, stale, latestTs: items[0].publishedTs };
+}
+// ---- Comparison, outcome-based (contracts §7; PulseWorkerV2 #182 /api/comparison/v1-v2[/summary], cmp-v1-v2-1).
+// Values are the Worker's; nothing is recomputed here. The 55/45 V1 band is a PROPOSED convention (OD-12). ----
+var CMP_CLAIM_TEXT = {
+  insufficient_sample: 'Too few resolved aligned outcomes (under 30) to compare the engines.',
+  no_supported_difference: 'No difference supported by the data (intervals overlap, or under 100 calls on a side).',
+  v1_higher_observational: 'V1 called the direction correctly more often than V2 on these decisions, and the 95% intervals do not overlap.',
+  v2_higher_observational: 'V2 called the direction correctly more often than V1 on these decisions, and the 95% intervals do not overlap.' };
+function cmpSummaryModel(res){
+  if(!res || !res.ok){
+    const d = res && res.data, err = (res && res.error) || 'request failed';
+    if(err === 'not_found') return { state: 'not_deployed', note: 'The comparison route is not live on this backend yet (PulseWorkerV2 #182 is merged; its production deploy is pending).' };
+    return { state: 'error', note: 'The comparison could not be loaded (' + err + (d && d.reason ? ', ' + d.reason : '') + ').' };
+  }
+  const d = res.data, s = d && d.summary;
+  if(!s || typeof s !== 'object') return { state: 'error', note: 'Unexpected response from the comparison route.' };
+  const acc = (a) => (a && typeof a.n === 'number' ? { n: a.n, correct: a.correct, rate: a.rate, ci: Array.isArray(a.ci95) ? a.ci95 : null } : { n: 0, correct: 0, rate: null, ci: null });
+  return { state: s.n_aligned ? 'ok' : 'empty', version: d.version || null, period: d.period, horizon: d.horizon_hours, generated: d.generated_ts, truncated: !!d.truncated,
+    status: s.status, claim: s.claim, claimText: CMP_CLAIM_TEXT[s.claim] || String(s.claim || ''), observational: /_observational$/.test(String(s.claim || '')),
+    nAligned: s.n_aligned, nResolved: s.n_resolved, nResolvedPairs: s.n_resolved_pairs, v1Coverage: s.v1_coverage, v1Sources: s.v1_sources || {},
+    noCall: s.no_call_rate || {}, agreement: s.agreement || {}, accV1: acc(s.accuracy && s.accuracy.v1), accV2b: acc(s.accuracy && s.accuracy.v2_baseline), accV2f: acc(s.accuracy && s.accuracy.v2_final),
+    brierV2b: s.brier && s.brier.v2_baseline ? s.brier.v2_baseline : null, brierV2f: s.brier && s.brier.v2_final ? s.brier.v2_final : null,
+    bands: Array.isArray(s.v1_bands) ? s.v1_bands : [], glm: s.glm || {}, methodology: d.methodology || {} };
+}
+function cmpRecordRows(res, n){
+  const recs = res && res.ok && res.data && Array.isArray(res.data.records) ? res.data.records : null;
+  if(!recs) return null;
+  return recs.slice(0, n).map((r) => ({ ts: r.decision_ts, target: r.target_ts, sha: r.git_commit_sha ? String(r.git_commit_sha).slice(0, 7) : null,
+    v1: r.v1 && r.v1.score !== null && r.v1.score !== undefined ? { score: r.v1.score, dir: r.v1.direction, source: r.v1.source, ageMin: r.v1.age_ms !== null ? Math.round(r.v1.age_ms / 60000) : null } : null,
+    v1Missing: r.v1 ? r.v1.missing_reason : 'missing', base: r.v2_baseline || {}, fin: r.v2_final || {}, outcome: r.outcome || { status: 'pending' } }));
+}
+// ---- V1 alerts, read-only (contracts §9): GET /alert-configs and GET /alert-log?limit=50. V1 evaluates them every
+// 15 min and delivers through its own Telegram integration; V2 never creates, edits, toggles or tests them. ----
+function v1AlertsModel(cfgRes, logRes, now){
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const cfgs = cfgRes && cfgRes.ok && cfgRes.data && Array.isArray(cfgRes.data.configs) ? cfgRes.data.configs : null;
+  const log = logRes && logRes.ok && logRes.data && Array.isArray(logRes.data.log) ? logRes.data.log : null;
+  const params = (j) => { try{ const o = JSON.parse(j || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? Object.entries(o).slice(0, 8).map(([k, v]) => k + ' ' + (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(' · ') : ''; }catch(e){ return 'unreadable parameters'; } };
+  return {
+    configsState: cfgs ? (cfgs.length ? 'ok' : 'empty') : 'error', logState: log ? (log.length ? 'ok' : 'empty') : 'error',
+    configsError: cfgs ? '' : (cfgRes && cfgRes.error) || 'not loaded', logError: log ? '' : (logRes && logRes.error) || 'not loaded',
+    configs: (cfgs || []).map((c) => ({ id: num(c.id), type: String(c.type || 'unknown'), enabled: c.enabled === 1 || c.enabled === true, params: params(c.params_json),
+      cooldownMin: num(c.cooldown_minutes), lastFired: num(c.last_fired_ts), fireCount: num(c.fire_count) || 0 })).sort((a, b) => (b.enabled - a.enabled) || ((b.lastFired || 0) - (a.lastFired || 0))),
+    log: (log || []).filter((l) => num(l.ts) !== null).map((l) => ({ ts: l.ts, type: String(l.type || ''), message: String(l.message || '').slice(0, 400), configId: num(l.config_id) })).sort((a, b) => b.ts - a.ts),
+    enabledCount: (cfgs || []).filter((c) => c.enabled === 1 || c.enabled === true).length,
+    lastFired: (log || []).reduce((m, l) => (num(l.ts) !== null && l.ts > m ? l.ts : m), 0) || null };
+}
+// ---- Portfolio accounting (contracts §8; temporary V1-equivalent security, owner decision OD-06). Pure functions:
+// the ledger is append-only (corrections are reversal rows), USD is the reporting currency, a missing FX rate is
+// reported and never guessed. Nothing here reads or writes sentiment, predictions, weights or outcomes. ----
+var PF_TYPES = ['buy', 'sell', 'deposit', 'withdrawal', 'transfer_out', 'transfer_in', 'reward', 'fee', 'reversal'];
+var PF_FIAT = ['USD', 'EUR', 'GBP', 'CHF'];
+var PF_ACCOUNT_KINDS = ['exchange', 'wallet', 'bank'];
+var PF_EPS = 1e-12;
+function pfNum(v){ const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v; return typeof n === 'number' && isFinite(n) ? n : null; }
+function pfAsset(v){ const a = String(v || '').trim().toUpperCase(); return /^[A-Z0-9]{2,10}$/.test(a) ? a : null; }
+function pfIsFiat(a){ return PF_FIAT.includes(a); }
+// Validation of one new transaction against the stored ledger. Returns a list of errors (empty = valid).
+function pfValidateTx(tx, store, now){
+  const e = [];
+  if(!tx || typeof tx !== 'object') return ['not a transaction'];
+  if(!PF_TYPES.includes(tx.type)) e.push('unknown type');
+  const accounts = (store && store.accounts) || [], txs = (store && store.txs) || [];
+  if(tx.type !== 'reversal' && !accounts.some((a) => a.id === tx.account_id)) e.push('unknown account');
+  if(pfNum(tx.ts) === null) e.push('invalid date');
+  else if(tx.ts > now + 86400000) e.push('date is in the future');
+  if(txs.some((t) => t.id === tx.id)) e.push('duplicate id');
+  const qty = pfNum(tx.qty), price = pfNum(tx.price), fee = pfNum(tx.fee), fx = pfNum(tx.fx_to_usd);
+  const needAsset = () => { if(!pfAsset(tx.asset)) e.push('asset must be 2-10 letters/digits'); };
+  const needQty = () => { if(qty === null || qty <= 0) e.push('quantity must be above 0'); };
+  if(tx.type === 'buy' || tx.type === 'sell'){
+    needAsset(); needQty();
+    if(pfIsFiat(pfAsset(tx.asset))) e.push('buy/sell a crypto asset; use deposit/withdrawal for cash');
+    if(price === null || price <= 0) e.push('price must be above 0');
+    if(!pfIsFiat(tx.price_ccy)) e.push('price currency must be one of ' + PF_FIAT.join(', '));
+  }
+  if(tx.type === 'deposit' || tx.type === 'withdrawal'){ needQty(); if(!pfIsFiat(pfAsset(tx.asset))) e.push('cash currency must be one of ' + PF_FIAT.join(', ')); }
+  if(tx.type === 'transfer_out' || tx.type === 'transfer_in'){ needAsset(); needQty(); if(!tx.transfer_id) e.push('transfer id required'); }
+  if(tx.type === 'reward'){ needAsset(); needQty(); if(price !== null && (price < 0 || !pfIsFiat(tx.price_ccy))) e.push('reward value needs a price ≥ 0 and a cash currency'); }
+  if(tx.type === 'fee'){ needAsset(); needQty(); }
+  if(fee !== null && fee < 0) e.push('fee cannot be negative');
+  if(fee !== null && fee > 0 && !(pfIsFiat(tx.fee_ccy) || pfAsset(tx.fee_ccy) === pfAsset(tx.asset))) e.push('fee currency must be the price currency, a cash currency or the asset itself');
+  if(fx !== null && fx <= 0) e.push('FX rate must be above 0');
+  if(tx.type === 'reversal'){
+    const target = txs.find((t) => t.id === tx.reverses_id);
+    if(!target) e.push('reversal must point to an existing transaction');
+    else if(target.type === 'reversal') e.push('a reversal cannot be reversed; enter the transaction again');
+    else if(txs.some((t) => t.type === 'reversal' && t.reverses_id === target.id)) e.push('already reversed');
+  }
+  return e;
+}
+// Amount in USD: USD as is; another currency only with a positive rate (the transaction's own, or the store's
+// rate table for that currency and day if the user supplied one). Otherwise null = unknown.
+function pfUsd(amount, ccy, fx){ if(amount === null) return null; if(ccy === 'USD') return amount; return fx !== null && fx > 0 ? amount * fx : null; }
+function pfCompute(store, prices, fxNow){
+  const accounts = (store && store.accounts) || [], all = (store && store.txs) || [];
+  const reversed = new Set(all.filter((t) => t.type === 'reversal').map((t) => t.reverses_id));
+  const ORDER = { deposit: 0, transfer_out: 1, transfer_in: 2, buy: 3, reward: 4, sell: 5, fee: 6, withdrawal: 7 };
+  const active = all.map((t, i) => ({ t, i })).filter(({ t }) => t.type !== 'reversal' && !reversed.has(t.id))
+    .sort((a, b) => (a.t.ts - b.t.ts) || (ORDER[a.t.type] - ORDER[b.t.type]) || (a.i - b.i)).map(({ t }) => t);
+  const acc = {}; for(const a of accounts) acc[a.id] = { id: a.id, name: a.name, kind: a.kind, pos: {}, cash: {}, feesUsd: 0, feesKnown: true };
+  const issues = [], pending = {};
+  const P = (A, asset) => (A.pos[asset] = A.pos[asset] || { asset, qty: 0, costUsd: 0, costKnown: true, costByCcy: {}, realizedUsd: 0, realizedKnown: true, rewardsUsd: 0, rewardNoPrice: false });
+  const addCcy = (p, ccy, v) => { p.costByCcy[ccy] = (p.costByCcy[ccy] || 0) + v; };
+  const remove = (p, q) => { // takes q units out at average cost; returns the cost removed
+    const r = p.qty > PF_EPS ? Math.min(1, q / p.qty) : 0;
+    const out = { costUsd: p.costKnown ? p.costUsd * r : null, byCcy: {} };
+    for(const [c, v] of Object.entries(p.costByCcy)){ out.byCcy[c] = v * r; p.costByCcy[c] = v - v * r; }
+    if(p.costKnown) p.costUsd -= out.costUsd;
+    p.qty -= q; if(Math.abs(p.qty) < 1e-10){ p.qty = 0; p.costUsd = p.costKnown ? 0 : p.costUsd; for(const c in p.costByCcy) p.costByCcy[c] = 0; }
+    return out;
+  };
+  for(const t of active){
+    const A = acc[t.account_id];
+    if(!A){ issues.push({ id: t.id, code: 'unknown_account', text: 'Transaction for an account that does not exist; ignored.' }); continue; }
+    const asset = pfAsset(t.asset), qty = pfNum(t.qty) || 0, price = pfNum(t.price), fx = pfNum(t.fx_to_usd);
+    const fee = pfNum(t.fee) || 0, feeCcy = t.fee_ccy ? String(t.fee_ccy).toUpperCase() : t.price_ccy;
+    const feeInAsset = fee > 0 && feeCcy === asset, feeQuote = fee > 0 && !feeInAsset && feeCcy === t.price_ccy ? fee : 0;
+    const feeOther = fee > 0 && !feeInAsset && !feeQuote ? fee : 0;
+    if(feeOther){ A.cash[feeCcy] = (A.cash[feeCcy] || 0) - feeOther; const u = pfUsd(feeOther, feeCcy, feeCcy === t.price_ccy ? fx : null); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
+    if(t.type === 'deposit' || t.type === 'withdrawal'){ A.cash[asset] = (A.cash[asset] || 0) + (t.type === 'deposit' ? qty : -qty); continue; }
+    if(t.type === 'buy'){
+      const p = P(A, asset), total = qty * price + feeQuote, u = pfUsd(total, t.price_ccy, fx);
+      p.qty += qty - (feeInAsset ? fee : 0); addCcy(p, t.price_ccy, total);
+      if(u === null){ p.costKnown = false; issues.push({ id: t.id, code: 'fx_missing', text: `${asset} buy in ${t.price_ccy} has no FX rate to USD: its USD cost is unknown.` }); } else if(p.costKnown) p.costUsd += u;
+      if(feeQuote){ const fu = pfUsd(feeQuote, t.price_ccy, fx); if(fu === null) A.feesKnown = false; else A.feesUsd += fu; }
+      A.cash[t.price_ccy] = (A.cash[t.price_ccy] || 0) - total; continue;
+    }
+    if(t.type === 'sell'){
+      const p = P(A, asset);
+      let q = qty + (feeInAsset ? fee : 0);
+      if(q > p.qty + 1e-9){ issues.push({ id: t.id, code: 'oversell', text: `${asset} sell of ${qty} exceeds the ${+p.qty.toFixed(10)} held in ${A.name}; only what is held is counted.` }); q = Math.max(0, p.qty); }
+      const sold = Math.min(qty, q), proceeds = sold * price - feeQuote, pu = pfUsd(proceeds, t.price_ccy, fx);
+      const out = remove(p, q);
+      if(pu === null || out.costUsd === null){ p.realizedKnown = false; if(pu === null) issues.push({ id: t.id, code: 'fx_missing', text: `${asset} sell in ${t.price_ccy} has no FX rate to USD: realised P&L in USD is unknown.` }); }
+      else p.realizedUsd += pu - out.costUsd;
+      if(feeQuote){ const fu = pfUsd(feeQuote, t.price_ccy, fx); if(fu === null) A.feesKnown = false; else A.feesUsd += fu; }
+      A.cash[t.price_ccy] = (A.cash[t.price_ccy] || 0) + proceeds; continue;
+    }
+    if(t.type === 'transfer_out'){
+      const p = P(A, asset); let q = qty;
+      if(q > p.qty + 1e-9){ issues.push({ id: t.id, code: 'overtransfer', text: `${asset} transfer of ${qty} exceeds what ${A.name} holds; only what is held is moved.` }); q = Math.max(0, p.qty); }
+      const known = p.costKnown, out = remove(p, q);
+      (pending[t.transfer_id] = pending[t.transfer_id] || []).push({ asset, qty: q, costUsd: out.costUsd, costKnown: known, byCcy: out.byCcy, from: A.name, id: t.id });
+      continue;
+    }
+    if(t.type === 'transfer_in'){
+      const p = P(A, asset), list = pending[t.transfer_id] || [], k = list.findIndex((m) => m.asset === asset);
+      if(k < 0){ p.qty += qty; p.costKnown = false; issues.push({ id: t.id, code: 'unmatched_transfer_in', text: `${asset} transfer into ${A.name} has no matching transfer out: its cost is unknown.` }); continue; }
+      const m = list.splice(k, 1)[0];
+      if(qty > m.qty + 1e-9) issues.push({ id: t.id, code: 'transfer_in_exceeds_out', text: `${asset} received (${qty}) is more than was sent (${m.qty}).` });
+      p.qty += qty; for(const [c, v] of Object.entries(m.byCcy)) addCcy(p, c, v);
+      if(!m.costKnown || m.costUsd === null) p.costKnown = false; else if(p.costKnown) p.costUsd += m.costUsd;
+      continue;   // a smaller amount received is the network fee, paid in the asset: the cost moves in full
+    }
+    if(t.type === 'reward'){
+      const p = P(A, asset); p.qty += qty;
+      if(price === null){ p.rewardNoPrice = true; issues.push({ id: t.id, code: 'reward_no_price', text: `${asset} reward without a value: counted at zero cost.` }); }
+      else { const u = pfUsd(qty * price, t.price_ccy, fx); addCcy(p, t.price_ccy, qty * price);
+        if(u === null){ p.costKnown = false; issues.push({ id: t.id, code: 'fx_missing', text: `${asset} reward valued in ${t.price_ccy} has no FX rate.` }); } else { if(p.costKnown) p.costUsd += u; p.rewardsUsd += u; } }
+      continue;
+    }
+    if(t.type === 'fee'){
+      if(pfIsFiat(asset)){ A.cash[asset] = (A.cash[asset] || 0) - qty; const u = pfUsd(qty, asset, fx); if(u === null) A.feesKnown = false; else A.feesUsd += u; }
+      else { const p = P(A, asset); p.qty -= Math.min(qty, Math.max(0, p.qty)); }   // a fee in the asset leaves the cost, raising the average
+      continue;
+    }
+  }
+  for(const [tid, list] of Object.entries(pending)) for(const m of list) issues.push({ id: m.id, code: 'in_transit', text: `${m.qty} ${m.asset} sent from ${m.from} (transfer ${tid}) has no matching receipt yet: not counted in any account.` });
+  const px = (a) => { const v = prices ? pfNum(prices[a]) : null; return v !== null && v > 0 ? v : null; };
+  const cashUsd = (cash) => { let s = 0, ok = true; for(const [c, v] of Object.entries(cash)){ if(Math.abs(v) < 1e-9) continue; const u = c === 'USD' ? v : (c === 'EUR' && pfNum(fxNow) ? v * fxNow : null); if(u === null) ok = false; else s += u; } return { usd: s, complete: ok }; };
+  const finish = (p) => { const price = px(p.asset), value = price !== null ? p.qty * price : null;
+    return { asset: p.asset, qty: p.qty, costUsd: p.costKnown ? p.costUsd : null, costByCcy: p.costByCcy, avgCostUsd: p.costKnown && p.qty > PF_EPS ? p.costUsd / p.qty : null,
+      price, valueUsd: value, unrealizedUsd: value !== null && p.costKnown ? value - p.costUsd : null,
+      realizedUsd: p.realizedKnown ? p.realizedUsd : null, rewardsUsd: p.rewardsUsd, rewardNoPrice: p.rewardNoPrice }; };
+  const outAccounts = Object.values(acc).map((A) => ({ id: A.id, name: A.name, kind: A.kind,
+    positions: Object.values(A.pos).filter((p) => Math.abs(p.qty) > PF_EPS || Math.abs(p.realizedUsd) > 1e-9).map(finish).sort((a, b) => a.asset < b.asset ? -1 : 1),
+    cash: A.cash, cashUsd: cashUsd(A.cash), feesUsd: A.feesKnown ? A.feesUsd : null }));
+  // Consolidated by asset: sums across accounts; a USD figure is known only if it is known in every account.
+  const cons = {};
+  for(const A of Object.values(acc)) for(const p of Object.values(A.pos)){
+    const c = cons[p.asset] = cons[p.asset] || { asset: p.asset, qty: 0, costUsd: 0, costKnown: true, costByCcy: {}, realizedUsd: 0, realizedKnown: true, rewardsUsd: 0, rewardNoPrice: false };
+    c.qty += p.qty; if(!p.costKnown) c.costKnown = false; else c.costUsd += p.costUsd;
+    for(const [k, v] of Object.entries(p.costByCcy)) c.costByCcy[k] = (c.costByCcy[k] || 0) + v;
+    if(!p.realizedKnown) c.realizedKnown = false; else c.realizedUsd += p.realizedUsd;
+    c.rewardsUsd += p.rewardsUsd; c.rewardNoPrice = c.rewardNoPrice || p.rewardNoPrice;
+  }
+  const positions = Object.values(cons).filter((p) => Math.abs(p.qty) > PF_EPS || Math.abs(p.realizedUsd) > 1e-9).map(finish).sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
+  const sum = (k) => { let s = 0, ok = true; for(const p of positions){ if(Math.abs(p.qty) <= PF_EPS && k !== 'realizedUsd') continue; if(p[k] === null) ok = false; else s += p[k]; } return { value: s, complete: ok }; };
+  const allCash = {}; for(const A of Object.values(acc)) for(const [c, v] of Object.entries(A.cash)) allCash[c] = (allCash[c] || 0) + v;
+  const totals = { valueUsd: sum('valueUsd'), costUsd: sum('costUsd'), unrealizedUsd: sum('unrealizedUsd'), realizedUsd: sum('realizedUsd'), cash: allCash, cashUsd: cashUsd(allCash) };
+  const held = positions.filter((p) => p.qty > PF_EPS && p.valueUsd !== null && p.valueUsd > 0);
+  const tv = held.reduce((s, p) => s + p.valueUsd, 0);
+  const allocation = tv > 0 ? held.map((p) => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : [];
+  return { accounts: outAccounts, positions, totals, allocation, issues, nActive: active.length, nReversed: reversed.size };
+}
+// V1 Dry Powder Planner rule (CryptoPulse index.html renderDryPowder): deploy `amountUsd` at the current price.
+function pfDryPowder(position, amountUsd, priceUsd){
+  const q = position && position.qty > 0 ? position.qty : 0, oldAvg = position && position.avgCostUsd !== null ? position.avgCostUsd : null;
+  if(!(priceUsd > 0) || !(amountUsd >= 0)) return null;
+  if(oldAvg === null && q > 0) return { unknown: true };
+  const oldCost = q * (oldAvg || 0), addQty = amountUsd / priceUsd, newQty = q + addQty, newCost = oldCost + amountUsd;
+  const newAvg = newQty > 0 ? newCost / newQty : 0;
+  return { oldAvg: oldAvg || 0, newAvg, oldCost, newCost, addQty, shiftPct: oldAvg > 0 ? (newAvg - oldAvg) / oldAvg * 100 : 0 };
+}
+// Scenario: every held price moves by the same percentage (an assumption, stated in the UI; not a forecast).
+function pfScenario(positions, pct){
+  let v = 0, cost = 0, complete = true;
+  for(const p of positions || []){ if(!(p.qty > PF_EPS)) continue; if(p.price === null){ complete = false; continue; } v += p.qty * p.price * (1 + pct / 100); if(p.costUsd === null) complete = false; else cost += p.costUsd; }
+  return { pct, valueUsd: v, pnlUsd: complete ? v - cost : null, complete };
+}
+// ---- CSV import/export. Columns are fixed; dates are UTC (YYYY-MM-DD or ISO date-time). ----
+var PF_CSV_COLUMNS = ['date', 'account', 'type', 'asset', 'qty', 'price', 'price_ccy', 'fee', 'fee_ccy', 'fx_to_usd', 'transfer_id', 'note'];
+function pfParseCsv(text){
+  const rows = []; let row = [], cell = '', q = false; const s = String(text || '').replace(/^﻿/, '');
+  for(let i = 0; i < s.length; i++){ const ch = s[i];
+    if(q){ if(ch === '"'){ if(s[i + 1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if(ch === '"') q = true; else if(ch === ','){ row.push(cell); cell = ''; } else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && s[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch; }
+  if(cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+function pfDateMs(v){ const s = String(v || '').trim(); if(!s) return null; const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? Date.parse(s + 'T00:00:00Z') : /^\d{4}-\d{2}-\d{2}T/.test(s) ? Date.parse(/Z|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z') : NaN; return isFinite(d) ? d : null; }
+function pfDedupKey(t, accountName){ return [accountName || t.account_id, t.ts, t.type, pfAsset(t.asset), pfNum(t.qty), pfNum(t.price)].join('|'); }
+// Rows → candidate transactions (ids assigned by the caller). Unknown accounts are listed, not created silently.
+function pfCsvRowsToTxs(rows){
+  if(!rows.length) return { header: false, items: [], errors: ['empty file'] };
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const missing = PF_CSV_COLUMNS.slice(0, 5).filter((c) => !head.includes(c));
+  if(missing.length) return { header: false, items: [], errors: ['missing columns: ' + missing.join(', ')] };
+  const col = (r, c) => { const i = head.indexOf(c); return i < 0 ? '' : String(r[i] || '').trim(); };
+  const items = rows.slice(1).map((r, k) => { const type = col(r, 'type').toLowerCase();
+    return { line: k + 2, accountName: col(r, 'account'), tx: { ts: pfDateMs(col(r, 'date')), type, asset: pfAsset(col(r, 'asset')) || col(r, 'asset').toUpperCase(),
+      qty: pfNum(col(r, 'qty')), price: pfNum(col(r, 'price')), price_ccy: col(r, 'price_ccy').toUpperCase() || (type === 'buy' || type === 'sell' || type === 'reward' ? 'USD' : ''),
+      fee: pfNum(col(r, 'fee')), fee_ccy: col(r, 'fee_ccy').toUpperCase() || null, fx_to_usd: pfNum(col(r, 'fx_to_usd')),
+      transfer_id: col(r, 'transfer_id') || null, note: col(r, 'note').slice(0, 200) } }; });
+  return { header: true, items, errors: [] };
+}
+function pfCsvCell(v){ const s = v === null || v === undefined ? '' : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function pfToCsv(store){
+  const name = (id) => ((store.accounts || []).find((a) => a.id === id) || {}).name || '';
+  const lines = [PF_CSV_COLUMNS.concat(['id', 'reverses_id']).join(',')];
+  for(const t of store.txs || []) lines.push([new Date(t.ts).toISOString(), name(t.account_id), t.type, t.asset || '', t.qty ?? '', t.price ?? '', t.price_ccy || '', t.fee ?? '', t.fee_ccy || '', t.fx_to_usd ?? '', t.transfer_id || '', t.note || '', t.id, t.reverses_id || ''].map(pfCsvCell).join(','));
+  return lines.join('\n') + '\n';
+}
+// V1 backup (GET /txs-backup → {txs:[{date, asset, acct, type:'buy'|'sell', qty, price, ccy}]}) → candidates.
+function pfFromV1Backup(json){
+  const list = json && Array.isArray(json.txs) ? json.txs : null;
+  if(!list) return { items: [], errors: ['not a V1 backup (no txs list)'] };
+  return { errors: [], items: list.map((t, k) => ({ line: k + 1, accountName: String(t.acct || 'V1').trim() || 'V1', tx: { ts: pfDateMs(t.date), type: t.type,
+    asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: pfNum(t.price), price_ccy: String(t.ccy || 'USD').toUpperCase(), fee: null, fee_ccy: null,
+    fx_to_usd: null, transfer_id: null, note: 'imported from V1 backup' } })) };
 }
 // ---- END view-model helpers ----
 
@@ -2750,8 +3043,9 @@ function loadActiveView(force){
   if (activeView === 'forecast') loadForecastLabIfNeeded(force);
   if (activeView === 'sentiment-v1') loadSentimentV1IfNeeded(force);
   if (activeView === 'comparison') loadComparisonIfNeeded(force);
-  if (activeView === 'alerts') loadSystemStatus(force);
+  if (activeView === 'alerts') { loadSystemStatus(force); loadV1Alerts(force); }
   if (activeView === 'settings') renderSettings();
+  if (activeView === 'portfolio') loadPortfolio(force);
 }
 function goRoute(target){
   _route = resolveRoute(target);
@@ -2953,64 +3247,72 @@ function renderSentimentV1(res, period){
         callbacks: { title: items => items.length ? fmtUtc(items[0].parsed.x) : '' } } } } });
   enableChartFullscreen('v1Chart', () => _v1.chart);
 }
-var _cmp = { period: '24h', seq: 0 };
+var _cmp = { period: '24h', horizon: 24, seq: 0 };
 function loadComparisonIfNeeded(force){
-  loadOutcomeComparison(force);
   v1Presets('cmpPresets', _cmp.period, k => { _cmp.period = k; loadComparisonIfNeeded(); });
-  const seq = ++_cmp.seq, period = _cmp.period;
+  flSeg('cmpHorizons', [[12, '12 h'], [24, '24 h']], _cmp.horizon, k => { _cmp.horizon = Number(k); loadComparisonIfNeeded(); });
+  const seq = ++_cmp.seq, period = _cmp.period, h = _cmp.horizon;
   document.getElementById('cmpSummary').textContent = 'Loading…';
+  document.getElementById('cmpOutcome').textContent = 'Loading…';
+  document.getElementById('cmpRecords').textContent = 'Loading…';
+  if(force) apiCacheClear();
   sv2Comparison(period, force).then(res => { if(seq === _cmp.seq && activeView === 'comparison') renderComparison(res); });
+  const q = '?asset=BTC&horizon=' + h + '&period=' + period;
+  Promise.all([getJson(WORKER_URL + '/api/comparison/v1-v2/summary' + q), getJson(WORKER_URL + '/api/comparison/v1-v2' + q + '&limit=50')]).then(([sr, rr]) => {
+    if(seq !== _cmp.seq || activeView !== 'comparison') return;
+    renderCmpOutcome(cmpSummaryModel(sr)); renderCmpRecords(cmpRecordRows(rr, 50), cmpSummaryModel(rr.ok ? { ok: true, data: { summary: { n_aligned: 1 } } } : rr));
+  });
 }
-// ---- Outcome comparison (read-only GETs of /api/comparison/v1-v2[/summary]). Default period All: shorter windows rarely
-// reach the 30-pair minimum, and the period here selects decisions, not a chart range. ----
-var _cmpOut = { period: 'all', horizon: 24, seq: 0 };
-function loadOutcomeComparison(force){
-  const hz = document.getElementById('cmpHorizon');
-  hz.innerHTML = [24, 12].map(h => `<button type="button" data-h="${h}" aria-pressed="${h === _cmpOut.horizon}" class="px-2.5 py-1 rounded-md text-xs font-semibold ${h === _cmpOut.horizon ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${h}h</button>`).join('');
-  hz.querySelectorAll('button').forEach(b => { b.onclick = () => { _cmpOut.horizon = Number(b.dataset.h); loadOutcomeComparison(); }; });
-  v1Presets('cmpOutPresets', _cmpOut.period, k => { _cmpOut.period = k; loadOutcomeComparison(); });
-  const seq = ++_cmpOut.seq, q = `asset=BTC&horizon=${_cmpOut.horizon}&period=${_cmpOut.period}`;
-  document.getElementById('cmpOutBody').textContent = 'Loading…';
-  Promise.all([getJson(WORKER_URL + '/api/comparison/v1-v2/summary?' + q), getJson(WORKER_URL + '/api/comparison/v1-v2?' + q + '&limit=25')])
-    .then(([sum, recs]) => { if(seq === _cmpOut.seq && activeView === 'comparison') renderOutcomeComparison(cmpOutcomeModel(sum, recs)); });
-}
-function renderOutcomeComparison(m){
-  const host = document.getElementById('cmpOutBody');
-  if(m.state !== 'ok'){ host.innerHTML = `${chip(m.state === 'unavailable' ? 'NOT AVAILABLE' : 'ERROR', m.state === 'unavailable' ? 'neutral' : 'bad')} <span class="text-[#BAC9CD]">${esc(m.note)}</span>`; return; }
-  const f = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d));
-  const ci = (c) => (c ? `${f(c[0])}–${f(c[1])}%` : '—');
-  const th = (t) => `<th scope="col" class="text-left font-semibold text-[#8A9599] px-2 py-1">${t}</th>`;
-  const td = (t, mono = true) => `<td class="px-2 py-1 ${mono ? 'font-mono-data' : ''} text-[#E1E2E7]">${t}</td>`;
-  const table = (head, rows) => `<div class="overflow-x-auto"><table class="min-w-full text-xs border-collapse"><thead><tr class="border-b border-[#3B494C]">${head.map(th).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
-  const tr = (cells) => `<tr class="border-b border-[#3B494C]/40">${cells.join('')}</tr>`;
-  const c = m.counts;
-  const prop = (on) => (on ? ' ' + chip('PROPOSED', 'warn') : '');
-  host.innerHTML = `
-    <p class="mb-2">${chip(m.sufficient ? 'SAMPLE ≥ 30' : 'INSUFFICIENT SAMPLE', m.sufficient ? 'info' : 'neutral')} <span class="text-[#BAC9CD]">${esc(m.claimText)}</span></p>
-    <p class="text-[#BAC9CD] mb-3">${c.aligned} decisions${m.truncated ? ' (newest 500 only)' : ''} · ${c.resolved} resolved · ${c.pairs} resolved with a V1 reading · V1 coverage ${f(c.v1CoveragePct)}% (${c.fromComposite} server composite, ${c.fromHistory} history, ${c.v1Missing} missing)</p>
-    <h3 class="text-xs font-semibold text-[#E1E2E7] mb-1">Directional accuracy (resolved, called decisions)</h3>
-    ${table(['Series', 'n', 'Correct', 'Accuracy', 'Wilson 95%'], m.accuracy.map(a => tr([td(esc(a.label) + prop(a.proposed), false), td(a.n), td(a.correct), td(f(a.ratePct) + (a.ratePct === null ? '' : '%')), td(ci(a.ciPct))])))}
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-      <div><h3 class="text-xs font-semibold text-[#E1E2E7] mb-1">V1 threshold sensitivity</h3>
-        ${table(['Band', 'Coverage', 'No call', 'n', 'Accuracy', 'Wilson 95%'], m.bands.map(b => tr([td(esc(b.band) + prop(b.proposed), false), td(f(b.coveragePct) + '%'), td(f(b.noCallPct) + '%'), td(b.acc.n), td(f(b.acc.ratePct) + (b.acc.ratePct === null ? '' : '%')), td(ci(b.acc.ciPct))])))}</div>
-      <div><h3 class="text-xs font-semibold text-[#E1E2E7] mb-1">Agreement, calibration and GLM</h3>
-        ${table(['Measure', 'n', 'Value'], [
-          ...m.agreement.map(a => tr([td(esc(a.label), false), td(a.n), td(f(a.ratePct) + (a.ratePct === null ? '' : '%'))])),
-          tr([td('Brier · V2 baseline', false), td(m.brier.v2b.n), td(f(m.brier.v2b.score, 4))]),
-          tr([td('Brier · V2 final', false), td(m.brier.v2f.n), td(f(m.brier.v2f.score, 4))]),
-          tr([td('No-call rate · V1 / V2b / V2f', false), td('—'), td(`${f(m.noCallPct.v1)} / ${f(m.noCallPct.v2b)} / ${f(m.noCallPct.v2f)}%`)]),
-          tr([td('GLM adjusted decisions · changed calls', false), td(m.glm.rows_in_scope), td(`${m.glm.adjusted} · ${m.glm.changed_calls}`)]),
-          tr([td('GLM mean |adjustment|', false), td(m.glm.adjusted), td(m.glm.mean_abs_adjustment === null ? '—' : f(m.glm.mean_abs_adjustment * 100, 2) + ' pp')])])}
-        <p class="text-[10px] text-[#8A9599] mt-1">Brier is for V2 only (V1 is not a probability). GLM is BTC 24h only and never flips a call, so changed calls should stay 0.</p></div>
+function cmpPct(v){ return v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%'; }
+function renderCmpOutcome(m){
+  const host = document.getElementById('cmpOutcome');
+  if(m.state === 'not_deployed' || m.state === 'error'){ host.innerHTML = `${chip(m.state === 'not_deployed' ? 'NOT LIVE YET' : 'UNAVAILABLE', m.state === 'error' ? 'bad' : 'neutral')} <span class="text-[#BAC9CD]">${esc(m.note)} No figures are shown in their place.</span>`; return; }
+  if(m.state === 'empty'){ host.innerHTML = `${chip('NO DECISIONS', 'neutral')} <span class="text-[#BAC9CD]">No V2 decision in this range. Choose a longer range.</span>`; return; }
+  const acc = (a) => a.n ? `<b class="text-[#E1E2E7]">${cmpPct(a.rate)}</b> <span class="text-[#8A9599]">[${a.ci ? cmpPct(a.ci[0]) + '–' + cmpPct(a.ci[1]) : '—'}]</span><br><span class="text-[10px] text-[#8A9599]">${a.correct} of ${a.n} calls</span>` : '<span class="text-[#8A9599]">no resolved calls</span>';
+  const tone = m.status === 'insufficient_sample' ? 'neutral' : m.observational ? 'warn' : 'info';
+  const sr = m.v1Sources;
+  host.innerHTML = `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3 mb-3"><p>${chip(String(m.claim || '').replace(/_/g, ' ').toUpperCase(), tone)} <span class="text-[#E1E2E7]">${esc(m.claimText)}</span></p>
+      ${m.observational ? '<p class="text-[11px] text-[#FBBF24] mt-1">Observational, not pre-registered. V1 is scored only on decisions where it had a reading and made a call (see coverage); V2 is scored on all of them, so the two samples differ. This does not show that either engine is better in general.</p>' : ''}</div>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal"></th><th class="px-2 font-normal">V1 production</th><th class="px-2 font-normal">V2 baseline (before GLM)</th><th class="px-2 font-normal">V2 final (after GLM)</th></tr></thead><tbody>
+      <tr class="border-t border-[#3B494C]/60 align-top"><td class="py-1.5 px-2 text-[#BAC9CD]">Direction accuracy [95% CI]</td><td class="px-2">${acc(m.accV1)}</td><td class="px-2">${acc(m.accV2b)}</td><td class="px-2">${acc(m.accV2f)}</td></tr>
+      <tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 text-[#BAC9CD]">Brier score (lower is better)</td><td class="px-2 text-[#8A9599]">n/a: V1 gives no probability</td><td class="px-2 font-mono-data">${m.brierV2b && m.brierV2b.score !== null ? m.brierV2b.score.toFixed(4) + ' <span class="text-[#8A9599]">n=' + m.brierV2b.n + '</span>' : '—'}</td><td class="px-2 font-mono-data">${m.brierV2f && m.brierV2f.score !== null ? m.brierV2f.score.toFixed(4) + ' <span class="text-[#8A9599]">n=' + m.brierV2f.n + '</span>' : '—'}</td></tr>
+      <tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 text-[#BAC9CD]">No call (abstention)</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v1)}</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v2_baseline)}</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v2_final)}</td></tr>
+    </tbody></table></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">Coverage</p><dl class="space-y-0.5 text-[#BAC9CD]">
+        <div class="flex justify-between gap-2"><dt>V2 decisions in range</dt><dd class="font-mono-data">${m.nAligned}${m.truncated ? ' (newest 500)' : ''}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Resolved</dt><dd class="font-mono-data">${m.nResolved}</dd></div>
+        <div class="flex justify-between gap-2"><dt>With a V1 reading</dt><dd class="font-mono-data">${cmpPct(m.v1Coverage)}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Resolved with V1</dt><dd class="font-mono-data">${m.nResolvedPairs}</dd></div>
+        <div class="flex justify-between gap-2"><dt>V1 source: server / app / none</dt><dd class="font-mono-data">${sr.server_composite_readings ?? 0} / ${sr.history ?? 0} / ${sr.missing ?? 0}</dd></div></dl></div>
+      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">Agreement (both made a call)</p><dl class="space-y-0.5 text-[#BAC9CD]">
+        ${[['V1 · V2 baseline', 'v1_v2_baseline'], ['V1 · V2 final', 'v1_v2_final'], ['V2 baseline · final', 'v2_baseline_v2_final']].map(([l, k]) => { const a = m.agreement[k] || {}; return `<div class="flex justify-between gap-2"><dt>${l}</dt><dd class="font-mono-data">${cmpPct(a.rate)} <span class="text-[#8A9599]">n=${a.n ?? 0}</span></dd></div>`; }).join('')}</dl></div>
+      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">GLM influence (BTC 24 h only)</p><dl class="space-y-0.5 text-[#BAC9CD]">
+        <div class="flex justify-between gap-2"><dt>Decisions in GLM scope</dt><dd class="font-mono-data">${m.glm.rows_in_scope ?? 0}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Adjusted by GLM</dt><dd class="font-mono-data">${m.glm.adjusted ?? 0}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Calls changed (no-flip: expected 0)</dt><dd class="font-mono-data">${m.glm.changed_calls ?? 0}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Mean |adjustment|</dt><dd class="font-mono-data">${m.glm.mean_abs_adjustment === null || m.glm.mean_abs_adjustment === undefined ? '—' : (m.glm.mean_abs_adjustment * 100).toFixed(2) + ' pp'}</dd></div></dl>
+        ${(m.glm.adjusted || 0) === 0 ? '<p class="text-[10px] text-[#8A9599] mt-1">No decision has been adjusted yet, so V2 final equals V2 baseline everywhere in this range.</p>' : ''}</div>
     </div>
-    <h3 class="text-xs font-semibold text-[#E1E2E7] mt-4 mb-1">Latest decisions</h3>
-    ${m.records.length ? table(['Decision (UTC)', 'V1', 'V2 baseline', 'V2 final', 'Outcome'], m.records.map(r => tr([
-      td(esc(fmtUtc(r.ts)), false),
-      td(r.v1 === null ? '<span class="text-[#8A9599]">missing</span>' : `${esc(String(r.v1))} <span class="text-[10px] text-[#8A9599]">${esc(r.v1Dir || '')}${r.v1Source === 'history' ? ' · history' : ''}</span>`),
-      td(r.v2b === null ? '—' : `${f(r.v2b * 100)}% <span class="text-[10px] text-[#8A9599]">${esc(r.v2bDir || '')}</span>`),
-      td(r.v2f === null ? '—' : `${f(r.v2f * 100)}% <span class="text-[10px] text-[#8A9599]">${esc(r.finalReason || '')}</span>`),
-      td(esc(r.outcome))]))) : '<p class="text-[#BAC9CD]">No decisions in this period.</p>'}
-    <p class="text-[10px] text-[#8A9599] mt-3">Read-only; computed by the backend (${esc(m.asset)} ${m.horizon}h, period ${esc(m.period)}, generated ${esc(fmtUtc(m.generatedTs))}, cached up to 5 min). A difference is claimed only with n ≥ 100 per series and non-overlapping Wilson intervals, and is observational.</p>`;
+    <h4 class="text-xs font-semibold mt-4 mb-1">V1 threshold sensitivity <span class="text-[#8A9599] font-normal">(45/55 is the proposed convention, not production logic)</span></h4>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">V1 band (DOWN below / UP above)</th><th class="px-2 font-normal">Coverage</th><th class="px-2 font-normal">No call</th><th class="px-2 font-normal">Accuracy [95% CI]</th></tr></thead><tbody>
+      ${m.bands.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data">${esc(b.band)}${b.proposed ? ' ' + chip('PROPOSED', 'info') : ''}</td><td class="px-2 font-mono-data">${cmpPct(b.coverage)}</td><td class="px-2 font-mono-data">${cmpPct(b.no_call_rate)}</td><td class="px-2">${acc({ n: b.accuracy.n, correct: b.accuracy.correct, rate: b.accuracy.rate, ci: b.accuracy.ci95 })}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="text-[10px] text-[#8A9599] mt-3">Range ${esc(m.period)} · ${m.horizon} h · ${esc(m.version || '')} · generated ${esc(fmtUtc(m.generated))} (cached up to 5 min). Method: ${esc(m.methodology.claims || '')}</p>`;
+}
+function renderCmpRecords(rows, m){
+  const host = document.getElementById('cmpRecords');
+  if(m && (m.state === 'not_deployed' || m.state === 'error')){ host.innerHTML = `<span class="text-[#BAC9CD]">${esc(m.note)}</span>`; return; }
+  if(!rows || !rows.length){ host.innerHTML = '<span class="text-[#BAC9CD]">No decisions in this range.</span>'; return; }
+  const dir = (d) => d === 'UP' ? '<span class="text-[#4AE176]">UP</span>' : d === 'DOWN' ? '<span class="text-[#FFB4AB]">DOWN</span>' : d === 'NO_CALL' ? '<span class="text-[#8A9599]">no call</span>' : '—';
+  const hit = (d, o) => o.status !== 'resolved' || (d !== 'UP' && d !== 'DOWN') ? '' : d === o.direction ? ' ✓' : ' ✗';
+  const p = (v) => (v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%');
+  host.innerHTML = `<table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Decision (UTC)</th><th class="px-2 font-normal">V1</th><th class="px-2 font-normal">V2 baseline</th><th class="px-2 font-normal">V2 final</th><th class="px-2 font-normal">Outcome</th></tr></thead><tbody>${rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top">
+    <td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(fmtUtc(r.ts))}<br><span class="text-[10px] text-[#8A9599]">target ${esc(fmtUtc(r.target))}${r.sha ? ' · ' + esc(r.sha) : ''}</span></td>
+    <td class="px-2 whitespace-nowrap">${r.v1 ? `${r.v1.score} ${dir(r.v1.dir)}${hit(r.v1.dir, r.outcome)}<br><span class="text-[10px] text-[#8A9599]">${r.v1.source === 'server_composite_readings' ? 'server' : 'app'} · ${r.v1.ageMin} min before</span>` : '<span class="text-[#8A9599]">—</span>'}</td>
+    <td class="px-2 whitespace-nowrap font-mono-data">${p(r.base.p_up)} ${dir(r.base.direction)}${hit(r.base.direction, r.outcome)}</td>
+    <td class="px-2 whitespace-nowrap font-mono-data">${p(r.fin.p_up)} ${dir(r.fin.direction)}${hit(r.fin.direction, r.outcome)}<br><span class="text-[10px] text-[#8A9599]">${esc(String(r.fin.reason || '').replace(/_/g, ' '))}</span></td>
+    <td class="px-2 whitespace-nowrap">${r.outcome.status === 'resolved' ? dir(r.outcome.direction) + '<br><span class="text-[10px] text-[#8A9599]">' + esc(fmtUtc(r.outcome.resolved_ts)) + '</span>' : chip('PENDING', 'neutral')}</td></tr>`).join('')}</tbody></table>`;
 }
 function renderComparison(res){
   const host = document.getElementById('cmpSummary');
@@ -3046,6 +3348,313 @@ function loadGlmEvaluation(force){
       <p class="text-[10px] text-[#8A9599] mt-2">${esc(m.note)}${m.sufficient ? '' : ' Until then these figures are descriptive only.'}</p>`;
   });
 }
+// ---- Portfolio: storage and UI. The ledger lives only in this browser (same model as V1, owner decision OD-06;
+// see docs/security/POST_PRODUCTION_SECURITY_REVIEW.md S-09/S-10). Export regularly: clearing site data deletes it. ----
+var PF_STORE_KEY = 'cpv2_portfolio_v1';
+var _pf = { store: null, prices: null, pricesAt: 0, pricesErr: null, fxNow: null, fxDate: null, fxErr: null, account: '', chart: null, alloc: null, range: CHART_DEFAULT_PRESET, narrative: null, narrativeBusy: false };
+function pfEmptyStore(){ return { version: 1, accounts: [], txs: [], importRuns: [], snapshots: [] }; }
+function pfLoad(){
+  if(_pf.store) return _pf.store;
+  try{ const raw = localStorage.getItem(PF_STORE_KEY); const s = raw ? JSON.parse(raw) : null;
+    _pf.store = s && s.version === 1 && Array.isArray(s.accounts) && Array.isArray(s.txs) ? { importRuns: [], snapshots: [], ...s } : pfEmptyStore();
+    _pf.storageOk = true;
+  }catch(e){ _pf.store = pfEmptyStore(); _pf.storageOk = false; }
+  return _pf.store;
+}
+function pfSave(){ try{ localStorage.setItem(PF_STORE_KEY, JSON.stringify(_pf.store)); _pf.storageOk = true; return true; }catch(e){ _pf.storageOk = false; return false; } }
+function pfId(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'tx-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
+// Append-only: a transaction is added only if valid; nothing is ever edited or deleted.
+function pfAppend(tx){
+  const s = pfLoad(), full = { id: pfId(), created_at: Date.now(), ...tx };
+  const err = pfValidateTx(full, s, Date.now());
+  if(err.length) return err;
+  s.txs.push(full);
+  if(!pfSave()){ s.txs.pop(); return ['could not save in this browser (storage blocked or full)']; }
+  return [];
+}
+async function pfLoadPrices(force){
+  if(!force && _pf.prices && Date.now() - _pf.pricesAt < 60000) return;
+  try{ const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'allMids' }) });
+    if(!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json(); if(!j || typeof j !== 'object') throw new Error('unexpected response');
+    _pf.prices = j; _pf.pricesAt = Date.now(); _pf.pricesErr = null;
+  }catch(e){ _pf.pricesErr = e.message; }
+  try{ const r = await fetch('https://api.frankfurter.dev/v2/rate/EUR/USD'); if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(); if(typeof j.rate !== 'number') throw new Error('unexpected response'); _pf.fxNow = j.rate; _pf.fxDate = j.date || null; _pf.fxErr = null;
+  }catch(e){ _pf.fxErr = e.message; }
+}
+function pfMoney(v, d = 2){ return v === null || v === undefined || !isFinite(v) ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function pfQty(v){ return v === null || v === undefined ? '—' : (+v).toLocaleString('en-US', { maximumFractionDigits: 8 }); }
+function pfSigned(v){ return v === null ? '<span class="text-[#8A9599]">unknown</span>' : `<span class="${v >= 0 ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${v >= 0 ? '+' : ''}${pfMoney(v)}</span>`; }
+function pfPartial(t){ return t.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'; }
+function pfSnapshot(m){
+  const s = pfLoad(), last = s.snapshots[s.snapshots.length - 1];
+  if(!m.positions.length || _pf.pricesErr || (last && Date.now() - last.ts < 3600000)) return;
+  s.snapshots.push({ ts: Date.now(), totalUsd: m.totals.valueUsd.value, complete: m.totals.valueUsd.complete });
+  if(s.snapshots.length > 3000) s.snapshots.splice(0, s.snapshots.length - 3000);
+  pfSave();
+}
+async function loadPortfolio(force){
+  pfLoad(); renderPortfolio();
+  await pfLoadPrices(force);
+  if(activeView === 'portfolio') renderPortfolio();
+}
+function pfView(){ return _route.tab || 'holdings'; }
+function renderPortfolio(){
+  const s = pfLoad(), m = pfCompute(s, _pf.prices, _pf.fxNow), tab = pfView();
+  pfSnapshot(m);
+  document.getElementById('pfStorageNote').innerHTML = _pf.storageOk === false
+    ? `${chip('STORAGE BLOCKED', 'bad')} This browser does not allow local storage, so nothing can be saved here.`
+    : `Stored only in this browser (same model as V1; no server copy). ${s.txs.length} ledger row${s.txs.length === 1 ? '' : 's'} · ${s.accounts.length} account${s.accounts.length === 1 ? '' : 's'}. Export regularly: clearing site data deletes the ledger.`;
+  const priceLine = _pf.pricesErr ? `${chip('PRICES UNAVAILABLE', 'bad')} ${esc(_pf.pricesErr)}: values are not shown rather than guessed.` :
+    _pf.prices ? `Prices: Hyperliquid mid prices (USD), fetched ${esc(fmtUtc(_pf.pricesAt))}.` : 'Loading prices…';
+  document.getElementById('pfPriceNote').innerHTML = priceLine + (_pf.fxNow ? ` · EUR/USD ${_pf.fxNow.toFixed(4)} (ECB via Frankfurter${_pf.fxDate ? ', ' + esc(_pf.fxDate) : ''}), used only to show cash held in EUR.` : _pf.fxErr ? ' · EUR/USD unavailable: EUR cash is not converted.' : '');
+  for(const k of ['holdings', 'transactions', 'planning']) document.getElementById('pf-' + k).classList.toggle('hidden', k !== tab);
+  if(tab === 'holdings') renderPfHoldings(m);
+  if(tab === 'transactions') renderPfTransactions(m);
+  if(tab === 'planning') renderPfPlanning(m);
+}
+function renderPfHoldings(m){
+  const sel = document.getElementById('pfAccountFilter');
+  const accs = pfLoad().accounts;
+  sel.innerHTML = '<option value="">All accounts (consolidated)</option>' + accs.map(a => `<option value="${esc(a.id)}"${a.id === _pf.account ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
+  sel.onchange = () => { _pf.account = sel.value; renderPortfolio(); };
+  const A = _pf.account ? m.accounts.find(a => a.id === _pf.account) : null;
+  const positions = A ? A.positions : m.positions;
+  const t = m.totals;
+  const kpi = (k, v, sub) => `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2.5"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] text-base mt-0.5">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
+  document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' : A
+    ? kpi('Account', esc(A.name), esc(A.kind || '')) + kpi('Cash in account', A.cashUsd.complete ? pfMoney(A.cashUsd.usd) : 'partial', Object.entries(A.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none recorded')
+    : kpi('Market value', pfMoney(t.valueUsd.value) + pfPartial(t.valueUsd), 'current prices') +
+      kpi('Cost basis of holdings', pfMoney(t.costUsd.value) + pfPartial(t.costUsd), 'what was paid for what is still held') +
+      kpi('Unrealised P&L', pfSigned(t.unrealizedUsd.value) + pfPartial(t.unrealizedUsd), 'market movement on holdings') +
+      kpi('Realised P&L', pfSigned(t.realizedUsd.value) + pfPartial(t.realizedUsd), 'from sells, after fees') +
+      kpi('Cash (dry powder)', t.cashUsd.complete ? pfMoney(t.cashUsd.usd) : 'partial', Object.entries(t.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'no deposits recorded');
+  const neg = Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9);
+  document.getElementById('pfIssues').innerHTML = (neg.length ? `<li>${chip('CASH', 'warn')} Buys exceed recorded deposits in ${neg.map(([c]) => esc(c)).join(', ')}: record deposits to track cash; holdings and P&L are unaffected.</li>` : '') +
+    m.issues.slice(0, 12).map(i => `<li>${chip(i.code.replace(/_/g, ' ').toUpperCase(), i.code === 'fx_missing' || i.code === 'reward_no_price' || i.code === 'in_transit' ? 'warn' : 'bad')} <span class="text-[#BAC9CD]">${esc(i.text)}</span></li>`).join('') +
+    (m.issues.length > 12 ? `<li class="text-[#8A9599]">…and ${m.issues.length - 12} more.</li>` : '');
+  const body = document.getElementById('pfPositions');
+  if(!pfLoad().txs.length){ body.innerHTML = `<tr><td colspan="8" class="py-4 px-2 text-[#BAC9CD]">${chip('EMPTY', 'neutral')} No transactions yet. Add an account and a transaction in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('portfolio/transactions')">Transactions</button>, or import a CSV or your V1 backup there.</td></tr>`; }
+  else body.innerHTML = positions.map(p => `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 font-semibold">${esc(p.asset)}</td><td class="px-2 font-mono-data text-right">${pfQty(p.qty)}</td>
+    <td class="px-2 font-mono-data text-right">${p.price === null ? '—' : pfMoney(p.price, p.price < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${pfMoney(p.valueUsd)}</td>
+    <td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? (p.qty > 0 ? '<span class="text-[#8A9599]">FX missing</span>' : '—') : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td>
+    <td class="px-2 font-mono-data text-right">${p.costUsd === null ? Object.entries(p.costByCcy).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' + ') : pfMoney(p.costUsd)}</td>
+    <td class="px-2 font-mono-data text-right">${pfSigned(p.unrealizedUsd)}</td><td class="px-2 font-mono-data text-right">${pfSigned(p.realizedUsd)}</td></tr>`).join('') || '<tr><td colspan="8" class="py-3 px-2 text-[#BAC9CD]">No holdings in this account.</td></tr>';
+  // Allocation (static: full screen, no time presets) and value history (time-based: presets + full screen).
+  const alloc = A ? (() => { const h = A.positions.filter(p => p.valueUsd > 0), tv = h.reduce((s, p) => s + p.valueUsd, 0); return tv > 0 ? h.map(p => ({ asset: p.asset, valueUsd: p.valueUsd, share: p.valueUsd / tv })) : []; })() : m.allocation;
+  document.getElementById('pfAllocNote').textContent = alloc.length ? alloc.map(a => `${a.asset} ${(a.share * 100).toFixed(1)}%`).join(' · ') + (alloc.length && alloc[0].share > 0.5 ? ' · concentration: one asset is over half the portfolio' : '') : 'No priced holdings to allocate.';
+  const palette = ['#00E0FF', '#A78BFA', '#F59E0B', '#22C55E', '#F472B6', '#3B82F6', '#EF4444', '#94A3B8'];
+  const adata = { labels: alloc.map(a => a.asset), datasets: [{ data: alloc.map(a => +(a.share * 100).toFixed(2)), backgroundColor: alloc.map((_, i) => palette[i % palette.length]), borderColor: '#191C1F' }] };
+  if(_pf.alloc){ _pf.alloc.data = adata; _pf.alloc.update(); }
+  else { _pf.alloc = new Chart(document.getElementById('pfAllocChart').getContext('2d'), { type: 'doughnut', data: adata, options: { responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { position: 'right', labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 10 } }, tooltip: { callbacks: { label: i => `${i.label}: ${i.parsed}%` } } } } });
+    enableChartFullscreen('pfAllocChart', () => _pf.alloc); }
+  buildPresetTabs('pfValuePresets', _pf.range, k => { _pf.range = k; renderPortfolio(); });
+  const now = Date.now(), clip = clipSeries(pfLoad().snapshots, 'ts', _pf.range, now);
+  document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' Recorded on this device, at most hourly, only while this page is open; gaps are not filled. ' + (A ? 'Whole portfolio, not this account.' : '');
+  const vdata = { datasets: [{ label: 'Portfolio value (USD)', data: clip.points.map(p => ({ x: p.ts, y: p.totalUsd })), borderColor: '#00E0FF', backgroundColor: '#00E0FF',
+    pointRadius: clip.points.length > 60 ? 0 : 2.5, borderWidth: 2, tension: 0, pointBackgroundColor: clip.points.map(p => (p.complete ? '#00E0FF' : 'rgba(0,0,0,0)')) }] };
+  // The axis spans the chosen window (All: from the first snapshot), so a single point is not stretched to milliseconds.
+  const win = chartPreset(_pf.range), xMin = win.ms === Infinity ? (clip.coverage.firstTs !== null ? Math.min(clip.coverage.firstTs, now - 3600000) : now - 86400000) : now - win.ms;
+  if(_pf.chart){ _pf.chart.data = vdata; _pf.chart.options.scales.x.min = xMin; _pf.chart.options.scales.x.max = now; _pf.chart.update(); }
+  else { const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
+    _pf.chart = new Chart(document.getElementById('pfValueChart').getContext('2d'), { type: 'line', data: vdata, options: { responsive: true, maintainAspectRatio: false, animation: false,
+      scales: { x: { type: 'time', min: xMin, max: now, ticks: { ...tick, maxRotation: 0, maxTicksLimit: 6 }, grid: { color: 'rgba(59,73,76,0.4)' }, title: { display: true, text: 'local time', color: '#8A9599', font: { size: 10 } } },
+        y: { ticks: { ...tick, callback: v => '$' + Number(v).toLocaleString('en-US') }, grid: { color: 'rgba(59,73,76,0.4)' } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: it => it.length ? fmtUtc(it[0].parsed.x) : '', label: it => pfMoney(it.parsed.y) + (it.raw && clip.points[it.dataIndex] && !clip.points[it.dataIndex].complete ? ' (partial: some prices missing)' : '') } } } } });
+    enableChartFullscreen('pfValueChart', () => _pf.chart); }
+}
+// Shared preset buttons (24H / 7D / 1M / All) for charts drawn from local data.
+function buildPresetTabs(hostId, current, onPick){
+  const host = document.getElementById(hostId); if(!host) return;
+  host.innerHTML = CHART_PRESETS.map(p => `<button type="button" data-k="${p.key}" aria-pressed="${p.key === current}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${p.key === current ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${p.label}</button>`).join('');
+  host.querySelectorAll('button').forEach(b => { b.onclick = () => onPick(b.dataset.k); });
+}
+function pfTypeLabel(t){ return { buy: 'Buy', sell: 'Sell', deposit: 'Deposit', withdrawal: 'Withdrawal', transfer_out: 'Transfer out', transfer_in: 'Transfer in', reward: 'Reward', fee: 'Fee', reversal: 'Reversal' }[t] || t; }
+function renderPfTransactions(m){
+  const s = pfLoad();
+  const accOpts = s.accounts.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  document.getElementById('pfTxAccount').innerHTML = accOpts || '<option value="">Add an account first</option>';
+  document.getElementById('pfTrFrom').innerHTML = accOpts; document.getElementById('pfTrTo').innerHTML = accOpts;
+  document.getElementById('pfAccountsList').innerHTML = s.accounts.map(a => `<li>${esc(a.name)} <span class="text-[#8A9599]">· ${esc(a.kind)} · ${esc(a.base_ccy || 'USD')}</span></li>`).join('') || '<li class="text-[#8A9599]">No accounts yet.</li>';
+  const reversed = new Set(s.txs.filter(t => t.type === 'reversal').map(t => t.reverses_id));
+  const name = id => (s.accounts.find(a => a.id === id) || {}).name || '—';
+  const rows = s.txs.slice().sort((a, b) => (b.ts - a.ts) || (b.created_at - a.created_at));
+  document.getElementById('pfLedgerCount').textContent = `${s.txs.length} row${s.txs.length === 1 ? '' : 's'} (append-only; ${reversed.size} reversed). Newest first.`;
+  document.getElementById('pfLedger').innerHTML = rows.map(t => { const isRev = reversed.has(t.id);
+    return `<tr class="border-t border-[#3B494C]/60 align-top ${isRev ? 'opacity-50' : ''}"><td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(new Date(t.ts).toISOString().slice(0, 16).replace('T', ' '))}</td>
+    <td class="px-2">${esc(pfTypeLabel(t.type))}${isRev ? ' ' + chip('REVERSED', 'neutral') : ''}</td><td class="px-2">${t.type === 'reversal' ? '<span class="text-[#8A9599]">of ' + esc(String(t.reverses_id).slice(0, 8)) + '</span>' : esc(name(t.account_id))}</td>
+    <td class="px-2 font-mono-data">${esc(t.asset || '')} ${t.qty !== undefined && t.qty !== null ? pfQty(t.qty) : ''}</td>
+    <td class="px-2 font-mono-data">${t.price !== null && t.price !== undefined ? esc(String(t.price)) + ' ' + esc(t.price_ccy || '') : ''}${t.fee ? '<br><span class="text-[#8A9599]">fee ' + esc(String(t.fee)) + ' ' + esc(t.fee_ccy || t.price_ccy || '') + '</span>' : ''}${t.fx_to_usd ? '<br><span class="text-[#8A9599]">FX ' + esc(String(t.fx_to_usd)) + '</span>' : ''}${t.transfer_id ? '<br><span class="text-[#8A9599]">transfer ' + esc(t.transfer_id) + '</span>' : ''}</td>
+    <td class="px-2 text-[#8A9599]">${esc(t.note || '')}</td>
+    <td class="px-2">${t.type !== 'reversal' && !isRev ? `<button type="button" data-rev="${esc(t.id)}" class="text-[11px] underline text-[#BAC9CD] hover:text-[#FFB4AB]">Reverse</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="py-3 px-2 text-[#BAC9CD]">No transactions yet.</td></tr>';
+  document.querySelectorAll('#pfLedger [data-rev]').forEach(b => { b.onclick = () => {
+    if(!confirm('Add a reversal row for this transaction? The original stays in the ledger, marked reversed; to correct it, enter the right transaction afterwards.')) return;
+    const err = pfAppend({ type: 'reversal', reverses_id: b.dataset.rev, ts: Date.now(), note: 'reversal' });
+    pfMsg('pfTxMsg', err); renderPortfolio(); }; });
+  const runs = s.importRuns.slice(-5).reverse();
+  document.getElementById('pfImportRuns').innerHTML = runs.map(r => `<li>${esc(fmtUtc(r.created_at))} · ${esc(r.source)} · ${r.accepted} added, ${r.duplicates} duplicate, ${r.rejected} rejected</li>`).join('') || '<li class="text-[#8A9599]">No imports yet.</li>';
+  pfTypeFields();
+}
+function pfMsg(id, errs, okText){ const el = document.getElementById(id); el.innerHTML = errs && errs.length ? `${chip('NOT SAVED', 'bad')} ${errs.map(esc).join('; ')}` : okText ? `${chip('SAVED', 'good')} ${esc(okText)}` : ''; }
+function pfTypeFields(){
+  const t = document.getElementById('pfTxType').value;
+  const show = (id, on) => document.getElementById(id).classList.toggle('hidden', !on);
+  show('pfFieldPrice', t === 'buy' || t === 'sell' || t === 'reward'); show('pfFieldFee', t === 'buy' || t === 'sell');
+  document.getElementById('pfTxAssetLabel').textContent = t === 'deposit' || t === 'withdrawal' ? 'Currency (USD, EUR, GBP, CHF)' : t === 'fee' ? 'Asset or currency' : 'Asset (e.g. BTC)';
+  document.getElementById('pfTxQtyLabel').textContent = t === 'deposit' || t === 'withdrawal' || (t === 'fee') ? 'Amount' : 'Quantity';
+}
+function pfFormVal(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function pfSubmitTx(){
+  const type = pfFormVal('pfTxType'), d = pfFormVal('pfTxDate');
+  const tx = { account_id: pfFormVal('pfTxAccount'), type, ts: d ? Date.parse(d + 'Z') : NaN, asset: pfFormVal('pfTxAsset').toUpperCase(), qty: pfNum(pfFormVal('pfTxQty')),
+    price: pfNum(pfFormVal('pfTxPrice')), price_ccy: pfFormVal('pfTxPriceCcy') || 'USD', fee: pfNum(pfFormVal('pfTxFee')), fee_ccy: pfFormVal('pfTxFeeCcy').toUpperCase() || null,
+    fx_to_usd: pfNum(pfFormVal('pfTxFx')), note: pfFormVal('pfTxNote').slice(0, 200) };
+  if(!(type === 'buy' || type === 'sell' || type === 'reward')){ tx.price = null; tx.price_ccy = null; tx.fee = null; tx.fee_ccy = null; }
+  if(tx.type === 'reward' && tx.price === null) tx.price_ccy = null;
+  const err = pfAppend(tx);
+  pfMsg('pfTxMsg', err, pfTypeLabel(type) + ' added.');
+  if(!err.length){ document.getElementById('pfTxQty').value = ''; document.getElementById('pfTxPrice').value = ''; document.getElementById('pfTxFee').value = ''; document.getElementById('pfTxFx').value = ''; document.getElementById('pfTxNote').value = ''; }
+  renderPortfolio();
+}
+function pfSubmitTransfer(){
+  const from = pfFormVal('pfTrFrom'), to = pfFormVal('pfTrTo'), asset = pfFormVal('pfTrAsset').toUpperCase(), sent = pfNum(pfFormVal('pfTrSent')), recv = pfNum(pfFormVal('pfTrRecv')), d = pfFormVal('pfTrDate');
+  if(from === to) return pfMsg('pfTrMsg', ['choose two different accounts']);
+  const ts = d ? Date.parse(d + 'Z') : NaN, tid = 'tr-' + pfId().slice(0, 8);
+  const outTx = { account_id: from, type: 'transfer_out', ts, asset, qty: sent, transfer_id: tid, note: 'internal transfer' };
+  const inTx = { account_id: to, type: 'transfer_in', ts, asset, qty: recv === null ? sent : recv, transfer_id: tid, note: 'internal transfer' };
+  const s = pfLoad(), e1 = pfValidateTx({ id: 'check-out', ...outTx }, s, Date.now()), e2 = pfValidateTx({ id: 'check-in', ...inTx }, s, Date.now());
+  if(e1.length || e2.length) return pfMsg('pfTrMsg', [...new Set([...e1, ...e2])]);
+  if(inTx.qty > outTx.qty) return pfMsg('pfTrMsg', ['received cannot exceed sent']);
+  const err = pfAppend(outTx); if(err.length) return pfMsg('pfTrMsg', err);
+  const err2 = pfAppend(inTx); pfMsg('pfTrMsg', err2, 'Transfer recorded as a matched pair (no buy, no sell, cost basis moved).'); renderPortfolio();
+}
+function pfSubmitAccount(){
+  const name = pfFormVal('pfAccName').slice(0, 40), kind = pfFormVal('pfAccKind'), ccy = pfFormVal('pfAccCcy');
+  const s = pfLoad();
+  if(!name) return pfMsg('pfAccMsg', ['name required']);
+  if(s.accounts.some(a => a.name.toLowerCase() === name.toLowerCase())) return pfMsg('pfAccMsg', ['an account with this name exists']);
+  s.accounts.push({ id: pfId(), name, kind: PF_ACCOUNT_KINDS.includes(kind) ? kind : 'exchange', base_ccy: PF_FIAT.includes(ccy) ? ccy : 'USD', created_at: Date.now() });
+  if(!pfSave()){ s.accounts.pop(); return pfMsg('pfAccMsg', ['could not save in this browser']); }
+  document.getElementById('pfAccName').value = ''; pfMsg('pfAccMsg', [], 'Account added.'); renderPortfolio();
+}
+// Import: every candidate is validated; duplicates (same account, time, type, asset, quantity, price) are skipped;
+// unknown account names are created only after the user confirms. One import-run record per import.
+function pfImportCandidates(items, source, fileHash){
+  const s = pfLoad(), newNames = [...new Set(items.map(i => i.accountName).filter(n => n && !s.accounts.some(a => a.name.toLowerCase() === n.toLowerCase())))];
+  if(newNames.length && !confirm(`Create ${newNames.length} new account(s): ${newNames.join(', ')}?`)) return { cancelled: true };
+  for(const n of newNames) s.accounts.push({ id: pfId(), name: n.slice(0, 40), kind: 'exchange', base_ccy: 'USD', created_at: Date.now() });
+  const byName = n => s.accounts.find(a => a.name.toLowerCase() === String(n).toLowerCase());
+  const seen = new Set(s.txs.map(t => pfDedupKey(t, (s.accounts.find(a => a.id === t.account_id) || {}).name)));
+  const run = { id: pfId(), source, file_hash: fileHash || null, created_at: Date.now(), rows: items.length, accepted: 0, duplicates: 0, rejected: 0, errors: [] };
+  for(const it of items){
+    const acc = byName(it.accountName), tx = { id: pfId(), created_at: Date.now(), import_run_id: run.id, ...it.tx, account_id: acc ? acc.id : null };
+    const key = pfDedupKey(tx, acc ? acc.name : it.accountName);
+    if(seen.has(key)){ run.duplicates++; continue; }
+    const e = pfValidateTx(tx, s, Date.now());
+    if(e.length){ run.rejected++; if(run.errors.length < 20) run.errors.push(`line ${it.line}: ${e.join(', ')}`); continue; }
+    s.txs.push(tx); seen.add(key); run.accepted++;
+  }
+  s.importRuns.push(run);
+  if(!pfSave()) return { error: 'could not save in this browser' };
+  return run;
+}
+function pfShowRun(r){
+  if(r.cancelled) return pfMsg('pfImportMsg', ['import cancelled']);
+  if(r.error) return pfMsg('pfImportMsg', [r.error]);
+  document.getElementById('pfImportMsg').innerHTML = `${chip(r.rejected ? 'IMPORTED WITH ERRORS' : 'IMPORTED', r.rejected ? 'warn' : 'good')} ${r.accepted} added · ${r.duplicates} duplicate skipped · ${r.rejected} rejected${r.errors.length ? `<ul class="list-disc pl-4 mt-1 text-[#FBBF24]">${r.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}`;
+  renderPortfolio();
+}
+async function pfHash(text){ try{ const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join(''); }catch(e){ return null; } }
+async function pfImportFile(file){
+  if(!file) return;
+  if(file.size > 2000000) return pfMsg('pfImportMsg', ['file too large (max 2 MB)']);
+  const text = await file.text(), h = await pfHash(text);
+  if(/\.json$/i.test(file.name)){
+    let j; try{ j = JSON.parse(text); }catch(e){ return pfMsg('pfImportMsg', ['not valid JSON']); }
+    if(j && j.version === 1 && Array.isArray(j.txs) && Array.isArray(j.accounts)){   // a full V2 backup: restore as a whole, reversals included
+      const cur = pfLoad();
+      if(cur.txs.length || cur.accounts.length) return pfMsg('pfImportMsg', ['a full backup restores only into an empty portfolio (this one has data); use CSV to add rows']);
+      const probe = { accounts: j.accounts, txs: [] };
+      for(const t of j.txs){ const e = pfValidateTx(t, probe, Date.now()); if(e.length) return pfMsg('pfImportMsg', ['backup row ' + (probe.txs.length + 1) + ': ' + e.join(', ')]); probe.txs.push(t); }
+      if(!confirm(`Restore ${j.accounts.length} account(s) and ${j.txs.length} ledger row(s) from this backup?`)) return pfMsg('pfImportMsg', ['restore cancelled']);
+      _pf.store = { ...pfEmptyStore(), accounts: j.accounts, txs: j.txs, importRuns: (Array.isArray(j.importRuns) ? j.importRuns : []).concat([{ id: pfId(), source: 'json_restore', file_hash: h, created_at: Date.now(), rows: j.txs.length, accepted: j.txs.length, duplicates: 0, rejected: 0, errors: [] }]), snapshots: Array.isArray(j.snapshots) ? j.snapshots : [] };
+      if(!pfSave()) return pfMsg('pfImportMsg', ['could not save in this browser']);
+      pfMsg('pfImportMsg', [], 'Backup restored.'); return renderPortfolio();
+    }
+    const v1 = pfFromV1Backup(j); if(v1.errors.length) return pfMsg('pfImportMsg', v1.errors);
+    return pfShowRun(pfImportCandidates(v1.items, 'v1_backup_file', h));
+  }
+  const parsed = pfCsvRowsToTxs(pfParseCsv(text));
+  if(parsed.errors.length) return pfMsg('pfImportMsg', parsed.errors);
+  pfShowRun(pfImportCandidates(parsed.items, 'csv', h));
+}
+// "Import from V1": one GET of V1's backup route, only on this explicit click (S-10 in the security register).
+async function pfImportFromV1(){
+  if(!confirm('Read your latest V1 transaction backup from the V1 Worker and import its buys and sells? V1 is not changed.')) return;
+  pfMsg('pfImportMsg', [], 'Reading V1 backup…');
+  const r = await getJson(V1_WORKER_URL + '/txs-backup');
+  if(!r.ok || !r.data) return pfMsg('pfImportMsg', ['V1 backup could not be read' + (r.error ? ' (' + r.error + ')' : '')]);
+  if(r.data.found === false) return pfMsg('pfImportMsg', ['V1 has no backup stored']);
+  const v1 = pfFromV1Backup(r.data); if(v1.errors.length) return pfMsg('pfImportMsg', v1.errors);
+  pfShowRun(pfImportCandidates(v1.items, 'v1_backup_route', null));
+}
+function pfDownload(name, text, type){ const b = new Blob([text], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0); }
+function pfExport(kind){
+  const s = pfLoad(), stamp = new Date().toISOString().slice(0, 10);
+  if(kind === 'json') pfDownload(`cryptopulse-v2-portfolio-${stamp}.json`, JSON.stringify(s, null, 1), 'application/json');
+  else pfDownload(`cryptopulse-v2-transactions-${stamp}.csv`, pfToCsv(s), 'text/csv');
+}
+function renderPfPlanning(m){
+  const held = m.positions.filter(p => p.qty > PF_EPS);
+  const sel = document.getElementById('pfDryAsset'), prev = sel.value;
+  sel.innerHTML = held.map(p => `<option value="${esc(p.asset)}"${p.asset === prev ? ' selected' : ''}>${esc(p.asset)}</option>`).join('') || '<option value="">No holdings</option>';
+  const runDry = () => { const p = held.find(x => x.asset === sel.value), amt = pfNum(document.getElementById('pfDryAmount').value) || 0;
+    const r = p ? pfDryPowder(p, amt, p.price) : null, el = document.getElementById('pfDryOut');
+    if(!p) el.textContent = 'Add holdings to use the planner.';
+    else if(p.price === null) el.textContent = 'No current price for ' + p.asset + ': the planner needs one.';
+    else if(r && r.unknown) el.textContent = 'The average cost of ' + p.asset + ' is unknown (FX missing on a transaction), so the effect cannot be computed.';
+    else el.innerHTML = amt > 0 ? `Average cost ${pfMoney(r.oldAvg)} → <b>${pfMoney(r.newAvg)}</b> (${r.shiftPct >= 0 ? '+' : ''}${r.shiftPct.toFixed(2)}%) · cost basis ${pfMoney(r.oldCost)} → ${pfMoney(r.newCost)} · buys ${pfQty(r.addQty)} ${esc(p.asset)} at ${pfMoney(p.price)}` : 'Enter an amount to see the effect on the average cost.'; };
+  sel.onchange = runDry; document.getElementById('pfDryAmount').oninput = runDry; runDry();
+  document.getElementById('pfCashLine').innerHTML = `Cash recorded: ${Object.entries(m.totals.cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none'}${m.totals.cashUsd.complete ? ' ≈ ' + pfMoney(m.totals.cashUsd.usd) : ''}`;
+  document.getElementById('pfBreakEven').innerHTML = held.map(p => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold">${esc(p.asset)}</td><td class="px-2 font-mono-data text-right">${p.avgCostUsd === null ? 'unknown' : pfMoney(p.avgCostUsd, p.avgCostUsd < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${p.price === null ? '—' : pfMoney(p.price, p.price < 10 ? 4 : 2)}</td><td class="px-2 font-mono-data text-right">${p.price === null || p.avgCostUsd === null ? '—' : ((p.avgCostUsd / p.price - 1) * 100 >= 0 ? '+' : '') + ((p.avgCostUsd / p.price - 1) * 100).toFixed(1) + '%'}</td></tr>`).join('') || '<tr><td colspan="4" class="py-2 px-2 text-[#BAC9CD]">No holdings.</td></tr>';
+  document.getElementById('pfScenarios').innerHTML = [-50, -25, -10, 0, 10, 25, 50, 100].map(pct => { const r = pfScenario(m.positions, pct);
+    return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data">${pct > 0 ? '+' : ''}${pct}%</td><td class="px-2 font-mono-data text-right">${pfMoney(r.valueUsd)}${r.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'}</td><td class="px-2 font-mono-data text-right">${pfSigned(r.pnlUsd)}</td></tr>`; }).join('');
+  const n = _pf.narrative, out = document.getElementById('pfNarrativeOut');
+  out.innerHTML = _pf.narrativeBusy ? 'Asking Gemini through V1…' : !n ? '' : n.error ? `${chip('UNAVAILABLE', 'bad')} ${esc(n.error)}` :
+    `<p class="text-[10px] text-[#8A9599] mb-1">Gemini (gemini-3.6-flash) via V1 · generated ${esc(fmtUtc(n.ts))} · an AI interpretation from the model's own knowledge, not a V2 score or advice. Sent: holding weights only.</p><p class="whitespace-pre-wrap text-[#E1E2E7]">${esc(n.analysis)}</p>`;
+  document.getElementById('pfNarrativeBtn').disabled = _pf.narrativeBusy || !m.allocation.length;
+}
+// Narrative (Gemini parity, contracts §6): V1's own POST /gemini-outlook with {portfolio:[{sym, weight}]}, exactly the
+// body V1 sends; only on this click; no amounts or transactions leave the browser.
+async function pfRunNarrative(){
+  const m = pfCompute(pfLoad(), _pf.prices, _pf.fxNow);
+  if(!m.allocation.length || _pf.narrativeBusy) return;
+  _pf.narrativeBusy = true; renderPortfolio();
+  try{ const r = await fetch(V1_WORKER_URL + '/gemini-outlook', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portfolio: m.allocation.map(a => ({ sym: a.asset, weight: +(a.share * 100).toFixed(1) })) }) });
+    const j = await r.json().catch(() => null);
+    _pf.narrative = r.ok && j && typeof j.analysis === 'string' ? { analysis: j.analysis, ts: j.ts || Date.now() } : { error: (j && j.error) || ('HTTP ' + r.status) };
+  }catch(e){ _pf.narrative = { error: e.message }; }
+  _pf.narrativeBusy = false; renderPortfolio();
+}
+// ---- Alerts: V1 alert configs and log (read-only) ----
+var _v1AlAt = 0;
+function loadV1Alerts(force){
+  if(!force && _v1AlAt && Date.now() - _v1AlAt < SV2_REFRESH_MS) return;
+  _v1AlAt = Date.now();
+  Promise.all([getJson(V1_WORKER_URL + '/alert-configs'), getJson(V1_WORKER_URL + '/alert-log?limit=50')]).then(([c, l]) => {
+    const m = v1AlertsModel(c, l, Date.now());
+    if(m.configsState === 'error' || m.logState === 'error') _v1AlAt = 0;
+    const cHost = document.getElementById('v1AlConfigs'), lHost = document.getElementById('v1AlLog');
+    cHost.innerHTML = m.configsState === 'error' ? `${chip('UNAVAILABLE', 'neutral')} <span class="text-[#BAC9CD]">V1 alert settings could not be read (${esc(m.configsError)}).</span>` :
+      m.configsState === 'empty' ? `${chip('NONE', 'neutral')} <span class="text-[#BAC9CD]">No alerts are configured in V1.</span>` :
+      `<p class="text-[#BAC9CD] mb-1">${m.enabledCount} of ${m.configs.length} enabled</p><ul class="space-y-1">${m.configs.map(a => `<li class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2 ${a.enabled ? '' : 'opacity-60'}"><div class="flex justify-between gap-2 flex-wrap"><span class="font-semibold">${esc(a.type.replace(/_/g, ' '))}</span>${chip(a.enabled ? 'ON' : 'OFF', a.enabled ? 'good' : 'neutral')}</div><p class="text-[10px] text-[#8A9599] break-words">${esc(a.params) || 'no parameters'}${a.cooldownMin !== null ? ' · cooldown ' + a.cooldownMin + ' min' : ''} · fired ${a.fireCount}×${a.lastFired ? ', last ' + esc(fmtUtc(a.lastFired)) : ''}</p></li>`).join('')}</ul>`;
+    lHost.innerHTML = m.logState === 'error' ? `${chip('UNAVAILABLE', 'neutral')} <span class="text-[#BAC9CD]">V1 alert log could not be read (${esc(m.logError)}).</span>` :
+      m.logState === 'empty' ? `<span class="text-[#BAC9CD]">No alert has fired yet.</span>` :
+      `<ul class="space-y-1 max-h-[360px] overflow-y-auto">${m.log.map(l => `<li class="border-t border-[#3B494C]/60 pt-1"><span class="font-mono-data text-[#8A9599]">${esc(fmtUtc(l.ts))}</span> ${chip(l.type.replace(/_/g, ' ').toUpperCase() || 'ALERT', 'info')} <span class="text-[#E1E2E7] break-words">${esc(l.message)}</span></li>`).join('')}</ul>`;
+  });
+}
 // ---- Settings: display and connection preferences only; no model, weight or production configuration. ----
 function renderSettings(){
   const staging = /staging/.test(WORKER_URL);
@@ -3059,6 +3668,10 @@ function renderSettings(){
       <p class="text-[#BAC9CD] mt-1">Every time-based chart opens on <b>24H</b> and offers 7D, 1M and All (all available history). Expand any chart to full screen with its corner button; press Esc or the same button to return.</p></div>
     <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Time display</p>
       <p class="text-[#BAC9CD] mt-1">Tables and tooltips show UTC; chart axes use your device's local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown')}).</p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Portfolio data</p>
+      <p class="text-[#BAC9CD] mt-1">${(() => { const st = pfLoad(); return `${st.accounts.length} account(s) and ${st.txs.length} ledger row(s), stored only in this browser. Reporting currency: USD.`; })()} <button type="button" class="underline text-[#00E0FF]" onclick="goRoute('portfolio/transactions')">Export or import</button></p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Alerts</p>
+      <p class="text-[#BAC9CD] mt-1">Market alerts and their Telegram delivery are set up in V1; V2 shows them read-only under <button type="button" class="underline text-[#00E0FF]" onclick="goRoute('alerts')">Alerts</button>. No alert credentials exist in this page.</p></div>
     <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Not configurable here</p>
       <p class="text-[#BAC9CD] mt-1">Model weights, calibration, GLM influence and schedules are production settings of the backend and cannot be changed from this page.</p></div>`;
 }
@@ -3356,6 +3969,15 @@ function renderFlLedger(){
     <td class="px-2 font-mono-data">${r.status === 'resolved' && r.predRet !== null ? (r.predRet - r.actualRet > 0 ? '+' : '') + (r.predRet - r.actualRet).toFixed(2) : '—'}</td>
     <td class="px-2">${r.status === 'resolved' ? chip(r.correct === 1 ? 'RIGHT' : 'WRONG', r.correct === 1 ? 'good' : 'bad') : chip(r.status.toUpperCase(), 'neutral')}${r.population === 'post_seal_descriptive' ? '<br>' + chip('DESCRIPTIVE', 'neutral') : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="py-3 px-2 text-[#BAC9CD]">No forecasts match these filters.</td></tr>';
 }
+document.getElementById('pfAccAdd').onclick = pfSubmitAccount;
+document.getElementById('pfTxAdd').onclick = pfSubmitTx;
+document.getElementById('pfTxType').onchange = pfTypeFields;
+document.getElementById('pfTrAdd').onclick = pfSubmitTransfer;
+document.getElementById('pfExportCsv').onclick = () => pfExport('csv');
+document.getElementById('pfExportJson').onclick = () => pfExport('json');
+document.getElementById('pfImportFile').onchange = (ev) => { pfImportFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; };
+document.getElementById('pfImportV1').onclick = pfImportFromV1;
+document.getElementById('pfNarrativeBtn').onclick = pfRunNarrative;
 buildSv2Periods();
 document.getElementById('sv2Details').addEventListener('toggle', () => loadSv2DetailsIfOpen());
 

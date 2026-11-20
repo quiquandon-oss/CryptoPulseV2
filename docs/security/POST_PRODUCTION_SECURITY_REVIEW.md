@@ -16,8 +16,11 @@ a row here.
 | S-06 | `X-App-Secret` value embedded in the public V1 page; the V1 Worker does not enforce it | V1 `index.html:3125`, `worker.js:1392` | code | V1, pre-existing | OD-06. V2 does not reuse it |
 | S-07 | `GET /foufi-check?force=1` can trigger a Gemini call without authentication (quota exhaustion vector) | V1 | V1 `worker.js:3503–3510` | V1, pre-existing | OD-06. V2 never calls it |
 | S-08 | V1 `POST /gemini-outlook`, `/trader-analysis-gemini` can be called by anyone (Gemini quota) | V1 | V1 `worker.js:3203–3376` | V1, pre-existing | OD-06. V2 parity calls them only on an explicit user action |
-| S-09 | V2 Portfolio stores the ledger in the browser (`localStorage`), the same model as V1; no server-side authorisation | V2 frontend (planned, Stage 7) | Phase 1 contracts §8 | V2, new, **V1-equivalent** | OD-06 |
-| S-10 | V2 "Import from V1" reads V1 `GET /txs-backup` on an explicit user click | V2 frontend (planned) | Phase 1 contracts §8.5 | V2, new, uses S-01 | OD-06 |
+| S-09 | V2 Portfolio stores the ledger in the browser (`localStorage`), the same model as V1; no server-side authorisation | V2 frontend (**implemented** 2026-11-20, key `cpv2_portfolio_v1`) | Phase 1 contracts §8 | V2, new, **V1-equivalent** | OD-06 |
+| S-10 | V2 "Import from V1" reads V1 `GET /txs-backup` on an explicit user click | V2 frontend (**implemented**: one GET after a confirmation dialog) | Phase 1 contracts §8.5 | V2, new, uses S-01 | OD-06 |
+| S-13 | V2 Narrative button POSTs holding weights (symbols and percentages only) to V1 `/gemini-outlook` | V2 frontend (implemented, click only) | contracts §6 | V2, new, uses S-08 | OD-04, OD-06 |
+| S-14 | Portfolio prices from Hyperliquid `allMids` and EUR/USD from Frankfurter are fetched from the browser (public, keyless; same providers as V1) | V2 frontend | — | V2, new | OD-06, OD-09 |
+| S-15 | V2 Alerts reads V1 `GET /alert-configs` and `GET /alert-log` (unauthenticated V1 routes; alert parameters and messages are shown) | V2 frontend (implemented, while Alerts is open) | contracts §9 | V2, new, uses an open V1 route | OD-06 |
 | S-11 | V2 public read routes (predictions, sentiment, GLM, research) are unauthenticated; operational routes use an admin token | PulseWorkerV2 | `worker.js@b640e3c` | V2, pre-existing | OD-06 |
 | S-12 | The Cloudflare connector in Claude sessions can write to production D1 | session tooling | Phase 0 F5 | tooling | Operating rule: SELECT-only unless authorised |
 

@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -853,7 +853,8 @@ test('page structure: backtests live in Research; Learning & Audit holds prospec
   // V1 is called on exactly three routes (contracts §4/§6/§8): the digest (GET), the user's own backup (GET, explicit
   // click with confirmation, security register S-10) and the Narrative (POST, explicit click). Nothing else.
   const v1Calls = (SRC.match(/V1_WORKER_URL \+ '[^']+'/g) || []).sort();
-  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/txs-backup'"]);
+  assert.deepEqual(v1Calls, ["V1_WORKER_URL + '/alert-configs'", "V1_WORKER_URL + '/alert-log?limit=50'", "V1_WORKER_URL + '/foufi-latest'", "V1_WORKER_URL + '/gemini-outlook'", "V1_WORKER_URL + '/txs-backup'"]);
+  assert.doesNotMatch(SRC, /test-telegram|alert-configs\/toggle|alert-configs\/delete/, 'V2 never changes or tests V1 alerts');
   const imp = SRC.slice(SRC.indexOf('async function pfImportFromV1()'), SRC.indexOf('function pfDownload'));
   assert.match(imp, /if\(!confirm\(/, 'V1 backup read only after confirmation');
   assert.match(imp, /getJson\(V1_WORKER_URL \+ '\/txs-backup'\)/, 'GET only');
@@ -977,4 +978,16 @@ test('portfolio: no real personal transactions and no portfolio data in source; 
   assert.doesNotMatch(SRC, /localStorage\.setItem\('cp2_/, 'never writes V1 keys');
   const pfBlock = SRC.slice(SRC.indexOf('// ---- Portfolio accounting'), SRC.indexOf('// ---- END view-model helpers ----')).split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
   assert.doesNotMatch(pfBlock, /predictions|sentiment_v2|glm_|WORKER_URL/, 'accounting never touches the prediction domain');
+});
+
+test('V1 alerts: read-only model; enabled first; bad params and errors explicit', () => {
+  const cfg = { ok: true, data: { configs: [
+    { id: 1, type: 'price', enabled: 0, params_json: '{"coin":"BTC","above":70000}', cooldown_minutes: 60, last_fired_ts: NOW - HOUR, fire_count: 3 },
+    { id: 2, type: 'funding_spike', enabled: 1, params_json: 'not json', cooldown_minutes: null, last_fired_ts: null, fire_count: 0 }] } };
+  const log = { ok: true, data: { log: [{ id: 1, ts: NOW - 2 * HOUR, config_id: 1, type: 'price', message: 'BTC above 70000' }, { id: 2, ts: 'bad' }] } };
+  const m = plain(H.v1AlertsModel(cfg, log, NOW));
+  assert.deepEqual([m.configsState, m.logState, m.enabledCount, m.configs[0].id, m.configs[0].params, m.configs[1].params], ['ok', 'ok', 1, 2, 'unreadable parameters', 'coin BTC · above 70000']);
+  assert.deepEqual([m.log.length, m.lastFired], [1, NOW - 2 * HOUR]);
+  const e = plain(H.v1AlertsModel({ ok: false, error: 'HTTP 500' }, { ok: true, data: { log: [] } }, NOW));
+  assert.deepEqual([e.configsState, e.configsError, e.logState], ['error', 'HTTP 500', 'empty']);
 });

@@ -886,6 +886,13 @@
       <p class="text-xs text-[#BAC9CD] mb-3">Health of the V2 production chain, read from the same sources as the Overview status panel. V1's own price/market alerts and their Telegram delivery stay in V1 and are not shown here yet.</p>
       <div id="alertsStatusBody" class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="status"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
     </section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="v1AlTitle">
+      <h2 id="v1AlTitle" class="text-sm font-semibold mb-1">V1 market alerts <span class="text-[#BAC9CD] font-normal text-xs">· read-only</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-3">Configured and evaluated in V1 (every 15 minutes) and delivered by V1's Telegram integration. Shown as V1 stores them; to create, change or test an alert use V1. Nothing here sends a message or changes V1.</p>
+      <div id="v1AlConfigs" class="text-xs mb-3" role="status">Loading…</div>
+      <h3 class="text-xs font-semibold mb-1">Recent alerts fired</h3>
+      <div id="v1AlLog" class="text-xs" role="status">Loading…</div>
+    </section>
   </div>
 
   <div id="view-settings" class="hidden">
@@ -1765,6 +1772,22 @@ function foufiModel(res, now){
   if(!items.length) return { state: 'empty', items: [], note: 'V1 has no Foufi digest yet.' };
   const stale = now - items[0].publishedTs > FOUFI_STALE_HOURS * 3600000;
   return { state: 'ok', items, stale, latestTs: items[0].publishedTs };
+}
+// ---- V1 alerts, read-only (contracts §9): GET /alert-configs and GET /alert-log?limit=50. V1 evaluates them every
+// 15 min and delivers through its own Telegram integration; V2 never creates, edits, toggles or tests them. ----
+function v1AlertsModel(cfgRes, logRes, now){
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const cfgs = cfgRes && cfgRes.ok && cfgRes.data && Array.isArray(cfgRes.data.configs) ? cfgRes.data.configs : null;
+  const log = logRes && logRes.ok && logRes.data && Array.isArray(logRes.data.log) ? logRes.data.log : null;
+  const params = (j) => { try{ const o = JSON.parse(j || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? Object.entries(o).slice(0, 8).map(([k, v]) => k + ' ' + (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(' · ') : ''; }catch(e){ return 'unreadable parameters'; } };
+  return {
+    configsState: cfgs ? (cfgs.length ? 'ok' : 'empty') : 'error', logState: log ? (log.length ? 'ok' : 'empty') : 'error',
+    configsError: cfgs ? '' : (cfgRes && cfgRes.error) || 'not loaded', logError: log ? '' : (logRes && logRes.error) || 'not loaded',
+    configs: (cfgs || []).map((c) => ({ id: num(c.id), type: String(c.type || 'unknown'), enabled: c.enabled === 1 || c.enabled === true, params: params(c.params_json),
+      cooldownMin: num(c.cooldown_minutes), lastFired: num(c.last_fired_ts), fireCount: num(c.fire_count) || 0 })).sort((a, b) => (b.enabled - a.enabled) || ((b.lastFired || 0) - (a.lastFired || 0))),
+    log: (log || []).filter((l) => num(l.ts) !== null).map((l) => ({ ts: l.ts, type: String(l.type || ''), message: String(l.message || '').slice(0, 400), configId: num(l.config_id) })).sort((a, b) => b.ts - a.ts),
+    enabledCount: (cfgs || []).filter((c) => c.enabled === 1 || c.enabled === true).length,
+    lastFired: (log || []).reduce((m, l) => (num(l.ts) !== null && l.ts > m ? l.ts : m), 0) || null };
 }
 // ---- Portfolio accounting (contracts §8; temporary V1-equivalent security, owner decision OD-06). Pure functions:
 // the ledger is append-only (corrections are reversal rows), USD is the reporting currency, a missing FX rate is
@@ -2982,7 +3005,7 @@ function loadActiveView(force){
   if (activeView === 'forecast') loadForecastLabIfNeeded(force);
   if (activeView === 'sentiment-v1') loadSentimentV1IfNeeded(force);
   if (activeView === 'comparison') loadComparisonIfNeeded(force);
-  if (activeView === 'alerts') loadSystemStatus(force);
+  if (activeView === 'alerts') { loadSystemStatus(force); loadV1Alerts(force); }
   if (activeView === 'settings') renderSettings();
   if (activeView === 'portfolio') loadPortfolio(force);
 }
@@ -3517,6 +3540,23 @@ async function pfRunNarrative(){
   }catch(e){ _pf.narrative = { error: e.message }; }
   _pf.narrativeBusy = false; renderPortfolio();
 }
+// ---- Alerts: V1 alert configs and log (read-only) ----
+var _v1AlAt = 0;
+function loadV1Alerts(force){
+  if(!force && _v1AlAt && Date.now() - _v1AlAt < SV2_REFRESH_MS) return;
+  _v1AlAt = Date.now();
+  Promise.all([getJson(V1_WORKER_URL + '/alert-configs'), getJson(V1_WORKER_URL + '/alert-log?limit=50')]).then(([c, l]) => {
+    const m = v1AlertsModel(c, l, Date.now());
+    if(m.configsState === 'error' || m.logState === 'error') _v1AlAt = 0;
+    const cHost = document.getElementById('v1AlConfigs'), lHost = document.getElementById('v1AlLog');
+    cHost.innerHTML = m.configsState === 'error' ? `${chip('UNAVAILABLE', 'neutral')} <span class="text-[#BAC9CD]">V1 alert settings could not be read (${esc(m.configsError)}).</span>` :
+      m.configsState === 'empty' ? `${chip('NONE', 'neutral')} <span class="text-[#BAC9CD]">No alerts are configured in V1.</span>` :
+      `<p class="text-[#BAC9CD] mb-1">${m.enabledCount} of ${m.configs.length} enabled</p><ul class="space-y-1">${m.configs.map(a => `<li class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-2 ${a.enabled ? '' : 'opacity-60'}"><div class="flex justify-between gap-2 flex-wrap"><span class="font-semibold">${esc(a.type.replace(/_/g, ' '))}</span>${chip(a.enabled ? 'ON' : 'OFF', a.enabled ? 'good' : 'neutral')}</div><p class="text-[10px] text-[#8A9599] break-words">${esc(a.params) || 'no parameters'}${a.cooldownMin !== null ? ' · cooldown ' + a.cooldownMin + ' min' : ''} · fired ${a.fireCount}×${a.lastFired ? ', last ' + esc(fmtUtc(a.lastFired)) : ''}</p></li>`).join('')}</ul>`;
+    lHost.innerHTML = m.logState === 'error' ? `${chip('UNAVAILABLE', 'neutral')} <span class="text-[#BAC9CD]">V1 alert log could not be read (${esc(m.logError)}).</span>` :
+      m.logState === 'empty' ? `<span class="text-[#BAC9CD]">No alert has fired yet.</span>` :
+      `<ul class="space-y-1 max-h-[360px] overflow-y-auto">${m.log.map(l => `<li class="border-t border-[#3B494C]/60 pt-1"><span class="font-mono-data text-[#8A9599]">${esc(fmtUtc(l.ts))}</span> ${chip(l.type.replace(/_/g, ' ').toUpperCase() || 'ALERT', 'info')} <span class="text-[#E1E2E7] break-words">${esc(l.message)}</span></li>`).join('')}</ul>`;
+  });
+}
 // ---- Settings: display and connection preferences only; no model, weight or production configuration. ----
 function renderSettings(){
   const staging = /staging/.test(WORKER_URL);
@@ -3530,6 +3570,10 @@ function renderSettings(){
       <p class="text-[#BAC9CD] mt-1">Every time-based chart opens on <b>24H</b> and offers 7D, 1M and All (all available history). Expand any chart to full screen with its corner button; press Esc or the same button to return.</p></div>
     <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Time display</p>
       <p class="text-[#BAC9CD] mt-1">Tables and tooltips show UTC; chart axes use your device's local time (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown')}).</p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Portfolio data</p>
+      <p class="text-[#BAC9CD] mt-1">${(() => { const st = pfLoad(); return `${st.accounts.length} account(s) and ${st.txs.length} ledger row(s), stored only in this browser. Reporting currency: USD.`; })()} <button type="button" class="underline text-[#00E0FF]" onclick="goRoute('portfolio/transactions')">Export or import</button></p></div>
+    <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Alerts</p>
+      <p class="text-[#BAC9CD] mt-1">Market alerts and their Telegram delivery are set up in V1; V2 shows them read-only under <button type="button" class="underline text-[#00E0FF]" onclick="goRoute('alerts')">Alerts</button>. No alert credentials exist in this page.</p></div>
     <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">Not configurable here</p>
       <p class="text-[#BAC9CD] mt-1">Model weights, calibration, GLM influence and schedules are production settings of the backend and cannot be changed from this page.</p></div>`;
 }

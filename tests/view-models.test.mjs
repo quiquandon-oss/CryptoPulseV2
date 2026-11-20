@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -1120,3 +1120,83 @@ test('ECB FX in the accounting: manual rate wins, ECB fills the rest, the ledger
   assert.deepEqual(plain(m.fxUse), { manual: 1, ecb: 1, missing: 1 });
   assert.equal(JSON.stringify(st.txs), before, 'transactions unchanged');
 });
+
+// ---- Revolut / Neverless statements (V1 parity). Synthetic rows only, shaped like the V1-supported exports. ----
+const REV_HEAD = ['Symbol', 'Type', 'Quantity', 'Price', 'Value', 'Fees', 'Date'];
+const revRows = [REV_HEAD,
+  ['ETH', 'Buy', '0.00100000', '€1,900.00', '€1.90', '€0.00', 'Apr 10, 2026, 3:41:03 PM'],
+  ['LINK', 'Buy - Revolut X', '2', '$8.50', '$17.00', '$0.00', 'May 7, 2026, 9:00:00 AM'],
+  ['ETH', 'Staking reward', '0.00000343', '', '', '', 'May 8, 2026, 1:00:00 AM'],
+  ['BTC', 'Buy', '0.00001', '1,500,000,000.00 IDR', '15.00 IDR', '', 'Jun 1, 2026, 2:00:00 PM'],
+  ['LINK', 'Sell', '1', '€9,10', '€9,10', '', '2026-06-02'],
+  ['XRP', 'Buy', '10', '€0.50', '€5.00', '', 'Jun 3, 2026'],
+  ['EUR', 'Top-up', '100', '', '', '', 'Jun 3, 2026'],
+  ['ETH', 'Buy', '', '€1,900.00', '', '', 'Jun 4, 2026']];
+
+test('statement numbers and dates follow V1 (last separator is the decimal mark; Revolut, ISO, dd/mm/yyyy, Excel serial)', () => {
+  assert.deepEqual([H.pfStmtNum('€1,908.30'), H.pfStmtNum('1.908,30'), H.pfStmtNum('7,75'), H.pfStmtNum('1,908'), H.pfStmtNum('$8.50'), H.pfStmtNum('138,920.02 IDR')], [1908.3, 1908.3, 7.75, 1908, 8.5, 138920.02]);
+  assert.deepEqual([H.pfStmtDate('Apr 10, 2026, 3:41:03 PM'), H.pfStmtDate('2026-06-02T10:00:00Z'), H.pfStmtDate('02/06/2026'), H.pfStmtDate('46175'), H.pfStmtDate('junk')], ['2026-04-10', '2026-06-02', '2026-06-02', '2026-06-02', null]);
+});
+test('Revolut statement: buys in EUR, Revolut X in USD, staking reward at zero cost, IDR converted with V1 rate and ×1000 fix, sell kept', () => {
+  assert.equal(H.pfDetectStatement(revRows), 'revolut');
+  const m = H.pfFromRevolut(H.pfRowObjects(revRows));
+  assert.deepEqual(plain(m.items.map((i) => [i.accountName, i.tx.type, i.tx.asset, i.tx.qty, +i.tx.price.toFixed(6), i.tx.price_ccy, new Date(i.tx.ts).toISOString().slice(0, 10)])), [
+    ['Revolut', 'buy', 'ETH', 0.001, 1900, 'EUR', '2026-04-10'],
+    ['Revolut', 'buy', 'LINK', 2, 8.5, 'USD', '2026-05-07'],
+    ['Revolut', 'reward', 'ETH', 0.00000343, 0, 'USD', '2026-05-08'],
+    ['Revolut', 'buy', 'BTC', 0.01, +(1500000000 / 17800).toFixed(6), 'EUR', '2026-06-01'],
+    ['Revolut', 'sell', 'LINK', 1, 9.1, 'EUR', '2026-06-02']]);
+  assert.equal(m.flags.length, 1);
+  assert.match(m.items[3].tx.note, /17800 IDR\/EUR.*×1000/);
+  assert.equal(m.items[0].tx.src_id, 'rev:ETH:Apr 10, 2026, 3:41:03 PM:0.00100000');
+  assert.deepEqual(plain(m.skipped), { 'asset not tracked by V1 (XRP)': 1, 'not a buy, sell or staking reward': 1, 'missing quantity or date': 1 });
+});
+const NLV_HEAD = ['ID', 'Date', 'Type', 'Asset sent', 'Amount sent', 'Asset received', 'Amount received', 'USD price of asset received'];
+const nlvRows = [NLV_HEAD,
+  ['n1', '2026-03-01 10:00:00', 'Trade', 'USDT', '100', 'BTC', '0.001', '90000'],
+  ['n2', '2026-04-11 09:00:00', 'Trade', 'EURC', '50', 'LINK', '3', '17'],
+  ['n3', '2026-05-01 09:00:00', 'Trade', 'EURC', '45', 'LINK', '5', '9.5'],
+  ['n4', '2026-05-02 00:05:00', 'Deposit', '', '', 'BTC', '0.0000012', '95000'],
+  ['n5', '2026-05-03 12:00:00', 'Trade', 'LINK', '2', 'USDT', '19', '1'],
+  ['n6', '2026-05-04 12:00:00', 'Trade', 'BTC', '0.0001', 'ETH', '0.003', '2000'],
+  ['n7', '2026-05-05 12:00:00', 'Withdrawal', 'BTC', '0.001', '', '', '']];
+test('Neverless statement: stable/fiat trades are USD buys, deposits are zero-cost rewards, V1 seed cutoff applies only when asked', () => {
+  assert.equal(H.pfDetectStatement(nlvRows), 'neverless');
+  const objs = H.pfRowObjects(nlvRows);
+  const withSeed = H.pfFromNeverless(objs, H.PF_NEVERLESS_V1_SEED_DATE);
+  assert.deepEqual(plain(withSeed.items.map((i) => [i.tx.type, i.tx.asset, i.tx.qty, i.tx.price, i.tx.price_ccy, i.tx.src_id])), [
+    ['buy', 'LINK', 5, 9.5, 'USD', 'nlv:n3'], ['reward', 'BTC', 0.0000012, 0, 'USD', 'nlv:n4']]);
+  assert.equal(withSeed.skipped['on or before the V1 seed date 2026-04-11 (already in the V1 balance)'], 2);
+  assert.equal(Object.values(withSeed.skipped).reduce((a, b) => a + b, 0), 5);   // n1,n2 seed; n5 sell; n6 crypto-for-crypto; n7 withdrawal
+  const full = H.pfFromNeverless(objs, null);
+  assert.deepEqual(plain(full.items.map((i) => i.tx.src_id)), ['nlv:n1', 'nlv:n2', 'nlv:n3', 'nlv:n4']);
+});
+test('V1 duplicate rule: same account, day, asset and quantity; buy and reward match (V1 stores rewards as zero-price buys)', () => {
+  const t = (type, qty, hour) => ({ type, asset: 'ETH', qty, ts: Date.UTC(2026, 4, 8, hour) });
+  assert.equal(H.pfStmtMatchKey(t('reward', 0.00000343, 0), 'Revolut'), H.pfStmtMatchKey(t('buy', 0.00000343, 15), 'revolut'));
+  assert.notEqual(H.pfStmtMatchKey(t('buy', 0.001, 0), 'Revolut'), H.pfStmtMatchKey(t('buy', 0.001, 0), 'Neverless'));
+  assert.notEqual(H.pfStmtMatchKey(t('buy', 0.001, 0), 'Revolut'), H.pfStmtMatchKey(t('sell', 0.001, 0), 'Revolut'));
+});
+test('V1 backup: zero-price / isReward buys become zero-cost rewards (previously rejected), source ids kept', () => {
+  const v = H.pfFromV1Backup({ txs: [{ date: '2026-04-11', asset: 'LINK', acct: 'Neverless', type: 'buy', qty: 65.9, price: 16.9, ccy: 'EUR' },
+    { date: '2026-05-08', asset: 'ETH', acct: 'Revolut', type: 'buy', qty: 0.00000343, price: 0, ccy: 'EUR', isReward: true, srcId: 'rev:ETH:x:0.00000343' }] });
+  assert.deepEqual(plain(v.items.map((i) => [i.tx.type, i.tx.price, i.tx.price_ccy, i.tx.src_id])), [['buy', 16.9, 'EUR', null], ['reward', 0, 'USD', 'rev:ETH:x:0.00000343']]);
+  const store = { accounts: [{ id: 'a1', name: 'Neverless' }], txs: [] };
+  assert.equal(H.pfValidateTx({ id: 'x', account_id: 'a1', ...v.items[1].tx }, store, NOW + 400 * 86400000).length, 0);
+  assert.equal(H.pfHasV1NeverlessSeed(store), false);
+  store.txs.push({ id: 's', account_id: 'a1', ...v.items[0].tx });
+  assert.equal(H.pfHasV1NeverlessSeed(store), true);
+});
+test('XLSX sheet rows: shared strings, inline strings, numbers and empty cells keep their columns', () => {
+  const shared = '<sst><si><t>Symbol</t></si><si><t>Type</t></si><si><r><t>Buy</t></r><r><t xml:space="preserve"> - Revolut X</t></r></si><si><t>$8.50</t></si></sst>';
+  const sheet = '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="D1" t="inlineStr"><is><t>Price</t></is></c></row>'
+    + '<row r="2"><c r="A2" t="inlineStr"><is><t>LINK</t></is></c><c r="B2" t="s"><v>2</v></c><c r="C2"><v>2</v></c><c r="D2" t="s"><v>3</v></c></row><row r="3"/></sheetData></worksheet>';
+  assert.deepEqual(plain(H.pfXlsxSheetRows(sheet, shared)), [['Symbol', 'Type', '', 'Price'], ['LINK', 'Buy - Revolut X', '2', '$8.50']]);
+});
+test('portfolio import UI: accepts XLSX, explains the V1 order (backup, then statements), statement path before generic CSV', () => {
+  assert.match(SRC, /id="pfImportFile" type="file" accept="[^"]*\.xlsx/);
+  assert.match(SRC, /Same portfolio as V1/);
+  assert.ok(SRC.indexOf('if(pfImportStatement(csvRows, h)) return;') < SRC.indexOf('const parsed = pfCsvRowsToTxs(csvRows);'));
+  assert.match(SRC, /pfImportCandidates\(v1\.items, 'v1_backup_route', null, \{ v1Match: true \}\)/);
+});
+

@@ -793,11 +793,19 @@
 
   <div id="view-comparison" class="hidden">
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpTitle">
-      <h2 id="cmpTitle" class="text-lg font-bold tracking-tight mb-1">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2, read-only</span></h2>
-      <p class="text-xs text-[#BAC9CD] mb-3">Observes both engines; it never changes either. This first view is <b>descriptive and sentiment-level</b>: V1 and V2 sentiment at the same timestamps. Outcome-based evaluation (V1 vs V2 baseline vs V2 final after GLM, resolved against the market) needs a read-only backend route that is not deployed yet, so no accuracy figures are shown here.</p>
-      <div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1 w-fit mb-3"></div>
-      <div id="cmpSummary" class="text-xs" role="status">Loading…</div>
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0"><h2 id="cmpTitle" class="text-lg font-bold tracking-tight">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2 baseline vs V2 final, read-only</span></h2>
+        <p class="text-xs text-[#BAC9CD] mt-1">BTC. Each V2 prediction is a decision; V1's reading at or before it (at most 3 h old) is aligned to it, and all three are scored against the same resolved market outcome. Read from the backend's comparison route; nothing here changes either engine.</p></div>
+        <div class="flex gap-2 flex-wrap"><div id="cmpHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div><div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+      </div>
+      <div id="cmpOutcome" class="mt-3 text-xs" role="status">Loading…</div>
     </section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpRecTitle"><h3 id="cmpRecTitle" class="text-sm font-semibold mb-1">Recent aligned decisions</h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Newest first, up to 50. V1 direction uses the proposed 45/55 band; "—" means V1 had no reading within 3 h. Outcomes appear only after resolution.</p>
+      <div id="cmpRecords" class="overflow-x-auto text-xs">Loading…</div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpSentTitle"><h3 id="cmpSentTitle" class="text-sm font-semibold mb-1">Sentiment levels <span class="text-[#BAC9CD] font-normal text-xs">· descriptive</span></h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">V1 and V2 sentiment at the same timestamps (no outcomes). Same range as above.</p>
+      <div id="cmpSummary" class="text-xs" role="status">Loading…</div></section>
   </div>
 
   <div id="view-portfolio" class="hidden">
@@ -1772,6 +1780,36 @@ function foufiModel(res, now){
   if(!items.length) return { state: 'empty', items: [], note: 'V1 has no Foufi digest yet.' };
   const stale = now - items[0].publishedTs > FOUFI_STALE_HOURS * 3600000;
   return { state: 'ok', items, stale, latestTs: items[0].publishedTs };
+}
+// ---- Comparison, outcome-based (contracts §7; PulseWorkerV2 #182 /api/comparison/v1-v2[/summary], cmp-v1-v2-1).
+// Values are the Worker's; nothing is recomputed here. The 55/45 V1 band is a PROPOSED convention (OD-12). ----
+var CMP_CLAIM_TEXT = {
+  insufficient_sample: 'Too few resolved aligned outcomes (under 30) to compare the engines.',
+  no_supported_difference: 'No difference supported by the data (intervals overlap, or under 100 calls on a side).',
+  v1_higher_observational: 'V1 called the direction correctly more often than V2 on these decisions, and the 95% intervals do not overlap.',
+  v2_higher_observational: 'V2 called the direction correctly more often than V1 on these decisions, and the 95% intervals do not overlap.' };
+function cmpSummaryModel(res){
+  if(!res || !res.ok){
+    const d = res && res.data, err = (res && res.error) || 'request failed';
+    if(err === 'not_found') return { state: 'not_deployed', note: 'The comparison route is not live on this backend yet (PulseWorkerV2 #182 is merged; its production deploy is pending).' };
+    return { state: 'error', note: 'The comparison could not be loaded (' + err + (d && d.reason ? ', ' + d.reason : '') + ').' };
+  }
+  const d = res.data, s = d && d.summary;
+  if(!s || typeof s !== 'object') return { state: 'error', note: 'Unexpected response from the comparison route.' };
+  const acc = (a) => (a && typeof a.n === 'number' ? { n: a.n, correct: a.correct, rate: a.rate, ci: Array.isArray(a.ci95) ? a.ci95 : null } : { n: 0, correct: 0, rate: null, ci: null });
+  return { state: s.n_aligned ? 'ok' : 'empty', version: d.version || null, period: d.period, horizon: d.horizon_hours, generated: d.generated_ts, truncated: !!d.truncated,
+    status: s.status, claim: s.claim, claimText: CMP_CLAIM_TEXT[s.claim] || String(s.claim || ''), observational: /_observational$/.test(String(s.claim || '')),
+    nAligned: s.n_aligned, nResolved: s.n_resolved, nResolvedPairs: s.n_resolved_pairs, v1Coverage: s.v1_coverage, v1Sources: s.v1_sources || {},
+    noCall: s.no_call_rate || {}, agreement: s.agreement || {}, accV1: acc(s.accuracy && s.accuracy.v1), accV2b: acc(s.accuracy && s.accuracy.v2_baseline), accV2f: acc(s.accuracy && s.accuracy.v2_final),
+    brierV2b: s.brier && s.brier.v2_baseline ? s.brier.v2_baseline : null, brierV2f: s.brier && s.brier.v2_final ? s.brier.v2_final : null,
+    bands: Array.isArray(s.v1_bands) ? s.v1_bands : [], glm: s.glm || {}, methodology: d.methodology || {} };
+}
+function cmpRecordRows(res, n){
+  const recs = res && res.ok && res.data && Array.isArray(res.data.records) ? res.data.records : null;
+  if(!recs) return null;
+  return recs.slice(0, n).map((r) => ({ ts: r.decision_ts, target: r.target_ts, sha: r.git_commit_sha ? String(r.git_commit_sha).slice(0, 7) : null,
+    v1: r.v1 && r.v1.score !== null && r.v1.score !== undefined ? { score: r.v1.score, dir: r.v1.direction, source: r.v1.source, ageMin: r.v1.age_ms !== null ? Math.round(r.v1.age_ms / 60000) : null } : null,
+    v1Missing: r.v1 ? r.v1.missing_reason : 'missing', base: r.v2_baseline || {}, fin: r.v2_final || {}, outcome: r.outcome || { status: 'pending' } }));
 }
 // ---- V1 alerts, read-only (contracts §9): GET /alert-configs and GET /alert-log?limit=50. V1 evaluates them every
 // 15 min and delivers through its own Telegram integration; V2 never creates, edits, toggles or tests them. ----
@@ -3209,12 +3247,72 @@ function renderSentimentV1(res, period){
         callbacks: { title: items => items.length ? fmtUtc(items[0].parsed.x) : '' } } } } });
   enableChartFullscreen('v1Chart', () => _v1.chart);
 }
-var _cmp = { period: '24h', seq: 0 };
+var _cmp = { period: '24h', horizon: 24, seq: 0 };
 function loadComparisonIfNeeded(force){
   v1Presets('cmpPresets', _cmp.period, k => { _cmp.period = k; loadComparisonIfNeeded(); });
-  const seq = ++_cmp.seq, period = _cmp.period;
+  flSeg('cmpHorizons', [[12, '12 h'], [24, '24 h']], _cmp.horizon, k => { _cmp.horizon = Number(k); loadComparisonIfNeeded(); });
+  const seq = ++_cmp.seq, period = _cmp.period, h = _cmp.horizon;
   document.getElementById('cmpSummary').textContent = 'Loading…';
+  document.getElementById('cmpOutcome').textContent = 'Loading…';
+  document.getElementById('cmpRecords').textContent = 'Loading…';
+  if(force) apiCacheClear();
   sv2Comparison(period, force).then(res => { if(seq === _cmp.seq && activeView === 'comparison') renderComparison(res); });
+  const q = '?asset=BTC&horizon=' + h + '&period=' + period;
+  Promise.all([getJson(WORKER_URL + '/api/comparison/v1-v2/summary' + q), getJson(WORKER_URL + '/api/comparison/v1-v2' + q + '&limit=50')]).then(([sr, rr]) => {
+    if(seq !== _cmp.seq || activeView !== 'comparison') return;
+    renderCmpOutcome(cmpSummaryModel(sr)); renderCmpRecords(cmpRecordRows(rr, 50), cmpSummaryModel(rr.ok ? { ok: true, data: { summary: { n_aligned: 1 } } } : rr));
+  });
+}
+function cmpPct(v){ return v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%'; }
+function renderCmpOutcome(m){
+  const host = document.getElementById('cmpOutcome');
+  if(m.state === 'not_deployed' || m.state === 'error'){ host.innerHTML = `${chip(m.state === 'not_deployed' ? 'NOT LIVE YET' : 'UNAVAILABLE', m.state === 'error' ? 'bad' : 'neutral')} <span class="text-[#BAC9CD]">${esc(m.note)} No figures are shown in their place.</span>`; return; }
+  if(m.state === 'empty'){ host.innerHTML = `${chip('NO DECISIONS', 'neutral')} <span class="text-[#BAC9CD]">No V2 decision in this range. Choose a longer range.</span>`; return; }
+  const acc = (a) => a.n ? `<b class="text-[#E1E2E7]">${cmpPct(a.rate)}</b> <span class="text-[#8A9599]">[${a.ci ? cmpPct(a.ci[0]) + '–' + cmpPct(a.ci[1]) : '—'}]</span><br><span class="text-[10px] text-[#8A9599]">${a.correct} of ${a.n} calls</span>` : '<span class="text-[#8A9599]">no resolved calls</span>';
+  const tone = m.status === 'insufficient_sample' ? 'neutral' : m.observational ? 'warn' : 'info';
+  const sr = m.v1Sources;
+  host.innerHTML = `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3 mb-3"><p>${chip(String(m.claim || '').replace(/_/g, ' ').toUpperCase(), tone)} <span class="text-[#E1E2E7]">${esc(m.claimText)}</span></p>
+      ${m.observational ? '<p class="text-[11px] text-[#FBBF24] mt-1">Observational, not pre-registered. V1 is scored only on decisions where it had a reading and made a call (see coverage); V2 is scored on all of them, so the two samples differ. This does not show that either engine is better in general.</p>' : ''}</div>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal"></th><th class="px-2 font-normal">V1 production</th><th class="px-2 font-normal">V2 baseline (before GLM)</th><th class="px-2 font-normal">V2 final (after GLM)</th></tr></thead><tbody>
+      <tr class="border-t border-[#3B494C]/60 align-top"><td class="py-1.5 px-2 text-[#BAC9CD]">Direction accuracy [95% CI]</td><td class="px-2">${acc(m.accV1)}</td><td class="px-2">${acc(m.accV2b)}</td><td class="px-2">${acc(m.accV2f)}</td></tr>
+      <tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 text-[#BAC9CD]">Brier score (lower is better)</td><td class="px-2 text-[#8A9599]">n/a: V1 gives no probability</td><td class="px-2 font-mono-data">${m.brierV2b && m.brierV2b.score !== null ? m.brierV2b.score.toFixed(4) + ' <span class="text-[#8A9599]">n=' + m.brierV2b.n + '</span>' : '—'}</td><td class="px-2 font-mono-data">${m.brierV2f && m.brierV2f.score !== null ? m.brierV2f.score.toFixed(4) + ' <span class="text-[#8A9599]">n=' + m.brierV2f.n + '</span>' : '—'}</td></tr>
+      <tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 text-[#BAC9CD]">No call (abstention)</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v1)}</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v2_baseline)}</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v2_final)}</td></tr>
+    </tbody></table></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">Coverage</p><dl class="space-y-0.5 text-[#BAC9CD]">
+        <div class="flex justify-between gap-2"><dt>V2 decisions in range</dt><dd class="font-mono-data">${m.nAligned}${m.truncated ? ' (newest 500)' : ''}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Resolved</dt><dd class="font-mono-data">${m.nResolved}</dd></div>
+        <div class="flex justify-between gap-2"><dt>With a V1 reading</dt><dd class="font-mono-data">${cmpPct(m.v1Coverage)}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Resolved with V1</dt><dd class="font-mono-data">${m.nResolvedPairs}</dd></div>
+        <div class="flex justify-between gap-2"><dt>V1 source: server / app / none</dt><dd class="font-mono-data">${sr.server_composite_readings ?? 0} / ${sr.history ?? 0} / ${sr.missing ?? 0}</dd></div></dl></div>
+      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">Agreement (both made a call)</p><dl class="space-y-0.5 text-[#BAC9CD]">
+        ${[['V1 · V2 baseline', 'v1_v2_baseline'], ['V1 · V2 final', 'v1_v2_final'], ['V2 baseline · final', 'v2_baseline_v2_final']].map(([l, k]) => { const a = m.agreement[k] || {}; return `<div class="flex justify-between gap-2"><dt>${l}</dt><dd class="font-mono-data">${cmpPct(a.rate)} <span class="text-[#8A9599]">n=${a.n ?? 0}</span></dd></div>`; }).join('')}</dl></div>
+      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">GLM influence (BTC 24 h only)</p><dl class="space-y-0.5 text-[#BAC9CD]">
+        <div class="flex justify-between gap-2"><dt>Decisions in GLM scope</dt><dd class="font-mono-data">${m.glm.rows_in_scope ?? 0}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Adjusted by GLM</dt><dd class="font-mono-data">${m.glm.adjusted ?? 0}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Calls changed (no-flip: expected 0)</dt><dd class="font-mono-data">${m.glm.changed_calls ?? 0}</dd></div>
+        <div class="flex justify-between gap-2"><dt>Mean |adjustment|</dt><dd class="font-mono-data">${m.glm.mean_abs_adjustment === null || m.glm.mean_abs_adjustment === undefined ? '—' : (m.glm.mean_abs_adjustment * 100).toFixed(2) + ' pp'}</dd></div></dl>
+        ${(m.glm.adjusted || 0) === 0 ? '<p class="text-[10px] text-[#8A9599] mt-1">No decision has been adjusted yet, so V2 final equals V2 baseline everywhere in this range.</p>' : ''}</div>
+    </div>
+    <h4 class="text-xs font-semibold mt-4 mb-1">V1 threshold sensitivity <span class="text-[#8A9599] font-normal">(45/55 is the proposed convention, not production logic)</span></h4>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">V1 band (DOWN below / UP above)</th><th class="px-2 font-normal">Coverage</th><th class="px-2 font-normal">No call</th><th class="px-2 font-normal">Accuracy [95% CI]</th></tr></thead><tbody>
+      ${m.bands.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data">${esc(b.band)}${b.proposed ? ' ' + chip('PROPOSED', 'info') : ''}</td><td class="px-2 font-mono-data">${cmpPct(b.coverage)}</td><td class="px-2 font-mono-data">${cmpPct(b.no_call_rate)}</td><td class="px-2">${acc({ n: b.accuracy.n, correct: b.accuracy.correct, rate: b.accuracy.rate, ci: b.accuracy.ci95 })}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="text-[10px] text-[#8A9599] mt-3">Range ${esc(m.period)} · ${m.horizon} h · ${esc(m.version || '')} · generated ${esc(fmtUtc(m.generated))} (cached up to 5 min). Method: ${esc(m.methodology.claims || '')}</p>`;
+}
+function renderCmpRecords(rows, m){
+  const host = document.getElementById('cmpRecords');
+  if(m && (m.state === 'not_deployed' || m.state === 'error')){ host.innerHTML = `<span class="text-[#BAC9CD]">${esc(m.note)}</span>`; return; }
+  if(!rows || !rows.length){ host.innerHTML = '<span class="text-[#BAC9CD]">No decisions in this range.</span>'; return; }
+  const dir = (d) => d === 'UP' ? '<span class="text-[#4AE176]">UP</span>' : d === 'DOWN' ? '<span class="text-[#FFB4AB]">DOWN</span>' : d === 'NO_CALL' ? '<span class="text-[#8A9599]">no call</span>' : '—';
+  const hit = (d, o) => o.status !== 'resolved' || (d !== 'UP' && d !== 'DOWN') ? '' : d === o.direction ? ' ✓' : ' ✗';
+  const p = (v) => (v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%');
+  host.innerHTML = `<table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Decision (UTC)</th><th class="px-2 font-normal">V1</th><th class="px-2 font-normal">V2 baseline</th><th class="px-2 font-normal">V2 final</th><th class="px-2 font-normal">Outcome</th></tr></thead><tbody>${rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top">
+    <td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(fmtUtc(r.ts))}<br><span class="text-[10px] text-[#8A9599]">target ${esc(fmtUtc(r.target))}${r.sha ? ' · ' + esc(r.sha) : ''}</span></td>
+    <td class="px-2 whitespace-nowrap">${r.v1 ? `${r.v1.score} ${dir(r.v1.dir)}${hit(r.v1.dir, r.outcome)}<br><span class="text-[10px] text-[#8A9599]">${r.v1.source === 'server_composite_readings' ? 'server' : 'app'} · ${r.v1.ageMin} min before</span>` : '<span class="text-[#8A9599]">—</span>'}</td>
+    <td class="px-2 whitespace-nowrap font-mono-data">${p(r.base.p_up)} ${dir(r.base.direction)}${hit(r.base.direction, r.outcome)}</td>
+    <td class="px-2 whitespace-nowrap font-mono-data">${p(r.fin.p_up)} ${dir(r.fin.direction)}${hit(r.fin.direction, r.outcome)}<br><span class="text-[10px] text-[#8A9599]">${esc(String(r.fin.reason || '').replace(/_/g, ' '))}</span></td>
+    <td class="px-2 whitespace-nowrap">${r.outcome.status === 'resolved' ? dir(r.outcome.direction) + '<br><span class="text-[10px] text-[#8A9599]">' + esc(fmtUtc(r.outcome.resolved_ts)) + '</span>' : chip('PENDING', 'neutral')}</td></tr>`).join('')}</tbody></table>`;
 }
 function renderComparison(res){
   const host = document.getElementById('cmpSummary');

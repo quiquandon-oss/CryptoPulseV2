@@ -868,9 +868,10 @@
           <button type="button" id="pfExportJson" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Export full backup (JSON)</button>
           <label class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF] cursor-pointer">Import CSV / XLSX / JSON…<input id="pfImportFile" type="file" accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden"></label>
           <button type="button" id="pfImportV1" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import from V1 backup</button>
+          <button type="button" id="pfImportV1Embedded" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Import V1 embedded data</button>
           <button type="button" id="pfFxFetch" class="px-3 py-1.5 rounded-lg border border-[#3B494C] hover:border-[#00E0FF]">Fetch ECB reference rates</button>
         </div>
-        <p class="text-[10px] text-[#8A9599] mt-2"><b>Same portfolio as V1:</b> 1) "Import from V1 backup" (what V1 already holds), then 2) your Revolut and Neverless statements (CSV or XLSX, as exported for V1). They are read with V1's rules (BTC, ETH, SOL, LINK, HYPE; staking and Neverless deposits at zero cost; Neverless rows up to V1's 11 Apr 2026 starting balance skipped), and rows already in the ledger are skipped, so files can be re-imported safely.</p><p class="text-[10px] text-[#8A9599] mt-1">Generic CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
+        <p class="text-[10px] text-[#8A9599] mt-2"><b>Same portfolio as V1:</b> 1) "Import from V1 backup" (what V1 already holds) and "Import V1 embedded data" (the starting transactions, Neverless interest and daily prices built into the V1 page), then 2) your Revolut and Neverless statements (CSV or XLSX, as exported for V1). They are read with V1's rules (BTC, ETH, SOL, LINK, HYPE; staking and Neverless deposits at zero cost; Neverless rows up to V1's 11 Apr 2026 starting balance skipped), and rows already in the ledger are skipped, so files can be re-imported safely.</p><p class="text-[10px] text-[#8A9599] mt-1">Generic CSV columns: <span class="font-mono-data">date, account, type, asset, qty, price, price_ccy, fee, fee_ccy, fx_to_usd, transfer_id, note</span> (dates in UTC). Every row is validated; duplicates (same account, time, type, asset, quantity and price) are skipped; new account names are created only after you confirm. A full JSON backup restores into an empty portfolio only. "Import from V1" reads V1's stored backup once (buys and sells; V1 records EUR prices without an FX rate, so their USD cost stays unknown until you add rates).</p>
         <p id="pfFxMsg" class="text-[11px] mt-2"></p>
         <p id="pfImportMsg" class="text-[11px] mt-2"></p><ul id="pfImportRuns" class="text-[10px] text-[#BAC9CD] mt-1 space-y-0.5"></ul>
       </section>
@@ -2270,7 +2271,8 @@ function pfToCsv(store){
   return lines.join('\n') + '\n';
 }
 // V1 backup (GET /txs-backup → {txs:[{date, asset, acct, type:'buy'|'sell', qty, price, ccy}]}) → candidates.
-function pfFromV1Backup(json){
+function pfFromV1Backup(json, label){
+  const from = label || 'V1 backup';
   const list = json && Array.isArray(json.txs) ? json.txs : null;
   if(!list) return { items: [], errors: ['not a V1 backup (no txs list)'] };
   // V1 stores staking rewards and Neverless deposits as zero-price buys (isReward): they become zero-cost rewards here,
@@ -2278,7 +2280,7 @@ function pfFromV1Backup(json){
   return { errors: [], items: list.map((t, k) => { const reward = t.type === 'buy' && (t.isReward === true || pfNum(t.price) === 0);
     return { line: k + 1, accountName: String(t.acct || 'V1').trim() || 'V1', tx: { ts: pfDateMs(t.date), type: reward ? 'reward' : t.type,
     asset: pfAsset(t.asset) || String(t.asset || ''), qty: pfNum(t.qty), price: reward ? 0 : pfNum(t.price), price_ccy: reward ? 'USD' : String(t.ccy || 'USD').toUpperCase(), fee: null, fee_ccy: null,
-    fx_to_usd: null, transfer_id: null, note: reward ? 'imported from V1 backup (reward, zero cost)' : 'imported from V1 backup', src_id: t.srcId ? String(t.srcId) : null } }; }) };
+    fx_to_usd: null, transfer_id: null, note: reward ? 'imported from ' + from + ' (reward, zero cost)' : 'imported from ' + from, src_id: t.srcId ? String(t.srcId) : null } }; }) };
 }
 // ---- Revolut / Neverless statements (V1 parity). Ports V1's mapRevolut / mapNeverless rules (CryptoPulse
 // index.html, "CSV / XLSX IMPORT") so the same files give the same portfolio: V1's five tracked assets, staking and
@@ -2385,7 +2387,7 @@ function pfStmtMatchKey(t, accountName){
 // True when the ledger holds V1's Neverless seed balances (imported from a V1 backup, dated the seed day).
 function pfHasV1NeverlessSeed(store){
   const acc = ((store && store.accounts) || []).filter((a) => a.name.toLowerCase() === 'neverless').map((a) => a.id);
-  return ((store && store.txs) || []).some((t) => acc.includes(t.account_id) && /V1 backup/i.test(t.note || '') && new Date(t.ts).toISOString().slice(0, 10) === PF_NEVERLESS_V1_SEED_DATE);
+  return ((store && store.txs) || []).some((t) => acc.includes(t.account_id) && /V1 (backup|embedded data)/i.test(t.note || '') && new Date(t.ts).toISOString().slice(0, 10) === PF_NEVERLESS_V1_SEED_DATE);
 }
 // XLSX sheet XML → array rows (pure, regex-based: no DOM, so it is unit-tested). Shared strings, inline strings,
 // plain values; column letters place cells, so empty cells keep their position.
@@ -2405,6 +2407,51 @@ function pfXlsxSheetRows(sheetXml, sharedXml){
     if(row.some((c) => String(c).trim() !== '')) rows.push(row);
   }
   return rows;
+}
+// ---- V1 embedded portfolio data (V1 index.html: SEED_TXS, INTEREST_EUR, PRICE_HISTORY). Read from V1's public page
+// only on an explicit click and kept in this browser; never copied into V2's source (OD-06). ----
+var PF_V1_PAGE_URL = 'https://raw.githubusercontent.com/quiquandon-oss/CryptoPulse/main/index.html';
+function pfParseV1Embedded(html){
+  const out = { seedTxs: null, interestEur: null, priceHistory: null, errors: [] };
+  const grab = (name, key, isList) => {
+    const m = String(html || '').match(new RegExp('^const ' + name + '=(.*);\\s*$', 'm'));
+    if(!m){ out.errors.push(name + ' not found in the V1 page'); return; }
+    try{ const v = JSON.parse(m[1]); if(isList ? Array.isArray(v) : (v && typeof v === 'object' && !Array.isArray(v))) out[key] = v; else out.errors.push(name + ' has an unexpected shape'); }
+    catch(e){ out.errors.push(name + ' is not plain JSON'); }
+  };
+  grab('SEED_TXS', 'seedTxs', true); grab('INTEREST_EUR', 'interestEur', false); grab('PRICE_HISTORY', 'priceHistory', false);
+  return out;
+}
+// Cumulative Neverless interest (EUR by day) → one EUR cash deposit per calendar month (that month's accrual), dated the
+// month's last day in the series. Source ids make re-imports add nothing.
+function pfV1InterestDeposits(interestEur){
+  const days = Object.keys(interestEur || {}).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && pfNum(interestEur[d]) !== null).sort();
+  const items = []; let prev = 0;
+  const months = [...new Set(days.map((d) => d.slice(0, 7)))];
+  for(const mo of months){
+    const last = days.filter((d) => d.slice(0, 7) === mo).pop(), cum = pfNum(interestEur[last]), delta = Math.round((cum - prev) * 1e4) / 1e4;
+    prev = cum;
+    if(delta > 0) items.push({ line: items.length + 1, accountName: 'Neverless', tx: { ts: Date.parse(last + 'T00:00:00Z'), type: 'deposit', asset: 'EUR', qty: delta, price: null, price_ccy: '', fee: null, fee_ccy: null,
+      fx_to_usd: null, transfer_id: null, note: 'Neverless interest accrued in ' + mo + ' (V1 embedded series, cumulative €' + cum.toFixed(2) + ')', src_id: 'v1int:' + mo } });
+  }
+  return items;
+}
+// Daily value history from V1's embedded daily USD prices: for each day without a snapshot, the ledger's holdings at the
+// end of that day × that day's price. Only days before the first existing snapshot are added.
+function pfBackfillSnapshots(store, priceHistory){
+  const ph = priceHistory || {}, days = [...new Set(Object.values(ph).flatMap((o) => Object.keys(o || {})))].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  const snaps = (store && store.snapshots) || [], first = snaps.length ? Math.min(...snaps.map((s) => s.ts)) : Infinity;
+  const out = [];
+  for(const d of days){
+    const ts = Date.parse(d + 'T12:00:00Z'), end = Date.parse(d + 'T00:00:00Z') + 86400000;
+    if(ts >= first) break;
+    const sub = { ...store, txs: ((store && store.txs) || []).filter((t) => t.ts < end) };
+    const prices = {}; for(const [a, o] of Object.entries(ph)) if(o && pfNum(o[d]) !== null) prices[a] = o[d];
+    const m = pfCompute(sub, prices, null);
+    if(!m.positions.length || m.totals.valueUsd.value === null) continue;
+    out.push({ ts, totalUsd: m.totals.valueUsd.value, complete: m.totals.valueUsd.complete, source: 'v1_embedded_prices' });
+  }
+  return out;
 }
 // ---- END view-model helpers ----
 
@@ -3825,9 +3872,15 @@ function renderPfHoldings(m){
     enableChartFullscreen('pfAllocChart', () => _pf.alloc); }
   buildPresetTabs('pfValuePresets', _pf.range, k => { _pf.range = k; renderPortfolio(); });
   const now = Date.now(), clip = clipSeries(pfLoad().snapshots, 'ts', _pf.range, now);
-  document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' Recorded on this device, at most hourly, only while this page is open; gaps are not filled. ' + (A ? 'Whole portfolio, not this account.' : '');
+  const v1pts = clip.points.filter(p => p.source === 'v1_embedded_prices');
+  document.getElementById('pfValueNote').textContent = (coverageNote(clip.coverage, _pf.range, now) || '') + ' Recorded on this device, at most hourly, only while this page is open; gaps are not filled. '
+    + (v1pts.length ? `Daily points ${fmtUtc(v1pts[0].ts, false)} → ${fmtUtc(v1pts[v1pts.length - 1].ts, false)} come from V1's embedded prices. ` : '') + (A ? 'Whole portfolio, not this account.' : '');
+  // Points more than 3 days apart are not joined (no line across a period without data); an isolated point keeps a dot.
+  const PF_GAP_MS = 3 * 86400000, gapAt = (i) => i > 0 && clip.points[i].ts - clip.points[i - 1].ts > PF_GAP_MS;
+  const lonely = clip.points.map((p, i) => (i === 0 || gapAt(i)) && (i === clip.points.length - 1 || gapAt(i + 1)));
   const vdata = { datasets: [{ label: 'Portfolio value (USD)', data: clip.points.map(p => ({ x: p.ts, y: p.totalUsd })), borderColor: '#00E0FF', backgroundColor: '#00E0FF',
-    pointRadius: clip.points.length > 60 ? 0 : 2.5, borderWidth: 2, tension: 0, pointBackgroundColor: clip.points.map(p => (p.complete ? '#00E0FF' : 'rgba(0,0,0,0)')) }] };
+    pointRadius: clip.points.map((p, i) => (clip.points.length <= 60 || lonely[i] ? 2.5 : 0)), borderWidth: 2, tension: 0, pointBackgroundColor: clip.points.map(p => (p.complete ? '#00E0FF' : 'rgba(0,0,0,0)')),
+    segment: { borderColor: c => (c.p1.parsed.x - c.p0.parsed.x > PF_GAP_MS ? 'transparent' : undefined) } }] };
   // The axis spans the chosen window (All: from the first snapshot), so a single point is not stretched to milliseconds.
   const win = chartPreset(_pf.range), xMin = win.ms === Infinity ? (clip.coverage.firstTs !== null ? Math.min(clip.coverage.firstTs, now - 3600000) : now - 86400000) : now - win.ms;
   if(_pf.chart){ _pf.chart.data = vdata; _pf.chart.options.scales.x.min = xMin; _pf.chart.options.scales.x.max = now; _pf.chart.update(); }
@@ -4047,6 +4100,28 @@ async function pfFetchEcbRates(){
   }catch(e){ pfMsg('pfFxMsg', ['ECB rates unavailable (' + (e.name === 'AbortError' ? 'no answer within 60 s' : e.message) + '); transactions keep their own rates and missing ones stay missing; try again later']); }
   if(timer) clearTimeout(timer);
   renderPortfolio();
+}
+// "Import V1 embedded data": one GET of V1's public page (V1 is not changed), then its seed transactions, its Neverless
+// interest series (monthly EUR deposits) and its daily price history (value-history snapshots), all with V1's duplicate rule.
+async function pfImportV1Embedded(){
+  if(!confirm('Read the portfolio data embedded in the V1 page (starting transactions, Neverless interest, daily prices) and add what this ledger does not have yet? V1 is not changed.')) return;
+  pfMsg('pfImportMsg', [], 'Reading the V1 page…');
+  let html; try{ const r = await fetch(PF_V1_PAGE_URL, { cache: 'no-store' }); if(!r.ok) throw new Error('HTTP ' + r.status); html = await r.text(); }
+  catch(e){ return pfMsg('pfImportMsg', ['V1 page could not be read (' + e.message + ')']); }
+  const e = pfParseV1Embedded(html);
+  if(!e.seedTxs) return pfMsg('pfImportMsg', e.errors.length ? e.errors : ['no embedded transactions in the V1 page']);
+  const v1 = pfFromV1Backup({ txs: e.seedTxs }, 'V1 embedded data');
+  const run = pfImportCandidates(v1.items, 'v1_embedded', null, { v1Match: true });
+  if(run.cancelled || run.error) return pfShowRun(run);
+  let interest = null, added = 0;
+  if(e.interestEur){ interest = pfImportCandidates(pfV1InterestDeposits(e.interestEur), 'v1_embedded_interest', null, { v1Match: true }); }
+  if(e.priceHistory){ const s = pfLoad(), extra = pfBackfillSnapshots(s, e.priceHistory);
+    if(extra.length){ s.snapshots = s.snapshots.concat(extra).sort((a, b) => a.ts - b.ts); added = extra.length; pfSave(); } }
+  run.label = 'V1 embedded data';
+  run.cutoffNote = (interest && !interest.error ? `Neverless interest: ${interest.accepted} monthly EUR deposit(s) added, ${interest.duplicates} already present. ` : '')
+    + (e.priceHistory ? `Value history: ${added} daily point(s) added from V1's embedded prices (V1 interpolated them between trades).` : '')
+    + (e.errors.length ? ' Not found in the V1 page: ' + e.errors.join('; ') + '.' : '');
+  pfShowRun(run);
 }
 // "Import from V1": one GET of V1's backup route, only on this explicit click (S-10 in the security register).
 async function pfImportFromV1(){
@@ -4497,6 +4572,7 @@ document.getElementById('pfTxType').onchange = pfTypeFields;
 document.getElementById('pfTrAdd').onclick = pfSubmitTransfer;
 document.getElementById('pfExportCsv').onclick = () => pfExport('csv');
 document.getElementById('pfExportJson').onclick = () => pfExport('json');
+document.getElementById('pfImportV1Embedded').onclick = () => pfImportV1Embedded();
 document.getElementById('pfImportFile').onchange = (ev) => { pfImportFile(ev.target.files && ev.target.files[0]); ev.target.value = ''; };
 document.getElementById('pfImportV1').onclick = pfImportFromV1;
 document.getElementById('pfFxFetch').onclick = pfFetchEcbRates;

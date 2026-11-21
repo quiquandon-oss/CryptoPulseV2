@@ -45,22 +45,35 @@
     .mobile-scroll-hint { display: block; }
   }
   @media (min-width: 768px) { .mobile-scroll-hint { display: none; } }
+  /* UX layer: folded cards, clamped text, collapsed tables, captions, swipeable tabs */
+  .ux-card.ux-folded > :not(.ux-card-head):not(.ux-fold-btn) { display: none !important; }
+  .ux-card.ux-folded > .ux-card-head { cursor: pointer; margin-bottom: 0; }
+  .ux-card.ux-folded { padding-bottom: .75rem; }
+  .ux-fold-btn { display: inline-flex; gap: .25rem; align-items: center; font-size: 11px; font-weight: 600; color: #00E0FF; margin: .15rem 0 .4rem; }
+  .ux-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ux-more { display: block; font-size: 11px; font-weight: 600; color: #00E0FF; margin: -.1rem 0 .4rem; }
+  .ux-cap { font-size: 12px; font-weight: 600; color: #E1E2E7; margin: .25rem 0 .35rem; }
+  tr.ux-hide { display: none !important; }
+  .hidden + .ux-more { display: none; }
+  .ux-rows-btn { margin-top: .5rem; padding: .3rem .7rem; border: 1px solid #3B494C; border-radius: .5rem; font-size: 12px; font-weight: 600; color: #00E0FF; }
+  #areaTabs { scrollbar-width: none; scroll-behavior: smooth; }
+  #areaTabs::-webkit-scrollbar { display: none; }
+  #areaTabs.ux-fade-r { -webkit-mask-image: linear-gradient(to right, #000 82%, transparent); mask-image: linear-gradient(to right, #000 82%, transparent); }
+  #areaTabs.ux-fade-l.ux-fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 82%, transparent); mask-image: linear-gradient(to right, transparent, #000 12%, #000 82%, transparent); }
+  #areaTabs.ux-fade-l:not(.ux-fade-r) { -webkit-mask-image: linear-gradient(to right, transparent, #000 12%); mask-image: linear-gradient(to right, transparent, #000 12%); }
 </style>
 </head>
 <body class="bg-[#0B0E11] text-[#E1E2E7] min-h-screen pb-24 md:pb-8">
-<div class="max-w-5xl mx-auto px-4 sm:px-5 py-6 sm:py-10">
+<div class="max-w-5xl mx-auto px-4 sm:px-5 py-3 sm:py-8">
 
-  <header class="mb-6">
-    <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
-      <div>
-        <p class="text-[10px] uppercase tracking-[0.25em] text-[#00E0FF]/70 mb-1 font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px] text-[#00E0FF]">monitoring</span>CryptoPulse</p>
-        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">V2<span class="text-[#00E0FF]">.</span></h1>
-      </div>
+  <header class="mb-3 sm:mb-5">
+    <div class="flex items-center justify-between gap-3">
+      <h1 class="flex items-center gap-1.5 text-lg sm:text-2xl font-bold tracking-tight"><span class="material-symbols-outlined text-[20px] text-[#00E0FF]" aria-hidden="true">monitoring</span>CryptoPulse <span class="text-[#00E0FF]">V2</span></h1>
       <!-- Status pill (Worker/D1/Model) removed. The refresh button stays
            -- it has real independent value (force-refresh the current
            view's data), it's just no longer visually grouped with a
            status readout that no longer exists. -->
-      <button id="refreshBtn" aria-label="Refresh data and rerun the prediction" title="Refresh: fetch fresh price/technical data and re-run the prediction now" class="bg-[#191C1F] border border-[#3B494C] rounded-xl p-2.5 text-[#BAC9CD] hover:text-[#00E0FF] hover:border-[#00E0FF]/40 transition-colors shadow-sm">
+      <button id="refreshBtn" aria-label="Refresh data and rerun the prediction" title="Refresh: fetch fresh price/technical data and re-run the prediction now" class="bg-[#191C1F] border border-[#3B494C] rounded-xl p-2 text-[#BAC9CD] hover:text-[#00E0FF] hover:border-[#00E0FF]/40 transition-colors shadow-sm">
         <svg id="refreshIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>
       </button>
     </div>
@@ -742,7 +755,7 @@
           <p id="pfValueNote" class="text-[11px] text-[#8A9599] mb-2"></p><div class="relative h-[260px]"><canvas id="pfValueChart" role="img" aria-label="Portfolio value over time, recorded on this device"></canvas></div></section>
       <ul id="pfIssues" class="space-y-1 text-[11px] mb-3"></ul>
       <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfPosTitle"><h3 id="pfPosTitle" class="text-sm font-semibold mb-2">Holdings</h3>
-        <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Quantity</th><th class="py-1 px-2 font-normal text-right">Price</th><th class="py-1 px-2 font-normal text-right">Value</th><th class="py-1 px-2 font-normal text-right">Avg cost</th><th class="py-1 px-2 font-normal text-right">Cost basis</th><th class="py-1 px-2 font-normal text-right">Unrealised</th><th class="py-1 px-2 font-normal text-right">Realised</th></tr></thead><tbody id="pfPositions"></tbody></table></div>
+        <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal ">Asset</th><th class="py-1 px-2 font-normal text-right">Quantity</th><th class="py-1 px-2 font-normal text-right">Price</th><th class="py-1 px-2 font-normal text-right">Value</th><th class="py-1 px-2 font-normal text-right">Avg cost</th><th class="py-1 px-2 font-normal text-right">Invested</th><th class="py-1 px-2 font-normal text-right">Paper P&amp;L</th><th class="py-1 px-2 font-normal text-right">Locked-in P&amp;L</th></tr></thead><tbody id="pfPositions"></tbody></table></div>
         <p class="text-[10px] text-[#8A9599] mt-2">Average-cost method. Fees paid in the price currency are part of the cost; a fee paid in the asset reduces the quantity. Internal transfers move quantity and cost between accounts without a buy or a sell. A cost recorded in another currency without an FX rate stays in that currency and is never converted with a guessed rate.</p>
       </section>
       <div>
@@ -794,7 +807,7 @@
 
     <div id="pf-planning" class="hidden">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfDryTitle"><h3 id="pfDryTitle" class="text-sm font-semibold mb-1">Dry powder planner</h3>
+        <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfDryTitle"><h3 id="pfDryTitle" class="text-sm font-semibold mb-1">Cash ready to invest · planner</h3>
           <p id="pfCashLine" class="text-[11px] text-[#8A9599] mb-2"></p>
           <div class="grid grid-cols-2 gap-2"><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Asset</span><select id="pfDryAsset" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full"></select></label><label class="flex flex-col gap-0.5 min-w-0 "><span class="text-[10px] text-[#8A9599]">Amount to deploy (USD)</span><input id="pfDryAmount" inputmode="decimal" class="bg-[#0B0E11] border border-[#3B494C] rounded-md px-2 py-1.5 text-xs min-w-0 w-full" placeholder="1000"></label></div>
           <p id="pfDryOut" class="text-xs mt-2 text-[#BAC9CD]" role="status"></p><p class="text-[10px] text-[#8A9599] mt-1">Same rule as V1: the amount buys at the current price and is blended into the average cost.</p></section>
@@ -2770,6 +2783,42 @@ function sv2fMethodologyItems(d){
   extra.push('Readings about an hour apart with 12/24 h horizons overlap, so the effective sample is smaller than n.');
   return { items: out, extra };
 }
+// ---- UX layer (pure part). Nothing is removed: long text is clamped with "More", long tables show their first rows
+// with "Show all", and secondary cards fold to their title. The DOM side is uxEnhance() further down.
+var UX_CLAMP_WORDS = 30, UX_TABLE_MAX = 8, UX_TABLE_SHOW = 5;
+// one short plain-language caption per table/ledger, keyed by the tbody id, a container id or the card heading id
+var UX_CAPTIONS = {
+  pfPositions: 'What you own now', pfLedger: 'Every buy, sell and transfer', pfBreakEven: 'Price each coin needs to break even',
+  pfBeProb: 'Chance of reaching break-even, by time', pfScenarios: 'Your portfolio if the market moves',
+  historyRecapTbody: 'Every past forecast and its outcome', variantCycleBody: 'What each model version says right now',
+  labModelHealthBody: 'Is each model getting better or worse?', labWeightingBody: 'Accuracy of each weighting mix',
+  flPev1: 'Sentiment vs AI price forecasts, scored', flCovTitle: 'How many forecasts each model made', flLedgerBody: 'AI price forecasts vs the real price',
+  sv2fTrack: 'How often each V2 signal was right', sv2fBands: 'Is a stronger score more reliable?', sv2fRecords: 'Each V2 reading and what BTC did next',
+  glmHistory: 'When the evidence layer changed a forecast', cmpOpposite: 'When they disagreed, who was right', cmpAvail: 'Data available per asset and horizon',
+  cmpGlm: 'Did the evidence tweak help?', cmpTable: 'Each side-by-side call and the result', regimeSplitTitle: 'Score accuracy by market mood',
+  historyBacktestTitle: 'Offline test results'
+};
+// cards that stay open by default; every other card in these views folds to its title (the user's choice is remembered)
+var UX_FOLD_VIEWS = {
+  'view-comparison': ['#0', 'cmpSecA'], 'view-forecast': ['#0', 'flMainTitle'], 'view-lab': ['labCompareCard', 'selectedModelCard'],
+  'view-v2forecast': ['#0', '#1', '#2', 'sv2fChartSection'], 'view-dashboard': ['overviewCard', 'chartSection'], 'view-experiments': ['#0'], 'view-glm': ['glmPanel'],
+  // Portfolio › Transactions: the ledger stays open; the entry forms (accounts, add, transfer, import) fold to their titles
+  'pf-transactions': ['pfLedgerTitle']
+};
+function uxWords(text){ return String(text || '').trim().split(/\s+/).filter(Boolean).length; }
+function uxShouldClamp(text){ return uxWords(text) >= UX_CLAMP_WORDS; }
+// rows to hide for a table of n rows; expanded tables hide nothing
+function uxTablePlan(n, expanded){
+  if(n <= UX_TABLE_MAX) return { collapsible: false, show: n, hidden: 0, label: '' };
+  if(expanded) return { collapsible: true, show: n, hidden: 0, label: 'Show fewer' };
+  return { collapsible: true, show: UX_TABLE_SHOW, hidden: n - UX_TABLE_SHOW, label: 'Show all ' + n.toLocaleString('en-US') + ' rows' };
+}
+function uxCaptionFor(keys){ for(const k of keys){ if(k && UX_CAPTIONS[k]) return UX_CAPTIONS[k]; } return null; }
+// is card number i (with id) open by default in a fold view? null = view does not fold
+function uxCardOpenByDefault(viewId, i, id){
+  const list = UX_FOLD_VIEWS[viewId]; if(!list) return null;
+  return list.includes('#' + i) || (!!id && list.includes(id));
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -3848,7 +3897,7 @@ function renderSv2Forecast(){
     + `</div><p class="text-[11px] text-[#8A9599] mt-2">Reading ${esc(fmtUtc(n.decisionTs))}${sv2fAgeText(n.ageMs) ? ' (' + esc(sv2fAgeText(n.ageMs)) + ')' : ''} · target ${esc(fmtUtc(n.targetTs))} · BTC ${h}h ahead.</p>`
     : '<span class="text-[#8A9599]">No current reading.</span>';
   const tr = sv2fTrackRows(s), counts = sv2fCounts(s);
-  document.getElementById('sv2fTrack').innerHTML = sv2fTable(['Series', 'n', 'Correct', 'Accuracy', 'Wilson 95% CI', 'Brier'],
+  document.getElementById('sv2fTrack').innerHTML = sv2fTable(['Series', 'Checked', 'Right', 'Right-call rate', '95% range', 'Brier'],
     tr.map(r => `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 whitespace-nowrap"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:${r.color}"></span>${esc(r.label)}</td><td class="px-2 font-mono-data text-right">${r.hasData ? r.n : '—'}</td><td class="px-2 font-mono-data text-right">${r.hasData ? r.correct : '—'}</td><td class="px-2 font-mono-data text-right">${esc(r.accuracy)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(r.ci)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(r.brier)}</td></tr>`).join(''), [0, 'r', 'r', 'r', 'r', 'r'])
     + `<p class="text-[11px] text-[#8A9599] mt-2">${counts.map(c => esc(c.label) + ' <span class="font-mono-data text-[#E1E2E7]">' + (c.value == null ? '—' : c.value) + '</span>').join(' · ')}. Brier: lower is better; direction-only series have none. Accuracy counts only resolved readings where the series made an UP/DOWN call.</p>`;
   const hh = sv2fHeadToHeadRows(s);
@@ -3857,7 +3906,7 @@ function renderSv2Forecast(){
     <div class="font-mono-data">${esc(r.a.label)}: ${esc(r.a.rate)} <span class="text-[#8A9599]">(CI ${esc(r.a.ci)})</span></div><div class="font-mono-data">${esc(r.b.label)}: ${esc(r.b.rate)} <span class="text-[#8A9599]">(CI ${esc(r.b.ci)})</span></div>
     <p class="mt-2">${chip(String(r.claim || '').replace(/_/g, ' ').toUpperCase(), r.tone)} ${esc(r.text)}</p></div>`).join('') + '</div>';
   const br = sv2fBandRows(s);
-  document.getElementById('sv2fBands').innerHTML = br.length ? sv2fTable(['Band (down/up)', 'Coverage', 'n', 'Accuracy', 'Wilson 95% CI'],
+  document.getElementById('sv2fBands').innerHTML = br.length ? sv2fTable(['Band (down/up)', 'Coverage', 'Checked', 'Right-call rate', '95% range'],
     br.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 whitespace-nowrap font-mono-data">${esc(b.band)} ${b.proposed ? chip('PROPOSED', 'warn') : ''}</td><td class="px-2 font-mono-data text-right">${esc(b.coverage)}</td><td class="px-2 font-mono-data text-right">${b.n}</td><td class="px-2 font-mono-data text-right">${esc(b.accuracy)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(b.ci)}</td></tr>`).join(''), [0, 'r', 'r', 'r', 'r'])
     + '<p class="text-[11px] text-[#8A9599] mt-2">Wider bands call more readings but only the called ones are scored; coverage is the share of readings with a call. The 45/55 rule is a proposal, not a tuned threshold.</p>' : '<span class="text-[#8A9599]">No band data yet.</span>';
   const rows = sv2fRecordRows(d.records), shown = rows.slice(0, _sv2f.shown);
@@ -4379,7 +4428,9 @@ async function pfLoadPrices(force){
 function pfMoney(v, d = 2){ return v === null || v === undefined || !isFinite(v) ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
 function pfQty(v){ return v === null || v === undefined ? '—' : (+v).toLocaleString('en-US', { maximumFractionDigits: 8 }); }
 function pfSigned(v){ return v === null ? '<span class="text-[#8A9599]">unknown</span>' : `<span class="${v >= 0 ? 'text-[#4AE176]' : 'text-[#FFB4AB]'}">${v >= 0 ? '+' : ''}${pfMoney(v)}</span>`; }
-function pfPartial(t){ return t.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]">partial</span>'; }
+function pfPartial(t){ return t.complete ? '' : ' <span class="text-[10px] text-[#FBBF24]" title="some holdings have no price or cost yet, so this total is incomplete">partial</span>'; }
+// a zero or empty total that is also incomplete would read as broken: show a dash and say why instead
+function pfKpiAmount(text, t){ return !t.complete && !t.value ? '— <span class="text-[10px] text-[#FBBF24]">missing prices</span>' : text + pfPartial(t); }
 function pfSnapshot(m){
   const s = pfLoad(), last = s.snapshots[s.snapshots.length - 1];
   // Only with live prices loaded: a snapshot taken before them would record an empty value and block the next hour.
@@ -4472,12 +4523,12 @@ function renderPfHoldings(m){
   const T = A ? { valueUsd: sumOf(A.positions, 'valueUsd'), costUsd: sumOf(A.positions, 'costUsd'), unrealizedUsd: sumOf(A.positions, 'unrealizedUsd'), realizedUsd: sumOf(A.positions, 'realizedUsd') } : t;
   const intHere = !A || A.name.toLowerCase() === 'neverless', iEurH = intHere ? iEur : 0, iUsdH = intHere ? iUsd : 0;
   _pf.liveAccountValue = A ? (T.valueUsd.complete && iUsdH !== null ? T.valueUsd.value + (iUsdH || 0) : null) : null;
-  const cashCard = (cash, cu) => kpi(A ? 'Cash in account' : 'Cash (dry powder)', cu.complete ? pfMoney(cu.usd) : 'partial', (Object.entries(cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none') + ' · uninvested cash: deposits − buys + sells');
+  const cashCard = (cash, cu) => kpi(A ? 'Cash in account' : 'Cash ready to invest', cu.complete ? pfMoney(cu.usd) : 'partial', (Object.entries(cash).filter(([, v]) => Math.abs(v) > 1e-9).map(([c, v]) => esc(c) + ' ' + v.toFixed(2)).join(' · ') || 'none') + ' · uninvested cash: deposits − buys + sells');
   document.getElementById('pfKpis').innerHTML = !pfLoad().txs.length ? '' :
       kpi('Market value', pfMoney(T.valueUsd.value + (iUsdH || 0)) + pfPartial({ complete: T.valueUsd.complete && iUsdH !== null }), (A ? esc(A.name) + ' · ' : '') + (iEurH > 0 ? `current prices + Neverless interest €${iEurH.toFixed(2)} (V1 accrual)` : 'current prices')) +
-      kpi('Cost basis of holdings', pfMoney(T.costUsd.value) + pfPartial(T.costUsd), 'what was paid for what is still held') +
-      kpi('Unrealised P&L', pfSigned(T.unrealizedUsd.value === null ? null : T.unrealizedUsd.value + (iUsdH || 0)) + pfPartial({ complete: T.unrealizedUsd.complete && iUsdH !== null }), iEurH > 0 ? 'market movement + Neverless interest (as V1)' : 'market movement on holdings') +
-      kpi('Realised P&L', pfSigned(T.realizedUsd.value) + pfPartial(T.realizedUsd), 'from sells, after fees') +
+      kpi('Amount invested', pfKpiAmount(pfMoney(T.costUsd.value), T.costUsd), 'what was paid for what is still held') +
+      kpi('Paper gain / loss', pfKpiAmount(pfSigned(T.unrealizedUsd.value === null ? null : T.unrealizedUsd.value + (iUsdH || 0)), { complete: T.unrealizedUsd.complete && iUsdH !== null, value: T.unrealizedUsd.value }), iEurH > 0 ? 'market movement + Neverless interest (as V1)' : 'market movement on holdings') +
+      kpi('Locked-in gain / loss', pfSigned(T.realizedUsd.value) + pfPartial(T.realizedUsd), 'from sells, after fees') +
       (hasCash ? (A ? cashCard(A.cash, A.cashUsd) : cashCard(t.cash, t.cashUsd)) : '');
   const neg = hasCash ? Object.entries(A ? A.cash : t.cash).filter(([, v]) => v < -1e-9) : [];
   document.getElementById('pfIssues').innerHTML = (neg.length ? `<li>${chip('CASH', 'warn')} Buys exceed recorded deposits in ${neg.map(([c]) => esc(c)).join(', ')}: record deposits to track cash; holdings and P&L are unaffected.</li>` : '') +
@@ -4963,7 +5014,7 @@ function flPp(v){ return v === null || v === undefined ? '—' : (v > 0 ? '+' : 
 function flUsd(v){ return v === null || v === undefined ? '—' : '$' + Math.round(v).toLocaleString('en-US'); }
 function flSeg(host, items, active, onPick){
   const el = document.getElementById(host);
-  el.innerHTML = items.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${String(k) === String(active)}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${String(k) === String(active) ? 'bg-[#A78BFA] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${l}</button>`).join('');
+  el.innerHTML = items.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${String(k) === String(active)}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${String(k) === String(active) ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${l}</button>`).join('');
   el.querySelectorAll('button').forEach(b => { b.onclick = () => onPick(b.dataset.k); });
 }
 async function loadForecastLabIfNeeded(force){
@@ -5644,13 +5695,14 @@ function enableChartFullscreen(canvasId, getChart){
 // to ALL: analyzing since V2's actual beginning is the standing
 // expectation now, range tabs are an optional zoom-in from there, not
 // the starting view. ----
-const LAB_RANGES = CHART_PRESETS;   // shared 24H / 7D / 1M / All (OD-08), independent state per chart
-const labChartRangeState = {};
+var LAB_RANGES = CHART_PRESETS;   // shared 24H / 7D / 1M / All (OD-08), independent state per chart
+var labChartRangeState = labChartRangeState || {};   // var (hoisted): the lab can render before this line runs on a deep link
 function buildLabRangeTabs(hostId, stateKey, onChange){
+  if(!labChartRangeState) labChartRangeState = {};
   if(!(stateKey in labChartRangeState)) labChartRangeState[stateKey] = CHART_DEFAULT_PRESET;
   const host = document.getElementById(hostId);
   if(!host) return;
-  host.innerHTML = LAB_RANGES.map(r =>
+  host.innerHTML = (LAB_RANGES || CHART_PRESETS).map(r =>
     `<button type="button" data-range="${r.key}" aria-pressed="${r.key===labChartRangeState[stateKey]}" class="range-tab px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors ${r.key===labChartRangeState[stateKey] ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${r.label}</button>`
   ).join('');
   host.querySelectorAll('.range-tab').forEach(btn => {
@@ -5660,7 +5712,7 @@ function buildLabRangeTabs(hostId, stateKey, onChange){
 function clipToLabRange(points, tsField, stateKey){
   const range = labChartRangeState[stateKey] || 'ALL';
   if(range === 'ALL') return points;
-  const rangeMeta = LAB_RANGES.find(r => r.key === range);
+  const rangeMeta = (LAB_RANGES || CHART_PRESETS).find(r => r.key === range);
   const cutoff = Date.now() - rangeMeta.ms;
   return points.filter(p => p[tsField] >= cutoff);
 }
@@ -6203,6 +6255,103 @@ function renderRegistry(){
 }
 
 document.getElementById('expRefreshBtn').onclick = () => { apiCacheClear(); _experimentsLoaded = false; loadExperimentsIfNeeded(); };
+
+// ---- UX layer (DOM side): runs after every render via a MutationObserver. It only adds classes, captions and toggle
+// buttons; it never removes or rewrites content, so every chart, table row and paragraph stays reachable.
+var _uxOpenTables = {}, _uxTimer = 0, _uxSeq = 0;
+var UX_FOLD_KEY = 'cpv2_ux_folds_v1';
+function uxFoldState(){ try { return JSON.parse(localStorage.getItem(UX_FOLD_KEY) || '{}') || {}; } catch(e){ return {}; } }
+function uxSaveFold(key, open){ try { const s = uxFoldState(); s[key] = open; localStorage.setItem(UX_FOLD_KEY, JSON.stringify(s)); } catch(e){} }
+function uxFold(card, open){
+  card.classList.toggle('ux-folded', !open);
+  const b = card.querySelector(':scope > .ux-fold-btn');
+  if(b){ b.setAttribute('aria-expanded', String(open)); b.innerHTML = open ? 'Hide <span aria-hidden="true">▴</span>' : 'Show <span aria-hidden="true">▾</span>'; }
+  if(open) setTimeout(() => window.dispatchEvent(new Event('resize')), 30);   // charts drawn while folded re-measure
+}
+function uxFoldCards(view){
+  if(!view) return;
+  const cards = [...view.children].filter(c => c.tagName === 'SECTION');
+  const saved = uxFoldState();
+  cards.forEach((card, i) => {
+    if(card.dataset.uxFold) return;
+    const cid = card.id || card.getAttribute('aria-labelledby') || (card.firstElementChild && card.firstElementChild.id) || '';
+    const def = uxCardOpenByDefault(view.id, i, cid);
+    if(def === null || !card.firstElementChild || (i === 0 && def)) return;   // an open lead card (title + answer) never folds
+    const key = view.id + ':' + (cid || i);
+    card.dataset.uxFold = key;
+    card.classList.add('ux-card');
+    const kids = [...card.children], hIdx = kids.slice(0, 2).findIndex(k => /^H[2-4]$/.test(k.tagName));
+    const head = kids.slice(0, hIdx > 0 ? hIdx + 1 : 1);
+    head.forEach(k => k.classList.add('ux-card-head'));
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ux-fold-btn';
+    b.onclick = () => { const open = card.classList.contains('ux-folded'); uxFold(card, open); uxSaveFold(key, open); };
+    head[head.length - 1].after(b);
+    head.forEach(k => k.addEventListener('click', (ev) => { if(card.classList.contains('ux-folded') && !ev.target.closest('button,a,input,select,label')) b.click(); }));
+    uxFold(card, key in saved ? !!saved[key] : def);
+  });
+}
+function uxClampText(view){
+  for(const el of view.querySelectorAll('p:not([data-ux-clamp])')){
+    // headlines (bold/semibold verdict lines) are the answer and always stay in full
+    if(el.closest('table,summary,.ux-cap,nav') || /\bflex\b|\bgrid\b|font-semibold|font-bold/.test(el.className) || !uxShouldClamp(el.textContent)) continue;
+    el.dataset.uxClamp = '1'; el.classList.add('ux-clamp');
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ux-more'; b.textContent = 'More'; b.setAttribute('aria-expanded', 'false');
+    b.onclick = () => { const open = el.classList.toggle('ux-clamp') === false; b.textContent = open ? 'Less' : 'More'; b.setAttribute('aria-expanded', String(open)); };
+    el.after(b);
+  }
+}
+function uxTableKey(t, view){
+  const keys = [t.tBodies[0] && t.tBodies[0].id];
+  for(let x = t.parentElement; x && x !== view; x = x.parentElement) keys.push(x.id);
+  const sec = t.closest('section'); const h = sec && sec.querySelector('h2[id],h3[id]'); if(h) keys.push(h.id);
+  return { caption: uxCaptionFor(keys), key: keys.find(Boolean) || null };
+}
+function uxRowsOf(t){ return t.tBodies.length ? [...t.tBodies].flatMap(b => [...b.rows]) : [...t.rows].filter(r => !r.closest('thead') && !r.querySelector('th')); }
+function uxCollapseTables(view){
+  for(const t of view.querySelectorAll('table')){
+    const par = t.parentElement;
+    const anchor = par && par.children.length === 1 && /overflow/.test(par.className) ? par : t;
+    if(!anchor.dataset.uxId) anchor.dataset.uxId = 'ux' + (++_uxSeq);
+    const info = uxTableKey(t, view), key = info.key || anchor.dataset.uxId;
+    const rows = uxRowsOf(t).filter(r => !(r.cells.length === 1 && /Loading/.test(r.textContent)));
+    const plan = uxTablePlan(rows.length, !!_uxOpenTables[key]);
+    if(info.caption){
+      let cap = anchor.previousElementSibling;
+      if(!cap || !cap.classList.contains('ux-cap')){ cap = document.createElement('p'); cap.className = 'ux-cap'; anchor.before(cap); }
+      const txt = info.caption + (rows.length ? ' · ' + rows.length.toLocaleString('en-US') + (rows.length === 1 ? ' row' : ' rows') : '');
+      if(cap.textContent !== txt) cap.textContent = txt;
+    }
+    rows.forEach((r, i) => r.classList.toggle('ux-hide', i >= plan.show));
+    let btn = anchor.nextElementSibling;
+    if(!btn || !btn.classList.contains('ux-rows-btn')){
+      if(!plan.collapsible) continue;
+      btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ux-rows-btn'; anchor.after(btn);
+    }
+    btn.dataset.key = key;
+    btn.onclick = () => { _uxOpenTables[btn.dataset.key] = !_uxOpenTables[btn.dataset.key]; uxEnhance(); if(!_uxOpenTables[btn.dataset.key]) anchor.scrollIntoView({ block: 'nearest' }); };
+    btn.classList.toggle('hidden', !plan.collapsible);
+    if(btn.textContent !== plan.label) btn.textContent = plan.label;
+  }
+}
+function uxEnhance(){
+  for(const id of Object.keys(UX_FOLD_VIEWS)) uxFoldCards(document.getElementById(id));
+  for(const view of document.querySelectorAll('[id^="view-"]')){ uxClampText(view); uxCollapseTables(view); }
+}
+function uxTabsFade(){
+  const t = document.getElementById('areaTabs'); if(!t) return;
+  const more = t.scrollWidth > t.clientWidth + 4 && t.scrollLeft + t.clientWidth < t.scrollWidth - 4;
+  t.classList.toggle('ux-fade-r', more); t.classList.toggle('ux-fade-l', t.scrollLeft > 4);
+}
+(function uxInit(){
+  const run = () => { clearTimeout(_uxTimer); _uxTimer = setTimeout(uxEnhance, 60); };
+  new MutationObserver(run).observe(document.body, { childList: true, subtree: true });
+  const t = document.getElementById('areaTabs');
+  if(t){ t.addEventListener('scroll', uxTabsFade, { passive: true }); window.addEventListener('resize', uxTabsFade);
+    new MutationObserver(() => { const on = t.querySelector('[aria-selected="true"]'); if(on) on.scrollIntoView({ block: 'nearest', inline: 'center' }); uxTabsFade(); }).observe(t, { childList: true }); }
+  run();
+})();
 </script>
 </body>
 </html>

@@ -10,7 +10,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, cmpFeedStatus, cmpFeed, cmpGate, cmpDirCorrect, cmpScore, cmpWeekStart, cmpBuckets, cmpAgreement, cmpAgreementRows, cmpAssetRows, cmpHorizonRows, cmpGlmSplit, cmpDetailRows, cmpDifference, cmpHeadline, cmpExecutive, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily, SV2F_SERIES, sv2fState, sv2fClaimText, sv2fHeadToHeadRows, sv2fTrackRows, sv2fCounts, sv2fBandRows, sv2fDir, sv2fCorrect, sv2fMark, sv2fOutcomeText, sv2fNowModel, sv2fAgeText, sv2fRecordRows, sv2fChartPoints, sv2fMethodologyItems };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, cmpFeedStatus, cmpFeed, cmpGate, cmpDirCorrect, cmpScore, cmpWeekStart, cmpBuckets, cmpAgreement, cmpAgreementRows, cmpAssetRows, cmpHorizonRows, cmpGlmSplit, cmpDetailRows, cmpDifference, cmpHeadline, cmpExecutive, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily, SV2F_SERIES, sv2fState, sv2fClaimText, sv2fHeadToHeadRows, sv2fTrackRows, sv2fCounts, sv2fBandRows, sv2fDir, sv2fCorrect, sv2fMark, sv2fOutcomeText, sv2fNowModel, sv2fAgeText, sv2fRecordRows, sv2fChartPoints, sv2fMethodologyItems, uxWords, uxShouldClamp, uxTablePlan, uxCaptionFor, uxCardOpenByDefault, UX_CAPTIONS, UX_FOLD_VIEWS };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -762,7 +762,7 @@ test('chart standard: 24H / 7D / 1M / All in that order, 24H default', () => {
   assert.equal(H.chartPreset('nope').key, '24H');
   assert.match(SRC, /const RANGES = CHART_PRESETS;/);
   assert.match(SRC, /let activeRange = CHART_DEFAULT_PRESET;/);
-  assert.match(SRC, /const LAB_RANGES = CHART_PRESETS;/);
+  assert.match(SRC, /var LAB_RANGES = CHART_PRESETS;/);
   assert.match(SRC, /labChartRangeState\[stateKey\] = CHART_DEFAULT_PRESET;/);
   assert.match(SRC, /var FL_PERIODS = CHART_PRESETS\.map/);
   assert.match(SRC, /var _fl = \{ horizon: 24, period: CHART_DEFAULT_PRESET,/);
@@ -1499,4 +1499,32 @@ test('sv2f: track record, counts, bands, record rows and methodology come from t
   assert.equal(m.items.length, Object.keys(d.methodology).length);
   assert.ok(m.extra.some((t) => /overlap, so the effective sample is smaller than n/.test(t)) && m.extra.some((t) => /older/.test(t)));
   assert.match(H.sv2fAgeText(8640000), /^2\.4 h old$/);
+});
+
+test('ux: long text clamps from 30 words; short text stays as is', () => {
+  assert.equal(H.uxWords('  a b\nc  '), 3);
+  assert.equal(H.uxShouldClamp('word '.repeat(29)), false);
+  assert.equal(H.uxShouldClamp('word '.repeat(30)), true);
+});
+test('ux: tables over 8 rows show 5 with "Show all"; expanding hides nothing; short tables are untouched', () => {
+  assert.deepEqual(plain(H.uxTablePlan(8, false)), { collapsible: false, show: 8, hidden: 0, label: '' });
+  assert.deepEqual(plain(H.uxTablePlan(1054, false)), { collapsible: true, show: 5, hidden: 1049, label: 'Show all 1,054 rows' });
+  assert.deepEqual(plain(H.uxTablePlan(1054, true)), { collapsible: true, show: 1054, hidden: 0, label: 'Show fewer' });
+});
+test('ux: captions are short, plain and found by the first matching key', () => {
+  for (const [k, v] of Object.entries(H.UX_CAPTIONS)) assert.ok(H.uxWords(v) <= 10, k + ' caption is at most 10 words');
+  assert.equal(H.uxCaptionFor([null, 'nope', 'pfLedger', 'cmpTable']), 'Every buy, sell and transfer');
+  assert.equal(H.uxCaptionFor(['nope']), null);
+});
+test('ux: the lead cards stay open, the rest fold, and views outside the list never fold', () => {
+  assert.equal(H.uxCardOpenByDefault('view-comparison', 0, ''), true);
+  assert.equal(H.uxCardOpenByDefault('view-comparison', 1, 'cmpSecA'), true);
+  assert.equal(H.uxCardOpenByDefault('view-comparison', 6, 'cmpSecF'), false);
+  assert.equal(H.uxCardOpenByDefault('view-portfolio', 3, 'x'), null);
+  assert.equal(H.uxCardOpenByDefault('view-history', 0, 'historyRecapCard'), null);
+});
+test('ux: the layer only adds toggles; it never deletes nodes or rewrites text', () => {
+  const a = SRC.indexOf('// ---- UX layer (DOM side)'), dom = SRC.slice(a, SRC.indexOf('</script>', a));
+  assert.ok(a > 0);
+  assert.doesNotMatch(dom, /\.remove\(\)|\.innerHTML\s*=\s*''|removeChild|replaceChildren/);
 });

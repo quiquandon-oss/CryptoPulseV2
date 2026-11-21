@@ -44,6 +44,7 @@ const text = async (p, sel) => (await p.textContent(sel)).replace(/\s+/g, ' ');
         const hasChart = await p.evaluate(() => { const c = Chart.getChart('sv2fChart'); return !!c && c.data.datasets.length === 4 && c.data.datasets[1].data.some((d) => d.y === null) && c.data.datasets[1].data.some((d) => d.y !== null); });
         ok(hasChart && await p.isVisible('#sv2fChart') && !!(await p.$('#sv2fChartFsBtn')), `${tag}: chart exists (score, k-NN with gaps, 45/55) + fullscreen button`);
         ok((await p.$$eval('#sv2fRecords tbody tr', (r) => r.length)) === 50 && !!(await p.$('#sv2fMore')), `${tag}: 50 record rows + show more`);
+        await p.evaluate(() => document.querySelectorAll('#view-v2forecast .ux-card.ux-folded > .ux-fold-btn').forEach((b) => b.click()));
         await p.click('#sv2fMore'); ok((await p.$$eval('#sv2fRecords tbody tr', (r) => r.length)) === 70 && !(await p.$('#sv2fMore')), `${tag}: show more reveals all 70`);
         ok(/✓/.test(await text(p, '#sv2fRecords')) && /✗/.test(await text(p, '#sv2fRecords')) && /pending/.test(await text(p, '#sv2fRecords')), `${tag}: correctness marks and pending`);
         ok(!(await p.$eval('#sv2fHow', (d) => d.open)) && /overlap, so the effective sample is smaller than n/.test(await text(p, '#sv2fHowBody')), `${tag}: methodology collapsed with overlap caveat`);

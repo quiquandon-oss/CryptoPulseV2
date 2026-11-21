@@ -19,7 +19,8 @@ const res = []; const ok = (c, m) => res.push((c ? 'PASS ' : 'FAIL ') + m);
     ok(/FIXTURE BTC below 60000/.test(await p.textContent('#v1AlLog')), `${name}: V1 alert log shown`);
     ok(!/Loading/.test(await p.textContent('#alertsStatusBody')), `${name}: operational checks rendered`);
     ok(JSON.stringify(calls.sort()) === JSON.stringify(['GET /alert-configs', 'GET /alert-log']), `${name}: only the two alert GETs reach V1: ${calls.join(', ')}`);
-    ok((await p.$$('#view-alerts button, #view-alerts input, #view-alerts select')).length === 0, `${name}: no control that could change V1 alerts`);
+    // the only buttons allowed are the display-only "More"/"Show" toggles of the UX layer (no handler reaches the network)
+    ok((await p.$$('#view-alerts button:not(.ux-more):not(.ux-fold-btn):not(.ux-rows-btn), #view-alerts input, #view-alerts select')).length === 0, `${name}: no control that could change V1 alerts`);
     await p.goto(BASE + '#settings'); await p.waitForTimeout(800);
     const st = await p.textContent('#settingsBody');
     ok(/PRODUCTION/.test(st) && /Portfolio data/.test(st) && /stored only in this browser/.test(st) && /cannot be changed from this page/.test(st), `${name}: settings show data source, portfolio storage, no model controls`);

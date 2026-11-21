@@ -30,8 +30,8 @@ const FIXTURE = { latest: [
     if (name === 'desktop') ok(/issued/.test(await p.$eval('#flLedgerBody', (b) => b.textContent)), 'ledger shows issued/target per forecast');
     await p.goto(BASE + '#research'); await p.waitForTimeout(2500);
     ok(await p.isVisible('#historyBacktestTitle') && await p.isVisible('#regimeSplitTitle'), `${name}: backtests are in Research`);
-    await p.goto(BASE + '#learning'); await p.waitForTimeout(3500);
-    ok(await p.isVisible('#prospectiveCard') && !(await p.isVisible('#historyBacktestTitle')), `${name}: Learning & Audit shows prospective evaluations, no backtests`);
+    await p.goto(BASE + '#sentiment-v2/evidence'); await p.waitForTimeout(5000);
+    ok(await p.isVisible('#prospectiveCard') && !(await p.isVisible('#historyBacktestTitle')), `${name}: V2 > Evidence / GLM shows the prospective evaluations, no backtests`);
     const ge = (await p.textContent('#glmEvalBody')).replace(/\s+/g, ' ');
     ok(!/^Loading/.test(ge) && /(NO APPLIED ADJUSTMENT YET|INSUFFICIENT SAMPLE|SAMPLE SUFFICIENT|UNAVAILABLE)/.test(ge), `${name}: GLM-PE-1 rendered: ${ge.slice(0, 90)}`);
     await p.goto(BASE + '#sentiment-v1'); await p.waitForTimeout(4000);

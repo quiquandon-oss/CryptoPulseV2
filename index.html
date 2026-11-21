@@ -1596,6 +1596,7 @@ var AREAS = [
   // (TimesFM, Chronos) that feed GLM.
   { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
     { key: 'overview', label: 'Overview', views: ['sentiment'] },
+    { key: 'v2forecast', label: 'V2 Forecast', views: ['v2forecast'] },
     { key: 'forecast', label: 'Price models', views: ['forecast'] },
     { key: 'evidence', label: 'Evidence / GLM', views: ['glm'] }] },
   { key: 'comparison', label: 'Model Comparison', short: 'Compare', icon: 'compare_arrows', views: ['comparison'] },
@@ -2624,6 +2625,128 @@ function pfV1InterestAt(series, day){
     const nd = Math.max(0, Math.round((Date.parse(day + 'T00:00:00Z') - Date.parse(last + 'T00:00:00Z')) / 86400000)); v = series[last] + inc * nd; }
   return v;
 }
+// ---- Sentiment V2 › V2 Forecast (SV2F-1, read-only evaluation of V2-based forecasts; BTC only). Pure helpers. ----
+var SV2F_MIN_PAIRS = 30, SV2F_MIN_TRAIN = 20;
+var SV2F_SERIES = [
+  { key: 'v1', label: 'V1 sentiment (baseline)', short: 'V1', color: '#3B82F6' },
+  { key: 'v2_signal', label: 'V2 signal', short: 'V2 signal', color: '#A78BFA' },
+  { key: 'v2_analogue', label: 'V2 analogue', short: 'V2 analogue', color: '#F59E0B' },
+  { key: 'v2_knn', label: 'V2 k-NN', short: 'V2 k-NN', color: '#00E0FF' },
+];
+function sv2fPct(x, d){ return typeof x === 'number' && isFinite(x) ? (x * 100).toFixed(d == null ? 1 : d) + '%' : '—'; }
+function sv2fRate(a){ return a && typeof a.rate === 'number' ? sv2fPct(a.rate) : '—'; }
+function sv2fCi(a){ return a && Array.isArray(a.ci95) && a.ci95.length === 2 && a.ci95.every((v) => typeof v === 'number') ? sv2fPct(a.ci95[0]) + ' – ' + sv2fPct(a.ci95[1]) : '—'; }
+// State of a getJson() result for /api/sv2-forecast: a 404 (route not deployed yet) is "unavailable", any other failure "error" with
+// its reason, a response without records or summary "empty". Never invents numbers.
+function sv2fState(res){
+  if(!res) return { state: 'error', reason: 'no response' };
+  if(res.ok === false){
+    const notFound = res.status === 404 || /^HTTP 404\b/.test(String(res.error || ''));
+    return notFound ? { state: 'unavailable', reason: 'Not available yet' } : { state: 'error', reason: String(res.error || 'request failed') };
+  }
+  const d = res.data;
+  if(!d || typeof d !== 'object' || !d.summary || !Array.isArray(d.records)) return { state: 'error', reason: 'unexpected response shape' };
+  if(!d.records.length || !d.summary.n_readings) return { state: 'empty', reason: 'No Sentiment V2 readings yet', data: d };
+  return { state: 'ok', reason: '', data: d };
+}
+// Plain sentence for one head-to-head, driven ONLY by the backend `claim`. Never computes significance.
+function sv2fClaimText(h, otherKey){
+  const lab = { v1: 'V1 sentiment', v2_signal: 'V2 signal', v2_knn: 'V2 k-NN' };
+  const claim = h && h.claim, n = h && typeof h.n === 'number' ? h.n : 0;
+  if(claim === 'insufficient_sample') return 'Not enough resolved pairs yet (' + n + ' of ' + SV2F_MIN_PAIRS + ' needed).';
+  if(claim === 'no_supported_difference') return 'No supported difference between ' + (lab[otherKey] || otherKey) + ' and V1 sentiment on these decisions.';
+  const m = /^(v1|v2_signal|v2_knn)_higher_observational$/.exec(String(claim || ''));
+  if(m) return (lab[m[1]]) + ' scored higher on these decisions. This is observational, not a validated edge.';
+  return 'No claim reported.';
+}
+function sv2fHeadToHeadRows(summary){
+  const h = (summary && summary.head_to_head) || {};
+  return [['v2_signal', 'V2 signal vs V1'], ['v2_knn', 'V2 k-NN vs V1']].map(([k, title]) => { const x = h[k + '_vs_v1'];
+    if(!x) return { key: k, title, missing: true };
+    return { key: k, title, n: x.n, a: { label: lab(k), rate: sv2fRate(x[k]), ci: sv2fCi(x[k]), n: x[k] ? x[k].n : 0 }, b: { label: 'V1 sentiment', rate: sv2fRate(x.v1), ci: sv2fCi(x.v1), n: x.v1 ? x.v1.n : 0 },
+      claim: x.claim, text: sv2fClaimText(x, k), tone: x.claim === 'insufficient_sample' ? 'neutral' : /higher/.test(x.claim || '') ? 'info' : 'neutral' }; });
+  function lab(k){ return k === 'v2_signal' ? 'V2 signal' : 'V2 k-NN'; }
+}
+// Track record: one row per series. Brier only exists for the probability series.
+function sv2fTrackRows(summary){
+  const acc = (summary && summary.accuracy) || {}, br = (summary && summary.brier) || {};
+  return SV2F_SERIES.map((s) => { const a = acc[s.key], b = br[s.key];
+    return { key: s.key, label: s.label, color: s.color, n: a ? a.n : null, correct: a ? a.correct : null, accuracy: sv2fRate(a), ci: sv2fCi(a),
+      brier: s.key === 'v2_analogue' || s.key === 'v2_knn' ? (b && typeof b.score === 'number' ? b.score.toFixed(3) + ' (n ' + b.n + ')' : '—') : '—', hasData: !!(a && a.n) }; });
+}
+function sv2fCounts(summary){
+  const s = summary || {};
+  return [['Readings', s.n_readings], ['Resolved', s.n_resolved], ['Pending', s.n_pending], ['No price', s.n_no_price]].map(([label, value]) => ({ label, value: typeof value === 'number' ? value : null }));
+}
+function sv2fBandRows(summary){
+  return ((summary && summary.v2_signal_bands) || []).map((b) => ({ band: b.band, proposed: !!b.proposed, coverage: sv2fPct(b.coverage, 0), n: b.accuracy ? b.accuracy.n : 0, accuracy: sv2fRate(b.accuracy), ci: sv2fCi(b.accuracy) }));
+}
+// Correctness of one series for one record: true / false only for a RESOLVED outcome and an UP/DOWN call; null otherwise.
+function sv2fDir(rec, series){
+  const x = rec && rec[series];
+  const d = x && x.direction;
+  if(series === 'v2_knn' && x && x.status !== 'ok') return null;
+  return d === 'UP' || d === 'DOWN' ? d : null;
+}
+function sv2fCorrect(rec, series){
+  if(!rec || !rec.outcome || rec.outcome.status !== 'resolved') return null;
+  const d = sv2fDir(rec, series), o = rec.outcome.direction;
+  if(!d || (o !== 'UP' && o !== 'DOWN')) return null;
+  return d === o;
+}
+function sv2fMark(ok){ return ok === true ? '✓' : ok === false ? '✗' : ''; }
+function sv2fOutcomeText(o){
+  if(!o) return '—';
+  if(o.status === 'resolved') return o.direction === 'UP' || o.direction === 'DOWN' ? o.direction : '—';
+  return o.status === 'pending' ? 'pending' : o.status === 'no_price' ? 'no price' : '—';
+}
+// "Now" cards. k-NN with insufficient history shows no number; analogue is 24h only.
+function sv2fNowModel(cur, horizon){
+  if(!cur) return null;
+  const sig = cur.v2_signal || {}, knn = cur.v2_knn || {}, an = cur.v2_analogue;
+  const knnOk = knn.status === 'ok' && typeof knn.p_up === 'number';
+  return {
+    signal: { score: typeof sig.score === 'number' ? sig.score.toFixed(1) : '—', direction: sig.direction || '—', rule: '45/55 rule, PROPOSED' },
+    knn: knnOk ? { ok: true, pct: sv2fPct(knn.p_up, 0), direction: knn.direction || '—', note: 'trained on ' + knn.n_train + ' known outcomes, k=' + knn.k }
+      : { ok: false, pct: '—', direction: '—', note: 'insufficient history (' + (knn.n_train == null ? 0 : knn.n_train) + ' of ' + SV2F_MIN_TRAIN + ' needed)' },
+    analogue: an && typeof an.p_up === 'number' ? { ok: true, pct: sv2fPct(an.p_up, 0), direction: an.direction || '—', note: 'candidate, unvalidated (built into each V2 reading)' }
+      : { ok: false, pct: '—', direction: '—', note: horizon === 12 ? '24h only' : 'not available for this reading' },
+    decisionTs: cur.decision_ts, targetTs: cur.target_ts, ageMs: cur.age_ms,
+  };
+}
+function sv2fAgeText(ms){
+  if(typeof ms !== 'number' || !isFinite(ms) || ms < 0) return '';
+  const h = ms / 3600000;
+  return h < 1 ? Math.max(1, Math.round(ms / 60000)) + ' min old' : (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h old';
+}
+// Table rows, newest first, each series with a correctness mark.
+function sv2fRecordRows(records){
+  return (Array.isArray(records) ? records : []).map((r) => { const f = r.features || {}, knn = r.v2_knn || {}, an = r.v2_analogue, v1 = r.v1;
+    const knnOk = knn.status === 'ok' && typeof knn.p_up === 'number';
+    return { ts: r.decision_ts, score: typeof f.score === 'number' ? f.score.toFixed(1) : '—', coverage: sv2fPct(f.evidence_coverage, 0), intensity: typeof f.event_intensity === 'number' ? f.event_intensity.toFixed(2) : '—',
+      signal: sv2fDir(r, 'v2_signal') || 'no call', signalOk: sv2fCorrect(r, 'v2_signal'),
+      knn: knnOk ? sv2fPct(knn.p_up, 0) : '—', knnDir: knnOk ? knn.direction : null, knnOk: sv2fCorrect(r, 'v2_knn'),
+      analogue: an && typeof an.p_up === 'number' ? sv2fPct(an.p_up, 0) : '—', analogueOk: sv2fCorrect(r, 'v2_analogue'),
+      v1: v1 && (v1.direction === 'UP' || v1.direction === 'DOWN') ? v1.direction : 'no call', v1Ok: sv2fCorrect(r, 'v1'),
+      outcome: sv2fOutcomeText(r.outcome), outcomeStatus: r.outcome ? r.outcome.status : null }; });
+}
+// Chart points, oldest first. knnPct is null when the k-NN had insufficient history (a gap, never a zero). `correct` is for the
+// k-NN call, resolved readings only; pending readings are hollow.
+function sv2fChartPoints(records){
+  return (Array.isArray(records) ? records : []).filter((r) => r && typeof r.decision_ts === 'number').slice().sort((a, b) => a.decision_ts - b.decision_ts).map((r) => {
+    const knn = r.v2_knn || {}, f = r.features || {};
+    return { ts: r.decision_ts, score: typeof f.score === 'number' ? f.score : null, knnPct: knn.status === 'ok' && typeof knn.p_up === 'number' ? knn.p_up * 100 : null,
+      correct: sv2fCorrect(r, 'v2_knn'), pending: !!(r.outcome && r.outcome.status === 'pending') };
+  });
+}
+function sv2fMethodologyItems(d){
+  const m = (d && d.methodology) || {}, out = Object.keys(m).map((k) => ({ key: k, text: String(m[k]) }));
+  const extra = [];
+  if(d && typeof d.not_evaluated_older === 'number') extra.push('Readings not evaluated because they are older than the evaluation window: ' + d.not_evaluated_older + '.');
+  if(d && typeof d.excluded_older_calc === 'number') extra.push('Readings excluded because they came from an older V2 calculation version: ' + d.excluded_older_calc + '.');
+  extra.push('Readings about an hour apart with 12/24 h horizons overlap, so the effective sample is smaller than n.');
+  return { items: out, extra };
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -2644,7 +2767,7 @@ async function getJson(url){
   try{
     const r = await apiFetch(url);
     const d = await r.json();
-    if(!r.ok || (d && d.ok === false)) return { ok: false, error: (d && d.error) || ('HTTP ' + r.status), data: d };
+    if(!r.ok || (d && d.ok === false)) return { ok: false, error: (d && d.error) || ('HTTP ' + r.status), status: r.status, data: d };
     return { ok: true, data: d };
   }catch(e){ return { ok: false, error: 'request failed' }; }
 }
@@ -3630,6 +3753,7 @@ function loadActiveView(force){
   if (on('history')) loadHistoryIfNeeded();
   if (on('experiments')) { if (force) _experimentsLoaded = false; loadExperimentsIfNeeded(); }
   if (on('sentiment')) loadSentimentV2IfNeeded(force);
+  if (on('v2forecast')) loadSv2ForecastIfNeeded(force);
   if (on('forecast') || on('glm')) loadForecastLabIfNeeded(force);
   if (on('glm')) loadGlmEvaluation(force);
   if (on('sentiment-v1')) loadSentimentV1IfNeeded(force);

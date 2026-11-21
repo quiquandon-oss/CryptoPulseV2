@@ -23,7 +23,7 @@ CryptoPulseV2 (GitHub Pages, single index.html) ◄── V2 public read API ─
 | GLM | Bounded influence into V2 BTC 24h only (as deployed). UI shows baseline, signal, adjustment and final as separate fields | UI reads `/api/glm/*` and `/predict`; it never derives GLM values itself |
 | Comparison | Read-only. No write route, button or workflow; never fed back to V1/V2 | Backend: GET only; static test that no `INSERT/UPDATE/DELETE` exists in the comparison module |
 | Research | Isolated; no production influence by default | Separate nav area; data only from research routes and artifacts |
-| Portfolio | Separate accounting domain; never touches sentiment, predictions, weights or outcomes | Separate storage (browser ledger; optional dedicated D1 tables later) |
+| Portfolio | Separate accounting domain; never touches sentiment, predictions, weights or outcomes. **Exception (OD-15):** the Projection tab works on a separate *copy* of the ledger and reads public V1/V2 history | Separate storage (browser ledger; optional dedicated D1 tables later). Projection copy under its own key `cpv2_portfolio_projection_v1`; the projection code never reads the ledger except in the owner's copy action |
 | Learning & Audit | Evaluates past decisions with resolved outcomes; preserves decision-time vs resolution-time facts | Reads existing ledgers only |
 | Security | Temporary V1-equivalent model (OD-06); deferred review (OD-07) | `docs/security/POST_PRODUCTION_SECURITY_REVIEW.md` |
 

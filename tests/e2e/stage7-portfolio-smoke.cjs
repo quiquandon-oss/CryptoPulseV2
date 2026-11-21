@@ -29,7 +29,7 @@ async function mock(ctx){
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('dialog', (d) => d.accept());
   await p.goto(BASE + '#portfolio'); await p.waitForTimeout(2500);
   ok(p.url().endsWith('#portfolio/holdings'), 'Portfolio opens on Holdings');
-  ok((await p.$$eval('#areaTabs [role=tab]', (b) => b.map((x) => x.textContent.trim()).join('|'))) === 'Holdings|Transactions|Planning', 'Portfolio tabs');
+  ok((await p.$$eval('#areaTabs [role=tab]', (b) => b.map((x) => x.textContent.trim()).join('|'))) === 'Holdings|Transactions|Planning|Projection', 'Portfolio tabs');
   ok(/No transactions yet/.test(await p.textContent('#pfPositions')), 'empty state, nothing invented');
   await p.click('#areaTabs [data-route="portfolio/transactions"]'); await p.waitForTimeout(400);
   for (const [n, k] of [['Exchange', 'exchange'], ['Wallet', 'wallet']]) { await p.fill('#pfAccName', n); await p.selectOption('#pfAccKind', k); await p.click('#pfAccAdd'); await p.waitForTimeout(150); }

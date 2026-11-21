@@ -4,12 +4,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+const FX = (h) => JSON.parse(readFileSync(new URL('./fixtures/sv2-forecast-synthetic-h' + h + '.json', import.meta.url), 'utf8'));
 
 const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, cmpFeedStatus, cmpFeed, cmpGate, cmpDirCorrect, cmpScore, cmpWeekStart, cmpBuckets, cmpAgreement, cmpAgreementRows, cmpAssetRows, cmpHorizonRows, cmpGlmSplit, cmpDetailRows, cmpDifference, cmpHeadline, cmpExecutive, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, cmpFeedStatus, cmpFeed, cmpGate, cmpDirCorrect, cmpScore, cmpWeekStart, cmpBuckets, cmpAgreement, cmpAgreementRows, cmpAssetRows, cmpHorizonRows, cmpGlmSplit, cmpDetailRows, cmpDifference, cmpHeadline, cmpExecutive, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily, SV2F_SERIES, sv2fState, sv2fClaimText, sv2fHeadToHeadRows, sv2fTrackRows, sv2fCounts, sv2fBandRows, sv2fDir, sv2fCorrect, sv2fMark, sv2fOutcomeText, sv2fNowModel, sv2fAgeText, sv2fRecordRows, sv2fChartPoints, sv2fMethodologyItems };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -730,7 +731,7 @@ test('navigation (owner restructure 2026-11-21): Portfolio first; Sentiment V1 a
   // The k-NN forecast engine and its Model Challenger use V1 sentiment as input (worker.js runPrediction reads V1 history),
   // so they are under Sentiment V1; Sentiment V2 keeps the V2 score, its evidence/GLM and the price-only models.
   assert.deepEqual(tabs('sentiment-v1'), [['overview', ['sentiment-v1']], ['forecast', ['dashboard']], ['history', ['history', 'lab']], ['trader', ['trader']]]);
-  assert.deepEqual(tabs('sentiment-v2'), [['overview', ['sentiment']], ['forecast', ['forecast']], ['evidence', ['glm']]]);
+  assert.deepEqual(tabs('sentiment-v2'), [['overview', ['sentiment']], ['v2forecast', ['v2forecast']], ['forecast', ['forecast']], ['evidence', ['glm']]]);
   assert.ok(!H.AREAS.some((a) => /lab|learning/i.test(a.label)), 'no Lab or Learning area');
   assert.doesNotMatch(SRC, />Forecasting Lab</, 'no Forecasting Lab heading or nav label');
   assert.deepEqual(plain(H.MOBILE_PRIMARY_AREAS), ['portfolio', 'sentiment-v1', 'sentiment-v2', 'comparison']);
@@ -1411,4 +1412,91 @@ test('Align with V1: up to V1’s last day, every crypto row must match one V1 r
 
 test('portfolio value history opens on All (owner exception to the 24H default, 2026-11-20)', () => {
   assert.match(SRC, /range: 'ALL' \/\* owner exception to OD-08/);
+});
+
+// ---- Sentiment V2 › V2 Forecast (SV2F-1) ----
+test('sv2f: navigation, container and loader are wired; no POST and no V1 call added', () => {
+  assert.deepEqual(plain(H.AREAS.find((x) => x.key === 'sentiment-v2').tabs.map((t) => t.label)), ['Overview', 'V2 Forecast', 'Price models', 'Evidence / GLM']);
+  assert.ok(/<div id="view-v2forecast" class="hidden">/.test(SRC) && /if \(on\('v2forecast'\)\) loadSv2ForecastIfNeeded\(force\);/.test(SRC));
+  const block = SRC.slice(SRC.indexOf('// ---- Sentiment V2 › V2 Forecast (render'), SRC.indexOf('// ---- Sentiment V2 tab ----'));
+  assert.match(block, /getJson\(WORKER_URL \+ '\/api\/sv2-forecast\?horizon='/);
+  assert.doesNotMatch(block, /method:\s*'POST'|V1_WORKER_URL/);
+});
+
+test('sv2f: fixtures give an ok state; 404 is unavailable, other errors are errors with a reason', () => {
+  const ok = H.sv2fState({ ok: true, data: FX(24) });
+  assert.equal(ok.state, 'ok');
+  assert.deepEqual(plain(H.sv2fState({ ok: false, error: 'not found', status: 404 })), { state: 'unavailable', reason: 'Not available yet' });
+  assert.equal(H.sv2fState({ ok: false, error: 'HTTP 404' }).state, 'unavailable');
+  const e = H.sv2fState({ ok: false, error: 'HTTP 500', status: 500 });
+  assert.deepEqual([e.state, e.reason], ['error', 'HTTP 500']);
+  assert.equal(H.sv2fState({ ok: false, error: 'request failed' }).state, 'error');
+  assert.equal(H.sv2fState({ ok: true, data: { ok: true } }).state, 'error');
+  assert.equal(H.sv2fState({ ok: true, data: { ...FX(24), records: [] } }).state, 'empty');
+});
+
+test('sv2f: claim sentence is driven only by the claim value', () => {
+  assert.equal(H.sv2fClaimText({ claim: 'insufficient_sample', n: 12 }, 'v2_knn'), 'Not enough resolved pairs yet (12 of 30 needed).');
+  assert.match(H.sv2fClaimText({ claim: 'no_supported_difference', n: 50 }, 'v2_signal'), /No supported difference between V2 signal and V1 sentiment/);
+  const a = H.sv2fClaimText({ claim: 'v2_knn_higher_observational', n: 150 }, 'v2_knn'), b = H.sv2fClaimText({ claim: 'v1_higher_observational', n: 150 }, 'v2_knn');
+  assert.match(a, /^V2 k-NN scored higher.*observational/); assert.match(b, /^V1 sentiment scored higher.*observational/);
+  assert.equal(H.sv2fClaimText({ claim: 'weird' }, 'v2_knn'), 'No claim reported.');
+  const rows = H.sv2fHeadToHeadRows(FX(24).summary);
+  assert.deepEqual(plain(rows.map((r) => [r.key, r.claim, r.n])), [['v2_signal', 'no_supported_difference', 30], ['v2_knn', 'insufficient_sample', 27]]);
+  assert.match(rows[1].text, /27 of 30 needed/); assert.equal(rows[0].a.rate, '60.0%'); assert.equal(rows[0].a.ci, '42.3% – 75.4%');
+});
+
+test('sv2f: correctness marks exist for resolved readings only', () => {
+  const recs = FX(24).records;
+  const pending = recs.find((r) => r.outcome.status === 'pending');
+  for (const k of ['v1', 'v2_signal', 'v2_analogue', 'v2_knn']) assert.equal(H.sv2fCorrect(pending, k), null, 'pending ' + k);
+  const rec = (o, dir) => ({ outcome: { status: 'resolved', direction: o }, v2_signal: { direction: dir }, v1: { direction: 'UP' } });
+  assert.deepEqual([H.sv2fCorrect(rec('UP', 'UP'), 'v2_signal'), H.sv2fCorrect(rec('UP', 'DOWN'), 'v2_signal'), H.sv2fCorrect(rec('UP', 'NO_CALL'), 'v2_signal'), H.sv2fCorrect(rec('UP', null), 'v2_signal')], [true, false, null, null]);
+  assert.deepEqual([H.sv2fMark(true), H.sv2fMark(false), H.sv2fMark(null)], ['✓', '✗', '']);
+  assert.equal(H.sv2fCorrect({ outcome: { status: 'no_price', direction: null }, v2_signal: { direction: 'UP' } }, 'v2_signal'), null);
+  // the fixture's resolved rows: every mark agrees with the stored outcome
+  for (const r of recs.filter((x) => x.outcome.status === 'resolved' && x.v2_signal.direction !== 'NO_CALL' && x.v2_signal.direction)) assert.equal(H.sv2fCorrect(r, 'v2_signal'), r.v2_signal.direction === r.outcome.direction);
+});
+
+test('sv2f: k-NN insufficient history shows no number, a gap in the chart and an "insufficient history" note', () => {
+  const d = FX(24), insuff = d.records.filter((r) => r.v2_knn.status === 'insufficient_history');
+  assert.ok(insuff.length > 0);
+  const rows = H.sv2fRecordRows(insuff);
+  assert.ok(rows.every((r) => r.knn === '—' && r.knnOk === null));
+  const pts = H.sv2fChartPoints(d.records);
+  assert.equal(pts.length, d.records.length); assert.ok(pts[0].ts < pts[pts.length - 1].ts, 'oldest first');
+  assert.equal(pts.filter((p) => p.knnPct === null).length, insuff.length);
+  assert.ok(pts.filter((p) => p.pending).every((p) => p.correct === null));
+  const now = H.sv2fNowModel({ ...d.current, v2_knn: { status: 'insufficient_history', p_up: null, n_train: 7, k: null, direction: null } }, 24);
+  assert.deepEqual([now.knn.ok, now.knn.pct, now.knn.note], [false, '—', 'insufficient history (7 of 20 needed)']);
+  const ok = H.sv2fNowModel(d.current, 24);
+  assert.deepEqual([ok.knn.ok, ok.knn.pct, ok.knn.direction, ok.knn.note], [true, '62%', 'UP', 'trained on 60 known outcomes, k=8']);
+  assert.deepEqual([ok.signal.score, ok.signal.direction, ok.analogue.pct, ok.analogue.note], ['43.4', 'DOWN', '25%', 'candidate, unvalidated (built into each V2 reading)']);
+});
+
+test('sv2f: 12h has no analogue (null) and no Brier for it; nothing is invented', () => {
+  const d = FX(12), n = H.sv2fNowModel(d.current, 12);
+  assert.deepEqual([n.analogue.ok, n.analogue.pct, n.analogue.note], [false, '—', '24h only']);
+  assert.ok(d.records.every((r) => r.v2_analogue === null));
+  const rows = H.sv2fRecordRows(d.records);
+  assert.ok(rows.every((r) => r.analogue === '—' && r.analogueOk === null));
+  const tr = H.sv2fTrackRows(d.summary), an = tr.find((r) => r.key === 'v2_analogue');
+  assert.deepEqual([an.hasData, an.brier, an.accuracy, an.ci], [false, '—', '—', '—']);
+  assert.equal(tr.find((r) => r.key === 'v1').brier, '—', 'direction-only series have no Brier');
+  assert.match(tr.find((r) => r.key === 'v2_knn').brier, /^0\.293 \(n 40\)$/);
+});
+
+test('sv2f: track record, counts, bands, record rows and methodology come from the response', () => {
+  const d = FX(24), tr = H.sv2fTrackRows(d.summary);
+  assert.deepEqual(plain(tr.map((r) => [r.key, r.n, r.correct, r.accuracy])), [['v1', 48, 27, '56.3%'], ['v2_signal', 37, 21, '56.8%'], ['v2_analogue', 54, 25, '46.3%'], ['v2_knn', 30, 8, '26.7%']]);
+  assert.deepEqual(plain(H.sv2fCounts(d.summary).map((c) => c.value)), [70, 60, 10, 0]);
+  const bands = H.sv2fBandRows(d.summary);
+  assert.deepEqual(plain(bands.map((b) => [b.band, b.proposed, b.coverage])), [['50/50', false, '100%'], ['45/55', true, '57%'], ['40/60', false, '44%']]);
+  const rows = H.sv2fRecordRows(d.records);
+  assert.equal(rows.length, 70); assert.equal(rows[0].ts, d.records[0].decision_ts); assert.equal(rows[0].outcome, 'pending');
+  assert.ok(rows.some((r) => r.outcome === 'UP') && rows.some((r) => r.outcome === 'DOWN'));
+  const m = H.sv2fMethodologyItems(d);
+  assert.equal(m.items.length, Object.keys(d.methodology).length);
+  assert.ok(m.extra.some((t) => /overlap, so the effective sample is smaller than n/.test(t)) && m.extra.some((t) => /older/.test(t)));
+  assert.match(H.sv2fAgeText(8640000), /^2\.4 h old$/);
 });

@@ -632,6 +632,29 @@
     </section>
   </div>
 
+  <!-- Sentiment V2 › V2 Forecast: forecasts derived from the V2 score, evaluated read-only (protocol SV2F-1, BTC only). -->
+  <div id="view-v2forecast" class="hidden">
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fTitle">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h2 id="sv2fTitle" class="text-sm font-semibold">Forecasts from the Sentiment V2 score <span class="text-[#8A9599] font-normal">· BTC · read-only evaluation</span></h2>
+          <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">These are research forecasts (protocol SV2F-1). They are not production logic: nothing here changes V1, the V2 engine or GLM. The production forecast engine uses V1 sentiment: <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('sentiment-v1/forecast')">open the V1 forecast</button>.</p>
+        </div>
+        <div id="sv2fHorizon" role="group" aria-label="Forecast horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div>
+      </div>
+      <p id="sv2fStatus" class="text-[11px] text-[#8A9599] mt-2" aria-live="polite">Loading…</p>
+    </section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fNowTitle"><h3 id="sv2fNowTitle" class="text-sm font-semibold mb-2">Now</h3><div id="sv2fNow" class="text-xs">Loading…</div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fTrackTitle"><h3 id="sv2fTrackTitle" class="text-sm font-semibold mb-2">Track record</h3><div id="sv2fTrack" class="text-xs">Loading…</div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fH2hTitle"><h3 id="sv2fH2hTitle" class="text-sm font-semibold mb-1">Head-to-head vs V1 <span class="text-[#8A9599] font-normal">(same decisions)</span></h3><div id="sv2fH2h" class="text-xs">Loading…</div></section>
+    <section id="sv2fChartSection" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fChartTitle"><div class="flex items-center justify-between flex-wrap gap-2 mb-1"><h3 id="sv2fChartTitle" class="text-sm font-semibold">V2 score and k-NN p_up over time</h3><div id="sv2fPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+      <p id="sv2fChartNote" class="text-[11px] text-[#8A9599] mb-2">Loading…</p><div id="sv2fChartWrap" class="relative h-[280px]"><canvas id="sv2fChart" role="img" aria-label="V2 score and V2 k-NN probability of up per reading, with the 45 and 55 thresholds"></canvas></div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fBandsTitle"><h3 id="sv2fBandsTitle" class="text-sm font-semibold mb-2">V2 signal threshold sensitivity</h3><div id="sv2fBands" class="text-xs">Loading…</div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fRecTitle"><h3 id="sv2fRecTitle" class="text-sm font-semibold mb-1">Recent readings</h3><div id="sv2fRecords" class="text-xs">Loading…</div></section>
+    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="sv2fHowTitle"><h3 id="sv2fHowTitle" class="sr-only">How this is computed</h3>
+      <details id="sv2fHow"><summary class="cursor-pointer text-sm font-semibold">How this is computed</summary><div id="sv2fHowBody" class="mt-2 text-[11px] text-[#BAC9CD] leading-relaxed">Loading…</div></details></section>
+  </div>
+
   <!-- Sentiment V2 › Evidence / GLM: GLM evidence layer and the frozen prospective protocols (read-only). -->
   <div id="view-glm" class="hidden">
     <section id="glmPanel" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="glmTitle">
@@ -1596,6 +1619,7 @@ var AREAS = [
   // (TimesFM, Chronos) that feed GLM.
   { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
     { key: 'overview', label: 'Overview', views: ['sentiment'] },
+    { key: 'v2forecast', label: 'V2 Forecast', views: ['v2forecast'] },
     { key: 'forecast', label: 'Price models', views: ['forecast'] },
     { key: 'evidence', label: 'Evidence / GLM', views: ['glm'] }] },
   { key: 'comparison', label: 'Model Comparison', short: 'Compare', icon: 'compare_arrows', views: ['comparison'] },
@@ -2624,6 +2648,128 @@ function pfV1InterestAt(series, day){
     const nd = Math.max(0, Math.round((Date.parse(day + 'T00:00:00Z') - Date.parse(last + 'T00:00:00Z')) / 86400000)); v = series[last] + inc * nd; }
   return v;
 }
+// ---- Sentiment V2 › V2 Forecast (SV2F-1, read-only evaluation of V2-based forecasts; BTC only). Pure helpers. ----
+var SV2F_MIN_PAIRS = 30, SV2F_MIN_TRAIN = 20;
+var SV2F_SERIES = [
+  { key: 'v1', label: 'V1 sentiment (baseline)', short: 'V1', color: '#3B82F6' },
+  { key: 'v2_signal', label: 'V2 signal', short: 'V2 signal', color: '#A78BFA' },
+  { key: 'v2_analogue', label: 'V2 analogue', short: 'V2 analogue', color: '#F59E0B' },
+  { key: 'v2_knn', label: 'V2 k-NN', short: 'V2 k-NN', color: '#00E0FF' },
+];
+function sv2fPct(x, d){ return typeof x === 'number' && isFinite(x) ? (x * 100).toFixed(d == null ? 1 : d) + '%' : '—'; }
+function sv2fRate(a){ return a && typeof a.rate === 'number' ? sv2fPct(a.rate) : '—'; }
+function sv2fCi(a){ return a && Array.isArray(a.ci95) && a.ci95.length === 2 && a.ci95.every((v) => typeof v === 'number') ? sv2fPct(a.ci95[0]) + ' – ' + sv2fPct(a.ci95[1]) : '—'; }
+// State of a getJson() result for /api/sv2-forecast: a 404 (route not deployed yet) is "unavailable", any other failure "error" with
+// its reason, a response without records or summary "empty". Never invents numbers.
+function sv2fState(res){
+  if(!res) return { state: 'error', reason: 'no response' };
+  if(res.ok === false){
+    const notFound = res.status === 404 || /^HTTP 404\b/.test(String(res.error || ''));
+    return notFound ? { state: 'unavailable', reason: 'Not available yet' } : { state: 'error', reason: String(res.error || 'request failed') };
+  }
+  const d = res.data;
+  if(!d || typeof d !== 'object' || !d.summary || !Array.isArray(d.records)) return { state: 'error', reason: 'unexpected response shape' };
+  if(!d.records.length || !d.summary.n_readings) return { state: 'empty', reason: 'No Sentiment V2 readings yet', data: d };
+  return { state: 'ok', reason: '', data: d };
+}
+// Plain sentence for one head-to-head, driven ONLY by the backend `claim`. Never computes significance.
+function sv2fClaimText(h, otherKey){
+  const lab = { v1: 'V1 sentiment', v2_signal: 'V2 signal', v2_knn: 'V2 k-NN' };
+  const claim = h && h.claim, n = h && typeof h.n === 'number' ? h.n : 0;
+  if(claim === 'insufficient_sample') return 'Not enough resolved pairs yet (' + n + ' of ' + SV2F_MIN_PAIRS + ' needed).';
+  if(claim === 'no_supported_difference') return 'No supported difference between ' + (lab[otherKey] || otherKey) + ' and V1 sentiment on these decisions.';
+  const m = /^(v1|v2_signal|v2_knn)_higher_observational$/.exec(String(claim || ''));
+  if(m) return (lab[m[1]]) + ' scored higher on these decisions. This is observational, not a validated edge.';
+  return 'No claim reported.';
+}
+function sv2fHeadToHeadRows(summary){
+  const h = (summary && summary.head_to_head) || {};
+  return [['v2_signal', 'V2 signal vs V1'], ['v2_knn', 'V2 k-NN vs V1']].map(([k, title]) => { const x = h[k + '_vs_v1'];
+    if(!x) return { key: k, title, missing: true };
+    return { key: k, title, n: x.n, a: { label: lab(k), rate: sv2fRate(x[k]), ci: sv2fCi(x[k]), n: x[k] ? x[k].n : 0 }, b: { label: 'V1 sentiment', rate: sv2fRate(x.v1), ci: sv2fCi(x.v1), n: x.v1 ? x.v1.n : 0 },
+      claim: x.claim, text: sv2fClaimText(x, k), tone: x.claim === 'insufficient_sample' ? 'neutral' : /higher/.test(x.claim || '') ? 'info' : 'neutral' }; });
+  function lab(k){ return k === 'v2_signal' ? 'V2 signal' : 'V2 k-NN'; }
+}
+// Track record: one row per series. Brier only exists for the probability series.
+function sv2fTrackRows(summary){
+  const acc = (summary && summary.accuracy) || {}, br = (summary && summary.brier) || {};
+  return SV2F_SERIES.map((s) => { const a = acc[s.key], b = br[s.key];
+    return { key: s.key, label: s.label, color: s.color, n: a ? a.n : null, correct: a ? a.correct : null, accuracy: sv2fRate(a), ci: sv2fCi(a),
+      brier: s.key === 'v2_analogue' || s.key === 'v2_knn' ? (b && typeof b.score === 'number' ? b.score.toFixed(3) + ' (n ' + b.n + ')' : '—') : '—', hasData: !!(a && a.n) }; });
+}
+function sv2fCounts(summary){
+  const s = summary || {};
+  return [['Readings', s.n_readings], ['Resolved', s.n_resolved], ['Pending', s.n_pending], ['No price', s.n_no_price]].map(([label, value]) => ({ label, value: typeof value === 'number' ? value : null }));
+}
+function sv2fBandRows(summary){
+  return ((summary && summary.v2_signal_bands) || []).map((b) => ({ band: b.band, proposed: !!b.proposed, coverage: sv2fPct(b.coverage, 0), n: b.accuracy ? b.accuracy.n : 0, accuracy: sv2fRate(b.accuracy), ci: sv2fCi(b.accuracy) }));
+}
+// Correctness of one series for one record: true / false only for a RESOLVED outcome and an UP/DOWN call; null otherwise.
+function sv2fDir(rec, series){
+  const x = rec && rec[series];
+  const d = x && x.direction;
+  if(series === 'v2_knn' && x && x.status !== 'ok') return null;
+  return d === 'UP' || d === 'DOWN' ? d : null;
+}
+function sv2fCorrect(rec, series){
+  if(!rec || !rec.outcome || rec.outcome.status !== 'resolved') return null;
+  const d = sv2fDir(rec, series), o = rec.outcome.direction;
+  if(!d || (o !== 'UP' && o !== 'DOWN')) return null;
+  return d === o;
+}
+function sv2fMark(ok){ return ok === true ? '✓' : ok === false ? '✗' : ''; }
+function sv2fOutcomeText(o){
+  if(!o) return '—';
+  if(o.status === 'resolved') return o.direction === 'UP' || o.direction === 'DOWN' ? o.direction : '—';
+  return o.status === 'pending' ? 'pending' : o.status === 'no_price' ? 'no price' : '—';
+}
+// "Now" cards. k-NN with insufficient history shows no number; analogue is 24h only.
+function sv2fNowModel(cur, horizon){
+  if(!cur) return null;
+  const sig = cur.v2_signal || {}, knn = cur.v2_knn || {}, an = cur.v2_analogue;
+  const knnOk = knn.status === 'ok' && typeof knn.p_up === 'number';
+  return {
+    signal: { score: typeof sig.score === 'number' ? sig.score.toFixed(1) : '—', direction: sig.direction || '—', rule: '45/55 rule, PROPOSED' },
+    knn: knnOk ? { ok: true, pct: sv2fPct(knn.p_up, 0), direction: knn.direction || '—', note: 'trained on ' + knn.n_train + ' known outcomes, k=' + knn.k }
+      : { ok: false, pct: '—', direction: '—', note: 'insufficient history (' + (knn.n_train == null ? 0 : knn.n_train) + ' of ' + SV2F_MIN_TRAIN + ' needed)' },
+    analogue: an && typeof an.p_up === 'number' ? { ok: true, pct: sv2fPct(an.p_up, 0), direction: an.direction || '—', note: 'candidate, unvalidated (built into each V2 reading)' }
+      : { ok: false, pct: '—', direction: '—', note: horizon === 12 ? '24h only' : 'not available for this reading' },
+    decisionTs: cur.decision_ts, targetTs: cur.target_ts, ageMs: cur.age_ms,
+  };
+}
+function sv2fAgeText(ms){
+  if(typeof ms !== 'number' || !isFinite(ms) || ms < 0) return '';
+  const h = ms / 3600000;
+  return h < 1 ? Math.max(1, Math.round(ms / 60000)) + ' min old' : (h < 10 ? h.toFixed(1) : Math.round(h)) + ' h old';
+}
+// Table rows, newest first, each series with a correctness mark.
+function sv2fRecordRows(records){
+  return (Array.isArray(records) ? records : []).map((r) => { const f = r.features || {}, knn = r.v2_knn || {}, an = r.v2_analogue, v1 = r.v1;
+    const knnOk = knn.status === 'ok' && typeof knn.p_up === 'number';
+    return { ts: r.decision_ts, score: typeof f.score === 'number' ? f.score.toFixed(1) : '—', coverage: sv2fPct(f.evidence_coverage, 0), intensity: typeof f.event_intensity === 'number' ? f.event_intensity.toFixed(2) : '—',
+      signal: sv2fDir(r, 'v2_signal') || 'no call', signalOk: sv2fCorrect(r, 'v2_signal'),
+      knn: knnOk ? sv2fPct(knn.p_up, 0) : '—', knnDir: knnOk ? knn.direction : null, knnOk: sv2fCorrect(r, 'v2_knn'),
+      analogue: an && typeof an.p_up === 'number' ? sv2fPct(an.p_up, 0) : '—', analogueOk: sv2fCorrect(r, 'v2_analogue'),
+      v1: v1 && (v1.direction === 'UP' || v1.direction === 'DOWN') ? v1.direction : 'no call', v1Ok: sv2fCorrect(r, 'v1'),
+      outcome: sv2fOutcomeText(r.outcome), outcomeStatus: r.outcome ? r.outcome.status : null }; });
+}
+// Chart points, oldest first. knnPct is null when the k-NN had insufficient history (a gap, never a zero). `correct` is for the
+// k-NN call, resolved readings only; pending readings are hollow.
+function sv2fChartPoints(records){
+  return (Array.isArray(records) ? records : []).filter((r) => r && typeof r.decision_ts === 'number').slice().sort((a, b) => a.decision_ts - b.decision_ts).map((r) => {
+    const knn = r.v2_knn || {}, f = r.features || {};
+    return { ts: r.decision_ts, score: typeof f.score === 'number' ? f.score : null, knnPct: knn.status === 'ok' && typeof knn.p_up === 'number' ? knn.p_up * 100 : null,
+      correct: sv2fCorrect(r, 'v2_knn'), pending: !!(r.outcome && r.outcome.status === 'pending') };
+  });
+}
+function sv2fMethodologyItems(d){
+  const m = (d && d.methodology) || {}, out = Object.keys(m).map((k) => ({ key: k, text: String(m[k]) }));
+  const extra = [];
+  if(d && typeof d.not_evaluated_older === 'number') extra.push('Readings not evaluated because they are older than the evaluation window: ' + d.not_evaluated_older + '.');
+  if(d && typeof d.excluded_older_calc === 'number') extra.push('Readings excluded because they came from an older V2 calculation version: ' + d.excluded_older_calc + '.');
+  extra.push('Readings about an hour apart with 12/24 h horizons overlap, so the effective sample is smaller than n.');
+  return { items: out, extra };
+}
 // ---- END view-model helpers ----
 
 // ---- Shared GET memo: one request per URL per minute, shared by every panel that needs it (several panels read
@@ -2643,8 +2789,8 @@ function apiCacheClear(){ _apiCache.clear(); }
 async function getJson(url){
   try{
     const r = await apiFetch(url);
-    const d = await r.json();
-    if(!r.ok || (d && d.ok === false)) return { ok: false, error: (d && d.error) || ('HTTP ' + r.status), data: d };
+    let d; try{ d = await r.json(); }catch(e){ if(!r.ok) return { ok: false, error: 'HTTP ' + r.status, status: r.status }; throw e; }
+    if(!r.ok || (d && d.ok === false)) return { ok: false, error: (d && d.error) || ('HTTP ' + r.status), status: r.status, data: d };
     return { ok: true, data: d };
   }catch(e){ return { ok: false, error: 'request failed' }; }
 }
@@ -3630,6 +3776,7 @@ function loadActiveView(force){
   if (on('history')) loadHistoryIfNeeded();
   if (on('experiments')) { if (force) _experimentsLoaded = false; loadExperimentsIfNeeded(); }
   if (on('sentiment')) loadSentimentV2IfNeeded(force);
+  if (on('v2forecast')) loadSv2ForecastIfNeeded(force);
   if (on('forecast') || on('glm')) loadForecastLabIfNeeded(force);
   if (on('glm')) loadGlmEvaluation(force);
   if (on('sentiment-v1')) loadSentimentV1IfNeeded(force);
@@ -3651,6 +3798,104 @@ document.getElementById('refreshBtn').onclick = () => {
   icon.classList.add('animate-spin'); setTimeout(() => icon.classList.remove('animate-spin'), 800);
   loadActiveView(true);
 };
+
+// ---- Sentiment V2 › V2 Forecast (render; the logic is in the sv2f helpers). GET only; the chart is created once and updated. ----
+var _sv2f = { horizon: 24, range: 'ALL', res: {}, at: {}, seq: 0, chart: null, shown: 50 };
+var SV2F_REFRESH_MS = 5 * 60 * 1000;
+function sv2fSections(){ return ['sv2fNow', 'sv2fTrack', 'sv2fH2h', 'sv2fBands', 'sv2fRecords', 'sv2fHowBody']; }
+function sv2fBuildHorizon(){
+  const host = document.getElementById('sv2fHorizon');
+  host.innerHTML = [24, 12].map(h => `<button type="button" data-h="${h}" aria-pressed="${h === _sv2f.horizon}" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${h === _sv2f.horizon ? 'bg-[#00E0FF] text-[#0B0E11]' : 'text-[#BAC9CD] hover:text-[#E1E2E7]'}">${h}h</button>`).join('');
+  host.querySelectorAll('button').forEach(b => { b.onclick = () => { _sv2f.horizon = Number(b.dataset.h); _sv2f.shown = 50; loadSv2ForecastIfNeeded(false); }; });
+}
+function loadSv2ForecastIfNeeded(force){
+  sv2fBuildHorizon();
+  const h = _sv2f.horizon;
+  if(!force && _sv2f.res[h] && Date.now() - (_sv2f.at[h] || 0) < SV2F_REFRESH_MS){ renderSv2Forecast(); return; }
+  const seq = ++_sv2f.seq;
+  _sv2f.res[h] = null; renderSv2Forecast();
+  getJson(WORKER_URL + '/api/sv2-forecast?horizon=' + h).then(res => {
+    if(seq !== _sv2f.seq) return;
+    _sv2f.res[h] = sv2fState(res); _sv2f.at[h] = Date.now(); renderSv2Forecast();
+  });
+}
+function sv2fTable(head, rows, aligns){
+  return `<div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr>${head.map((x, i) => `<th class="py-1 px-2 font-normal whitespace-nowrap ${aligns && aligns[i] === 'r' ? 'text-right' : ''}">${x}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function sv2fMarkHtml(ok){ return ok === true ? '<span style="color:#4AE176" aria-label="correct">✓</span>' : ok === false ? '<span style="color:#FFB4AB" aria-label="wrong">✗</span>' : ''; }
+function sv2fDirHtml(d){ return d === 'UP' ? '<span style="color:#4AE176">UP</span>' : d === 'DOWN' ? '<span style="color:#FFB4AB">DOWN</span>' : '<span class="text-[#8A9599]">' + esc(d || '—') + '</span>'; }
+function renderSv2Forecast(){
+  const st = _sv2f.res[_sv2f.horizon], h = _sv2f.horizon;
+  const status = document.getElementById('sv2fStatus'), wrap = document.getElementById('sv2fChartWrap'), note = document.getElementById('sv2fChartNote');
+  buildPresetTabs('sv2fPresets', _sv2f.range, k => { _sv2f.range = k; renderSv2Forecast(); });
+  const fill = (html) => sv2fSections().forEach(id => { document.getElementById(id).innerHTML = html; });
+  if(!st){ status.textContent = 'Loading…'; fill('<span class="text-[#8A9599]">Loading…</span>'); note.textContent = 'Loading…'; wrap.classList.add('hidden'); return; }
+  if(st.state !== 'ok'){
+    const m = st.state === 'unavailable' ? `${chip('NOT AVAILABLE YET', 'neutral')} The V2 forecast route is not available on the Worker yet. Nothing is shown rather than made-up numbers.`
+      : st.state === 'empty' ? `${chip('EMPTY', 'neutral')} ${esc(st.reason)} for the ${h}h horizon.`
+      : `${chip('ERROR', 'bad')} Could not load the V2 forecast: ${esc(st.reason)}.`;
+    const short = st.state === 'unavailable' ? 'Not available yet.' : st.state === 'empty' ? 'No data yet.' : 'Unavailable because of the error above.';
+    status.innerHTML = m; fill(`<span class="text-[#8A9599]">${short}</span>`);
+    note.textContent = short; wrap.classList.add('hidden'); return;
+  }
+  const d = st.data, s = d.summary;
+  status.innerHTML = `${chip('SV2F-1', 'info')} ${chip('NOT PRODUCTION', 'neutral')} <span class="ml-1">${esc(d.model_version || '')} · ${h}h horizon · generated ${esc(fmtUtc(d.generated_ts))}${d.truncated ? ' · ' + chip('TRUNCATED', 'warn') : ''}</span>`;
+  const n = sv2fNowModel(d.current, h), card = (title, color, big, sub, note2, chipHtml) => `<div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3 min-w-0"><div class="text-[10px] uppercase tracking-wide mb-1" style="color:${color}">${title}</div><div class="font-mono-data text-xl">${big}</div><div class="mt-0.5">${sub}</div><div class="text-[11px] text-[#8A9599] mt-1">${note2}</div>${chipHtml ? '<div class="mt-1">' + chipHtml + '</div>' : ''}</div>`;
+  document.getElementById('sv2fNow').innerHTML = n ? `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">`
+    + card('V2 signal', '#A78BFA', esc(n.signal.score) + '<span class="text-xs text-[#8A9599]"> / 100</span>', sv2fDirHtml(n.signal.direction), esc(n.signal.rule), chip('PROPOSED', 'warn'))
+    + card('V2 k-NN', '#00E0FF', esc(n.knn.pct) + (n.knn.ok ? '<span class="text-xs text-[#8A9599]"> up</span>' : ''), sv2fDirHtml(n.knn.direction), esc(n.knn.note), n.knn.ok ? '' : chip('INSUFFICIENT HISTORY', 'neutral'))
+    + card('V2 analogue', '#F59E0B', esc(n.analogue.pct) + (n.analogue.ok ? '<span class="text-xs text-[#8A9599]"> up</span>' : ''), sv2fDirHtml(n.analogue.direction), esc(n.analogue.note), n.analogue.ok ? chip('UNVALIDATED', 'warn') : '')
+    + `</div><p class="text-[11px] text-[#8A9599] mt-2">Reading ${esc(fmtUtc(n.decisionTs))}${sv2fAgeText(n.ageMs) ? ' (' + esc(sv2fAgeText(n.ageMs)) + ')' : ''} · target ${esc(fmtUtc(n.targetTs))} · BTC ${h}h ahead.</p>`
+    : '<span class="text-[#8A9599]">No current reading.</span>';
+  const tr = sv2fTrackRows(s), counts = sv2fCounts(s);
+  document.getElementById('sv2fTrack').innerHTML = sv2fTable(['Series', 'n', 'Correct', 'Accuracy', 'Wilson 95% CI', 'Brier'],
+    tr.map(r => `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 whitespace-nowrap"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:${r.color}"></span>${esc(r.label)}</td><td class="px-2 font-mono-data text-right">${r.hasData ? r.n : '—'}</td><td class="px-2 font-mono-data text-right">${r.hasData ? r.correct : '—'}</td><td class="px-2 font-mono-data text-right">${esc(r.accuracy)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(r.ci)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(r.brier)}</td></tr>`).join(''), [0, 'r', 'r', 'r', 'r', 'r'])
+    + `<p class="text-[11px] text-[#8A9599] mt-2">${counts.map(c => esc(c.label) + ' <span class="font-mono-data text-[#E1E2E7]">' + (c.value == null ? '—' : c.value) + '</span>').join(' · ')}. Brier: lower is better; direction-only series have none. Accuracy counts only resolved readings where the series made an UP/DOWN call.</p>`;
+  const hh = sv2fHeadToHeadRows(s);
+  document.getElementById('sv2fH2h').innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">` + hh.map(r => r.missing ? `<div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3 text-[#8A9599]">${esc(r.title)}: not reported.</div>`
+    : `<div class="rounded-xl border border-[#3B494C] bg-[#0B0E11] p-3 min-w-0"><div class="font-semibold mb-1">${esc(r.title)} <span class="text-[#8A9599] font-normal">· n ${r.n} resolved pairs</span></div>
+    <div class="font-mono-data">${esc(r.a.label)}: ${esc(r.a.rate)} <span class="text-[#8A9599]">(CI ${esc(r.a.ci)})</span></div><div class="font-mono-data">${esc(r.b.label)}: ${esc(r.b.rate)} <span class="text-[#8A9599]">(CI ${esc(r.b.ci)})</span></div>
+    <p class="mt-2">${chip(String(r.claim || '').replace(/_/g, ' ').toUpperCase(), r.tone)} ${esc(r.text)}</p></div>`).join('') + '</div>';
+  const br = sv2fBandRows(s);
+  document.getElementById('sv2fBands').innerHTML = br.length ? sv2fTable(['Band (down/up)', 'Coverage', 'n', 'Accuracy', 'Wilson 95% CI'],
+    br.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 whitespace-nowrap font-mono-data">${esc(b.band)} ${b.proposed ? chip('PROPOSED', 'warn') : ''}</td><td class="px-2 font-mono-data text-right">${esc(b.coverage)}</td><td class="px-2 font-mono-data text-right">${b.n}</td><td class="px-2 font-mono-data text-right">${esc(b.accuracy)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(b.ci)}</td></tr>`).join(''), [0, 'r', 'r', 'r', 'r'])
+    + '<p class="text-[11px] text-[#8A9599] mt-2">Wider bands call more readings but only the called ones are scored; coverage is the share of readings with a call. The 45/55 rule is a proposal, not a tuned threshold.</p>' : '<span class="text-[#8A9599]">No band data yet.</span>';
+  const rows = sv2fRecordRows(d.records), shown = rows.slice(0, _sv2f.shown);
+  document.getElementById('sv2fRecords').innerHTML = `<p class="text-[11px] text-[#8A9599] mb-2">Newest first. Showing ${shown.length} of ${rows.length}. ✓ correct, ✗ wrong (resolved readings only).</p>` + sv2fTable(['Time (UTC)', 'V2 score', 'Coverage', 'Intensity', 'V2 signal', 'k-NN p_up', 'Analogue p_up', 'V1', 'Outcome'],
+    shown.map(r => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(fmtUtc(r.ts))}</td><td class="px-2 font-mono-data text-right">${esc(r.score)}</td><td class="px-2 font-mono-data text-right">${esc(r.coverage)}</td><td class="px-2 font-mono-data text-right">${esc(r.intensity)}</td>
+      <td class="px-2 whitespace-nowrap">${sv2fDirHtml(r.signal)} ${sv2fMarkHtml(r.signalOk)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(r.knn)} ${sv2fMarkHtml(r.knnOk)}</td><td class="px-2 font-mono-data text-right whitespace-nowrap">${esc(r.analogue)} ${sv2fMarkHtml(r.analogueOk)}</td>
+      <td class="px-2 whitespace-nowrap">${sv2fDirHtml(r.v1)} ${sv2fMarkHtml(r.v1Ok)}</td><td class="px-2 whitespace-nowrap">${r.outcomeStatus === 'resolved' ? sv2fDirHtml(r.outcome) : '<span class="text-[#8A9599]">' + esc(r.outcome) + '</span>'}</td></tr>`).join(''), [0, 'r', 'r', 'r', 0, 'r', 'r', 0, 0])
+    + (rows.length > shown.length ? '<button type="button" id="sv2fMore" class="mt-2 px-3 py-1.5 rounded-lg border border-[#3B494C] text-xs font-semibold text-[#BAC9CD] hover:text-[#E1E2E7]">Show more</button>' : '');
+  const more = document.getElementById('sv2fMore'); if(more) more.onclick = () => { _sv2f.shown += 50; renderSv2Forecast(); };
+  const mm = sv2fMethodologyItems(d);
+  document.getElementById('sv2fHowBody').innerHTML = `<p class="mb-2">Protocol ${esc(d.protocol || '')} · ${esc(d.model_version || '')} · calc ${esc(d.calc_version || '')}.</p><dl class="space-y-2">` + mm.items.map(i => `<div><dt class="text-[#E1E2E7] font-semibold">${esc(i.key)}</dt><dd>${esc(i.text)}</dd></div>`).join('') + '</dl><ul class="list-disc pl-4 mt-2 space-y-1">' + mm.extra.map(t => `<li>${esc(t)}</li>`).join('') + '</ul>';
+  renderSv2fChart(d);
+}
+function renderSv2fChart(d){
+  const wrap = document.getElementById('sv2fChartWrap'), note = document.getElementById('sv2fChartNote'), now = Date.now();
+  const pts = sv2fChartPoints(d.records), clip = clipSeries(pts, 'ts', _sv2f.range, now), cp = clip.points; _sv2f.chartPts = cp;
+  note.textContent = (coverageNote(clip.coverage, _sv2f.range, now) || '') + ' Left axis: V2 score (0-100) with the 45 and 55 thresholds. Right axis: k-NN p_up (%); gaps = insufficient history. Green = k-NN call correct, red = wrong, hollow = pending.';
+  if(!cp.length){ wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const x0 = cp[0].ts, xl = cp[cp.length - 1].ts, x1 = xl === x0 ? x0 + 3600000 : xl;
+  const dot = (p) => p.correct === true ? '#4AE176' : p.correct === false ? '#FFB4AB' : p.pending ? 'rgba(0,0,0,0)' : '#00E0FF';
+  const data = { datasets: [
+    { label: 'V2 score', data: cp.map(p => ({ x: p.ts, y: p.score })), borderColor: '#A78BFA', backgroundColor: '#A78BFA', borderWidth: 1.5, pointRadius: 0, tension: 0, yAxisID: 'y' },
+    { label: 'V2 k-NN p_up %', data: cp.map(p => ({ x: p.ts, y: p.knnPct })), borderColor: '#00E0FF', backgroundColor: '#00E0FF', borderWidth: 1.5, tension: 0, yAxisID: 'y1', spanGaps: false,
+      pointRadius: cp.map(p => p.knnPct == null ? 0 : (cp.length > 120 ? 2 : 3.5)), pointBorderColor: cp.map(p => (p.correct === true ? '#4AE176' : p.correct === false ? '#FFB4AB' : '#00E0FF')), pointBackgroundColor: cp.map(dot), pointBorderWidth: 1.5 },
+    { label: '55 / 45 thresholds', data: [{ x: x0, y: 55 }, { x: x1, y: 55 }], borderColor: 'rgba(186,201,205,0.6)', borderDash: [4, 4], borderWidth: 1, pointRadius: 0, yAxisID: 'y' },
+    { label: '45', data: [{ x: x0, y: 45 }, { x: x1, y: 45 }], borderColor: 'rgba(186,201,205,0.6)', borderDash: [4, 4], borderWidth: 1, pointRadius: 0, yAxisID: 'y' },
+  ] };
+  if(_sv2f.chart){ _sv2f.chart.data = data; _sv2f.chart.options.scales.x.min = x0; _sv2f.chart.options.scales.x.max = x1; _sv2f.chart.update(); _sv2f.chart.resize(); return; }
+  const tick = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } }, grid = { color: 'rgba(59,73,76,0.4)' };
+  _sv2f.chart = new Chart(document.getElementById('sv2fChart').getContext('2d'), { type: 'line', data, options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'nearest', intersect: false },
+    scales: { x: { type: 'time', min: x0, max: x1, ticks: { ...tick, maxRotation: 0, maxTicksLimit: 6 }, grid, title: { display: true, text: 'UTC (decision time)', color: '#8A9599', font: { size: 10 } } },
+      y: { position: 'left', min: 0, max: 100, ticks: tick, grid, title: { display: true, text: 'V2 score', color: '#A78BFA', font: { size: 10 } } },
+      y1: { position: 'right', min: 0, max: 100, ticks: { ...tick, callback: v => v + '%' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'k-NN p_up', color: '#00E0FF', font: { size: 10 } } } },
+    plugins: { legend: { labels: { color: '#BAC9CD', font: { size: 10 }, boxWidth: 10, filter: (it) => it.datasetIndex < 3 } },
+      tooltip: { filter: (it) => it.datasetIndex < 2, callbacks: { title: it => it.length ? fmtUtc(it[0].parsed.x) : '', label: it => { const p = _sv2f.chartPts ? _sv2f.chartPts[it.dataIndex] : null; return it.datasetIndex === 0 ? 'V2 score ' + (it.parsed.y == null ? '—' : it.parsed.y.toFixed(1)) : 'k-NN p_up ' + (it.parsed.y == null ? '— (insufficient history)' : it.parsed.y.toFixed(0) + '%') + (p ? (p.correct === true ? ' · correct' : p.correct === false ? ' · wrong' : p.pending ? ' · pending' : '') : ''); } } } } } });
+  enableChartFullscreen('sv2fChart', () => _sv2f.chart);
+}
 
 // ---- Sentiment V2 tab ----
 var _sv2Period = '24h';   // 24H first (OD-08)

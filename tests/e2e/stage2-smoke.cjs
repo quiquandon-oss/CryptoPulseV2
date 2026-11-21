@@ -45,7 +45,7 @@ const results = []; const ok = (c, m) => { results.push((c ? 'PASS ' : 'FAIL ') 
   ok(await page.$('#areaNavDesktop [data-area="learning"]') === null && await page.$('#view-learningblock') === null, 'Learning & Audit is not a frontend destination any more');
   // Sentiment V2 tabs
   await page.click('#areaNavDesktop [data-area="sentiment-v2"]'); await page.waitForTimeout(2500);
-  ok((await page.$$eval('#areaTabs [role="tab"]', bs => bs.map(b => b.textContent.trim()).join('|'))) === 'Overview|Price models|Evidence / GLM', 'Sentiment V2 tabs Overview|Price models|Evidence / GLM');
+  ok((await page.$$eval('#areaTabs [role="tab"]', bs => bs.map(b => b.textContent.trim()).join('|'))) === 'Overview|V2 Forecast|Price models|Evidence / GLM', 'Sentiment V2 tabs Overview|V2 Forecast|Price models|Evidence / GLM');
   ok((await page.$eval('#sv2Periods [aria-pressed="true"]', b => b.textContent.trim())) === '24H', 'SV2 chart default 24H');
   ok((await page.$$eval('#sv2Periods button', bs => bs.map(b => b.textContent.trim()).join('|'))) === '24H|7D|1M|All', 'SV2 presets 24H|7D|1M|All');
   ok(await page.$('#sv2Chart ~ .chart-fs-btn, #sv2Chart + .chart-fs-btn') !== null, 'SV2 chart has a full-screen control');

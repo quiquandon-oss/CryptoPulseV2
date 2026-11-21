@@ -373,18 +373,6 @@
     </details>
   </div>
 
-  <!-- ═══ AI LEARNING TAB ═══ Exposes CryptoPulseV2's continuous-learning
-       loop. Two live, already-deployed endpoints back this: /select-variant
-       and /selection-history (both real, both in production today). The
-       richer /api/learning/daily and /api/learning/chatgpt endpoints exist
-       in code but are on an unmerged branch (feature/continuous-learning-
-       foundation, PulseWorkerV2) — this view calls them anyway (that's the
-       real, intended path) and shows an honest "Unavailable" state until
-       that branch merges and deploys, rather than blocking on it. Gemini
-       investigation results, the full experiment lifecycle (EXP-NNN
-       stages), and per-variant eligibility for variants that never reached
-       50 resolved predictions have NO backend endpoint at all yet — those
-       sections say so plainly instead of inventing data. ═══ -->
   <!-- ═══ EXPERIMENTS ═══ Evidence and experiment status. Everything here
        is read from existing backend endpoints and shown as the backend
        reports it: /api/research-lab/registry (per-experiment status,
@@ -497,143 +485,6 @@
   </div>
 
   <!-- Learning & Audit also holds the learning loop (moved here from Experiments). -->
-  <div id="view-learningblock" class="hidden">
-    <section id="prospectiveCard" aria-labelledby="prospectiveTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <h2 id="prospectiveTitle" class="text-sm font-semibold mb-1">Prospective evaluations <span class="text-[#BAC9CD] font-normal text-xs">· frozen protocols, read-only</span></h2>
-      <p class="text-[11px] text-[#8A9599] mb-3">Both protocols were fixed before their data existed. This page only reports them; nothing here changes their windows, rules or records.</p>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-        <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">GLM-PE-1 · GLM influence on BTC 24 h</p><div id="glmEvalBody" class="mt-2" role="status">Loading…</div></div>
-        <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">PEV-1P · forecast models, prospective window</p>
-          <p class="mt-2 text-[#BAC9CD]">Counts-only until its single confirmatory analysis; the per-origin results and the counts are in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('sentiment-v2/forecast')">Sentiment V2 › Forecast</button>. No interim verdict is shown anywhere.</p></div>
-      </div>
-    </section>
-    <details id="learningDetails" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
-      <summary class="flex items-center justify-between cursor-pointer select-none">
-        <span class="text-sm font-semibold">Learning loop &amp; model selection <span class="text-[#BAC9CD] font-normal text-xs">(formerly "AI Learning")</span></span>
-        <span class="chev text-xs text-[#00E0FF]" aria-hidden="true">▾</span>
-      </summary>
-      <div id="view-learning" class="mt-4">
-
-      <!-- Section 1 — Status -->
-      <section id="learnStatusCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
-          <div>
-            <h2 class="text-base font-bold">AI Learning</h2>
-            <p class="text-xs text-[#BAC9CD] mt-0.5">How CryptoPulse learns from predictions, outcomes and experiments.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnStatusNote')">ⓘ Info</button>
-            <button id="learnRefreshBtn" class="text-[10px] text-[#BAC9CD] hover:text-[#00E0FF] border border-[#3B494C] hover:border-[#00E0FF]/40 rounded-md px-2 py-1 transition-colors flex items-center gap-1">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>Refresh
-            </button>
-          </div>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 mt-2 leading-relaxed" id="learnStatusNote">Each item below reflects a real signal from the backend — a status only shows "Healthy"/"Active" when a call actually succeeded, never a placeholder. "Unavailable" means no endpoint exists yet or the current deploy doesn't include it, not that something is broken.</p>
-        <div id="learnStatusGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
-      </section>
-
-      <!-- Section 2 — Learning Loop -->
-      <section id="learnLoopCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Loop</p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnLoopNote')">ⓘ Info</button>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnLoopNote">Each stage is a real step in the architecture, not a promise of automatic flow between them — a "connected" badge means this build actually calls a live endpoint for that stage; "not yet wired" means the stage is designed (see .ai/ in the CryptoPulseV2 repo) but has no queryable API today. No stage ever auto-advances to the next.</p>
-        <div id="learnLoop" class="flex flex-col md:flex-row md:items-stretch gap-1.5 mt-3"></div>
-      </section>
-
-      <!-- Section 3 — KPI Snapshot -->
-      <section id="learnKpiCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Learning Snapshot</p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnKpiNote')">ⓘ Info</button>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnKpiNote">Sourced entirely from GET /api/learning/daily — accuracy/Brier/calibration shown here are the BTC (all horizons combined) figures from that endpoint, never recomputed in this browser. The four "awaiting" experiment counts aren't broken out by stage in the current backend response — they show "Not available" rather than a guess.</p>
-        <div id="learnKpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3"></div>
-      </section>
-
-      <!-- Section 4 — Model Selection (live, per current coin/horizon) -->
-      <section id="learnSelectionCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Current Selection — <span id="learnSelectionCoinLabel"></span></p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnSelectionNote')">ⓘ Info</button>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnSelectionNote">From GET /select-variant — the latest decision the backend's Dynamic Classifier Selection stored, written by the scheduled run (not recomputed on request). A variant needs 50+ of its own resolved predictions before it's even compared (SELECTION_MIN_HISTORY) — variants below that bar aren't in the "eligible variants compared" list at all, since the backend doesn't return them. ELIGIBLE (compared, cleared the history bar) is not the same as SELECTED (the one actually chosen this round) — both are shown separately below.</p>
-        <div id="learnSelectionBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-      </section>
-
-      <!-- Section 5 — Recent Learning Events -->
-      <section id="learnEventsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <h2 class="text-sm font-semibold mb-1">Recent Learning Events — <span id="learnEventsCoinLabel" class="text-[#BAC9CD] font-normal text-xs"></span></h2>
-        <p class="text-xs text-[#BAC9CD] mb-3">Real selection decisions from GET /selection-history for the coin/horizon selected above — not a fabricated cross-pipeline feed.</p>
-        <div id="learnEventsBody" style="max-height:320px;overflow-y:auto"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-      </section>
-
-      <!-- Section 6 — Experiment Pipeline -->
-      <section id="learnExperimentsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Experiment Pipeline</p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnExperimentsNote')">ⓘ Info</button>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnExperimentsNote">candidate_experiments from GET /api/learning/daily is the only backend-populated source for this section today, and nothing currently writes to it — an empty list here is an accurate reflection of the backend, not a loading failure. Full experiment lifecycle tracking (EXP-NNN, stages, backtest/OOS results) exists as markdown files in PulseWorkerV2's /learning/ directory, not yet as a queryable API.</p>
-        <div id="learnExperimentsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-      </section>
-
-      <!-- Section 6.5 — Analyst Relay: the investigation mechanism. Was
-           originally built as a fallback for when the paid grounded API path
-           was rate-limited; that automated path has since been removed
-           entirely (Google Search grounding requires a funded, billing-
-           enabled Cloud project -- a recurring cost this project stopped
-           paying). This is now the only investigation mechanism, not a
-           fallback for anything -- see relayContent's own note. -->
-      <section id="learnRelayCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Analyst Relay</p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="loadAnalystRelayPrompt()">↻ Refresh</button>
-        </div>
-        <p class="text-[10px] text-[#8A9599] mb-3 leading-relaxed">How market intelligence gets investigated: real evidence, computed the same way as before, but you paste the prompt into the free Gemini app yourself and bring the answer back — no paid API grounding. Real catalyst data either way, but a pasted response has no verifiable search metadata the way an API response would, so this is never claimed as machine-verified.</p>
-        <div id="relayContent"><button class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold text-[#E1E2E7]" onclick="loadAnalystRelayPrompt()">Check for a candidate</button></div>
-      </section>
-
-      <!-- Section 7 — AI Responsibility Cards -->
-      <section id="learnRolesCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold mb-3">AI Responsibility Model</p>
-        <div id="learnRolesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-      </section>
-
-      <!-- Section 8 — Learning by Regime -->
-      <section id="learnRegimeCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning by Regime</p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnRegimeNote')">ⓘ Info</button>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnRegimeNote">Regime taxonomy is whatever the backend's regime_analysis actually returns (trend/volatility/anomaly buckets built from each prediction's own stored volatility_percentile and trend_strength) — nothing here is a frontend-invented category.</p>
-        <div id="learnRegimeBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-      </section>
-
-      <!-- Section 9 — Model Variant Comparison -->
-      <section id="learnVariantsCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Model Variant Comparison — <span id="learnVariantsCoinLabel"></span></p>
-          <button class="text-[10px] text-[#BAC9CD] hover:text-[#E1E2E7] border border-[#3B494C] rounded-md px-2 py-1 transition-colors" onclick="toggleNote(this,'learnVariantsNote')">ⓘ Info</button>
-        </div>
-        <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="learnVariantsNote">Same live /select-variant response as the Current Selection section above, reused (not a second fetch). Only shows variants that cleared the 50-resolved-prediction eligibility bar — the backend doesn't return variants below it, so this list can't show "active but not yet eligible" variants even though some may exist.</p>
-        <div id="learnVariantsBody"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-      </section>
-
-      <!-- Section 10 — Audit Trail -->
-      <section id="learnAuditCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5 mb-6">
-        <button id="learnAuditToggleBtn" class="w-full flex items-center justify-between text-left" onclick="toggleLearnAudit()" aria-expanded="false" aria-controls="learnAuditBody">
-          <span class="text-[10px] uppercase tracking-wide text-[#BAC9CD] font-semibold">Learning Audit Trail</span>
-          <span id="learnAuditChevron" class="material-symbols-outlined text-[16px] text-[#BAC9CD] transition-transform">expand_more</span>
-        </button>
-        <p class="text-xs text-[#BAC9CD] mt-1">Every selection decision, traceable — same underlying data as Recent Learning Events, in raw audit form.</p>
-        <div id="learnAuditBody" class="hidden mt-3"><p class="text-xs text-[#BAC9CD]">Loading…</p></div>
-      </section>
-
-      </div>
-    </details>
-  </div>
 
   <!-- Sentiment V2: one graph comparing V1 sentiment, V2 sentiment and BTC price at the same timestamps
        (data: PulseWorkerV2 /api/sentiment-v2/comparison; spec docs/SENTIMENT_V2_BUILD_SPEC.md §7). -->
@@ -656,13 +507,6 @@
       </div>
     </section>
     <!-- Secondary detail, collapsed: the graph above stays the primary view (spec §7). -->
-    <section id="traderCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="traderTitle">
-      <h2 id="traderTitle" class="text-sm font-semibold mb-1">Trader analysis <span class="text-[#BAC9CD] font-normal text-xs">· Gemini via V1, on request</span></h2>
-      <p class="text-[11px] text-[#8A9599] mb-2">V1's "Gemini's independent read" capability, run through V1's existing route and free Gemini quota, only when you click. The inputs are V2's own data taken at that moment (BTC daily candles with V1's indicator formulas, V2 sentiment, V2 evidence headlines); V1-only signals are sent as unavailable, so Gemini is told not to discuss them. An AI interpretation, not a V2 score and not advice.</p>
-      <button type="button" id="traderBtn" class="px-3 py-1.5 rounded-lg border border-[#A78BFA] text-[#A78BFA] text-xs font-semibold disabled:opacity-40">Ask for the trader analysis</button>
-      <div id="traderInputs" class="mt-3 text-xs"></div>
-      <div id="traderOut" class="mt-3 text-xs" role="status"></div>
-    </section>
 
     <details id="sv2Details" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
       <summary class="cursor-pointer select-none text-sm font-semibold flex items-center justify-between gap-2">
@@ -697,29 +541,6 @@
 
     <div id="flCards" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
 
-    <section id="glmPanel" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="glmTitle">
-      <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div class="min-w-0">
-          <h3 id="glmTitle" class="text-sm font-semibold">GLM evidence layer <span class="text-[#8A9599] font-normal">(BTC 24 h, daily at 07:00 UTC)</span></h3>
-          <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">GLM reads V1 sources (including V1's existing Gemini summaries, labelled as interpretations next to their originals), the evidence collector, market and V2 records, and the TimesFM / Chronos-2 forecasts. It returns an interpretation and at most a directional signal: <span class="text-[#E1E2E7]">it is not a price forecast</span>. Independence is counted in code: a summary and its original count once.</p>
-        </div>
-        <span id="glmModeChip"></span>
-      </div>
-      <p id="glmStatus" class="text-[11px] text-[#8A9599] mt-2" aria-live="polite">Loading…</p>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-3">
-        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #A78BFA"><h4 class="text-xs font-semibold text-[#E1E2E7]">1 · Numerical forecasts</h4><div id="glmForecasts" class="text-[11px] mt-2"></div></div>
-        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #FBBF24"><h4 class="text-xs font-semibold text-[#E1E2E7]">2 · GLM interpretation &amp; signal</h4><div id="glmSignal" class="text-[11px] mt-2"></div></div>
-        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #4AE176"><h4 class="text-xs font-semibold text-[#E1E2E7]">3 · V2 production: baseline → adjustment → final</h4><div id="glmAdjust" class="text-[11px] mt-2"></div></div>
-      </div>
-      <details class="mt-4 group" id="glmEvidenceBox">
-        <summary class="cursor-pointer text-xs font-semibold text-[#E1E2E7]">Evidence supplied to GLM (last run)</summary>
-        <div id="glmEvidence" class="mt-2 text-[11px]"></div>
-      </details>
-      <details class="mt-2">
-        <summary class="cursor-pointer text-xs font-semibold text-[#E1E2E7]">Signal history</summary>
-        <div id="glmHistory" class="mt-2 text-[11px] overflow-x-auto"></div>
-      </details>
-    </section>
 
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="flMainTitle">
       <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
@@ -796,6 +617,53 @@
       <h2 id="foufiTitle" class="text-sm font-semibold mb-1">Foufi Daily <span class="text-[#BAC9CD] font-normal text-xs">· V1 input, Gemini summary of a video</span></h2>
       <p class="text-[11px] text-[#8A9599] mb-3">V1 summarises each new video by the analyst Foufi with Gemini (model gemini-3.6-flash) and uses the BTC score as one low-weight V1 source. Shown here as V1 stored it: an interpretation of a video, not a V2 score and not a fact. Read from V1's <span class="font-mono-data">GET /foufi-latest</span>, which never triggers a Gemini call.</p>
       <div id="foufiBody" class="space-y-3 text-xs" role="status">Loading…</div>
+    </section>
+  </div>
+
+  <!-- Sentiment V1 › Trader Analysis: V1's Gemini trader read (POST V1 /trader-analysis-gemini, on click) on the V2 snapshot. -->
+  <div id="view-trader" class="hidden">
+    <section id="traderCard" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="traderTitle">
+      <h2 id="traderTitle" class="text-sm font-semibold mb-1">Trader analysis <span class="text-[#BAC9CD] font-normal text-xs">· Gemini via V1, on request</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-2">V1's "Gemini's independent read" capability, run through V1's existing route and free Gemini quota, only when you click. The inputs are V2's own data taken at that moment (BTC daily candles with V1's indicator formulas, V2 sentiment, V2 evidence headlines); V1-only signals are sent as unavailable, so Gemini is told not to discuss them. An AI interpretation, not a V2 score and not advice.</p>
+      <button type="button" id="traderBtn" class="px-3 py-1.5 rounded-lg border border-[#A78BFA] text-[#A78BFA] text-xs font-semibold disabled:opacity-40">Ask for the trader analysis</button>
+      <div id="traderInputs" class="mt-3 text-xs"></div>
+      <div id="traderOut" class="mt-3 text-xs" role="status"></div>
+    </section>
+  </div>
+
+  <!-- Sentiment V2 › Evidence / GLM: GLM evidence layer and the frozen prospective protocols (read-only). -->
+  <div id="view-glm" class="hidden">
+    <section id="glmPanel" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="glmTitle">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <h3 id="glmTitle" class="text-sm font-semibold">GLM evidence layer <span class="text-[#8A9599] font-normal">(BTC 24 h, daily at 07:00 UTC)</span></h3>
+          <p class="text-[11px] text-[#BAC9CD] mt-1 leading-relaxed">GLM reads V1 sources (including V1's existing Gemini summaries, labelled as interpretations next to their originals), the evidence collector, market and V2 records, and the TimesFM / Chronos-2 forecasts. It returns an interpretation and at most a directional signal: <span class="text-[#E1E2E7]">it is not a price forecast</span>. Independence is counted in code: a summary and its original count once.</p>
+        </div>
+        <span id="glmModeChip"></span>
+      </div>
+      <p id="glmStatus" class="text-[11px] text-[#8A9599] mt-2" aria-live="polite">Loading…</p>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-3">
+        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #A78BFA"><h4 class="text-xs font-semibold text-[#E1E2E7]">1 · Numerical forecasts</h4><div id="glmForecasts" class="text-[11px] mt-2"></div></div>
+        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #FBBF24"><h4 class="text-xs font-semibold text-[#E1E2E7]">2 · GLM interpretation &amp; signal</h4><div id="glmSignal" class="text-[11px] mt-2"></div></div>
+        <div class="rounded-xl border border-[#3B494C] p-3" style="border-top:3px solid #4AE176"><h4 class="text-xs font-semibold text-[#E1E2E7]">3 · V2 production: baseline → adjustment → final</h4><div id="glmAdjust" class="text-[11px] mt-2"></div></div>
+      </div>
+      <details class="mt-4 group" id="glmEvidenceBox">
+        <summary class="cursor-pointer text-xs font-semibold text-[#E1E2E7]">Evidence supplied to GLM (last run)</summary>
+        <div id="glmEvidence" class="mt-2 text-[11px]"></div>
+      </details>
+      <details class="mt-2">
+        <summary class="cursor-pointer text-xs font-semibold text-[#E1E2E7]">Signal history</summary>
+        <div id="glmHistory" class="mt-2 text-[11px] overflow-x-auto"></div>
+      </details>
+    </section>
+    <section id="prospectiveCard" aria-labelledby="prospectiveTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6">
+      <h2 id="prospectiveTitle" class="text-sm font-semibold mb-1">Prospective evaluations <span class="text-[#BAC9CD] font-normal text-xs">· frozen protocols, read-only</span></h2>
+      <p class="text-[11px] text-[#8A9599] mb-3">Both protocols were fixed before their data existed. This page only reports them; nothing here changes their windows, rules or records.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">GLM-PE-1 · GLM influence on BTC 24 h</p><div id="glmEvalBody" class="mt-2" role="status">Loading…</div></div>
+        <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7]">PEV-1P · forecast models, prospective window</p>
+          <p class="mt-2 text-[#BAC9CD]">Counts-only until its single confirmatory analysis; the per-origin results and the counts are in <button type="button" class="underline hover:text-[#00E0FF]" onclick="goRoute('sentiment-v2/forecast')">Sentiment V2 › Forecast</button>. No interim verdict is shown anywhere.</p></div>
+      </div>
     </section>
   </div>
 
@@ -1682,29 +1550,34 @@ function coverageNote(coverage, key, now){
   return '';
 }
 
-// ---- Navigation: nine areas; Forecast is a tab inside Sentiment V2 (OD-05). `views` are the page containers
+// ---- Navigation (owner restructure 2026-11-21): Portfolio first and default; Sentiment V1 and V2 apart; Learning & Audit
+// retired from the frontend (its data and routes stay). Forecast is a tab inside Sentiment V2 (OD-05). `views` are the page containers
 // (id view-<name>) each route shows; the first one is the internal activeView key the loaders already use. ----
 var AREAS = [
-  { key: 'overview', label: 'Overview', icon: 'monitoring', views: ['dashboard'] },
   { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', tabs: [
     { key: 'holdings', label: 'Holdings', views: ['portfolio'] },
     { key: 'transactions', label: 'Transactions', views: ['portfolio'] },
     { key: 'planning', label: 'Planning', views: ['portfolio'] }] },
-  { key: 'sentiment-v1', label: 'Sentiment V1', short: 'V1', icon: 'history_edu', views: ['sentiment-v1'] },
+  // V1 = the sentiment-ff75 Worker. Its series and Foufi digest, and Trader Analysis (V1's Gemini route). The forecast and
+  // Model Challenger pages run on PulseWorkerV2 (/predict, variants, calibration, selection), so they belong to V2.
+  { key: 'sentiment-v1', label: 'Sentiment V1', short: 'V1', icon: 'history_edu', tabs: [
+    { key: 'overview', label: 'Overview', views: ['sentiment-v1'] },
+    { key: 'trader', label: 'Trader Analysis', views: ['trader'] }] },
   { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
-    { key: 'overview', label: 'Overview', views: ['sentiment'] },
+    { key: 'overview', label: 'Overview', views: ['dashboard', 'sentiment'] },
     { key: 'forecast', label: 'Forecast', views: ['forecast'] },
-    { key: 'model', label: 'Model', views: ['lab'] }] },
-  { key: 'comparison', label: 'Comparison', short: 'Compare', icon: 'compare_arrows', views: ['comparison'] },
+    { key: 'evidence', label: 'Evidence / GLM', views: ['glm'] },
+    { key: 'history', label: 'History & model', views: ['history', 'lab'] }] },
+  { key: 'comparison', label: 'Model Comparison', short: 'Compare', icon: 'compare_arrows', views: ['comparison'] },
   { key: 'research', label: 'Research', icon: 'science', views: ['experiments'] },
-  { key: 'learning', label: 'Learning & Audit', short: 'Learning', icon: 'fact_check', views: ['history', 'learningblock'] },
   { key: 'alerts', label: 'Alerts', icon: 'notifications', views: ['alerts'] },
   { key: 'settings', label: 'Settings', icon: 'settings', views: ['settings'] },
 ];
-var MOBILE_PRIMARY_AREAS = ['overview', 'portfolio', 'sentiment-v2', 'comparison'];
+var MOBILE_PRIMARY_AREAS = ['portfolio', 'sentiment-v1', 'sentiment-v2', 'comparison'];
 // Old links keep working.
-var LEGACY_ROUTES = { dashboard: 'overview', lab: 'sentiment-v2/model', forecast: 'sentiment-v2/forecast', sentiment: 'sentiment-v2',
-  experiments: 'research', history: 'learning', learning: 'learning' };
+var LEGACY_ROUTES = { overview: 'sentiment-v2/overview', dashboard: 'sentiment-v2/overview', lab: 'sentiment-v2/history', forecast: 'sentiment-v2/forecast',
+  sentiment: 'sentiment-v2', experiments: 'research', history: 'sentiment-v2/history', learning: 'sentiment-v2/history', 'sentiment-v2/model': 'sentiment-v2/history',
+  glm: 'sentiment-v2/evidence', trader: 'sentiment-v1/trader', 'sentiment-v2/trader': 'sentiment-v1/trader' };
 function allAreaViews(){ const out = []; for(const a of AREAS) for(const v of (a.tabs ? a.tabs.flatMap((t) => t.views) : a.views)) if(!out.includes(v)) out.push(v); return out; }
 function resolveRoute(hash){
   let h = String(hash || '').replace(/^#/, '').trim().toLowerCase();
@@ -1715,7 +1588,7 @@ function resolveRoute(hash){
   const tab = area.tabs ? (area.tabs.find((t) => t.key === tk) || area.tabs[0]) : null;
   const views = tab ? tab.views : area.views;
   return { area: area.key, tab: tab ? tab.key : null, views: views.slice(), view: views[0],
-    canonical: area.key + (tab ? '/' + tab.key : ''), legacy, openLearning: legacy === 'learning' };
+    canonical: area.key + (tab ? '/' + tab.key : ''), legacy };
 }
 
 // ---- Comparison (Stage 2, descriptive): V1 and V2 sentiment at the same timestamps, from sentimentV2Model rows.
@@ -2789,7 +2662,6 @@ function refreshAll(){
   if (activeView === 'dashboard') loadDashboardIfNeeded();
   if (activeView === 'lab') loadLabIfNeeded();
   if (activeView === 'history') loadHistoryIfNeeded();
-  if (activeView === 'history' && _learningLoaded) loadLearningSelection();
   renderScopeChip();
 }
 
@@ -3438,7 +3310,6 @@ let _route = resolveRoute(location.hash);
 let activeView = _route.view;   // internal key of the route's first container; the per-view loaders key off it
 document.getElementById('labDesignExperiments').classList.toggle('hidden', new URLSearchParams(location.search).get('dev') !== '1');
 // Old #learning links open the learning loop inside Learning & Audit.
-let _openLearningOnLoad = _route.openLearning;
 
 // ---- Lazy, per-view, per-coin/horizon loading. Previously every one of
 // loadPrediction/loadChart/loadAnalysis/loadChallenger/loadLab fired
@@ -3523,7 +3394,7 @@ function renderNav(){
   document.title = 'CryptoPulse V2 · ' + area.label + (r.tab && area.tabs ? ' · ' + area.tabs.find(t => t.key === r.tab).label : '');
   // Coin/horizon toggle: on the Overview and on Learning & Audit (where it filters the prediction records). The Model
   // tab stays scoped to whatever combo was last chosen and says so in the scope chip.
-  document.getElementById('coinHorizonToggle').classList.toggle('hidden', activeView !== 'dashboard' && activeView !== 'history');
+  document.getElementById('coinHorizonToggle').classList.toggle('hidden', !r.views.includes('dashboard') && !r.views.includes('history'));
   renderScopeChip();
   loadActiveView(false);
   // Chart.js cannot size a canvas while its view is hidden: resize once the Overview is visible again.
@@ -3532,22 +3403,23 @@ function renderNav(){
 // Loads the data of whatever is on screen; force refetches (header refresh button).
 function loadActiveView(force){
   if (force) apiCacheClear();
-  if (activeView === 'dashboard') { if (force) { _dashboardLoadedFor = null; loadSystemStatus(true); } loadDashboardIfNeeded(); }
-  if (activeView === 'lab') { if (force) _labLoadedFor = null; loadLabIfNeeded(); }
-  if (activeView === 'history') { loadHistoryIfNeeded(); loadGlmEvaluation(force); if (force && _learningLoaded) loadLearningSelection(); }
-  if (activeView === 'experiments') { if (force) _experimentsLoaded = false; loadExperimentsIfNeeded(); }
-  if (activeView === 'sentiment') loadSentimentV2IfNeeded(force);
-  if (activeView === 'forecast') loadForecastLabIfNeeded(force);
-  if (activeView === 'sentiment-v1') loadSentimentV1IfNeeded(force);
-  if (activeView === 'comparison') loadComparisonIfNeeded(force);
-  if (activeView === 'alerts') { loadSystemStatus(force); loadV1Alerts(force); }
-  if (activeView === 'settings') renderSettings();
-  if (activeView === 'portfolio') loadPortfolio(force);
+  const on = (v) => _route.views.includes(v);
+  if (on('dashboard')) { if (force) { _dashboardLoadedFor = null; } loadDashboardIfNeeded(); }
+  if (on('lab')) { if (force) _labLoadedFor = null; loadLabIfNeeded(); }
+  if (on('history')) loadHistoryIfNeeded();
+  if (on('experiments')) { if (force) _experimentsLoaded = false; loadExperimentsIfNeeded(); }
+  if (on('sentiment')) loadSentimentV2IfNeeded(force);
+  if (on('forecast') || on('glm')) loadForecastLabIfNeeded(force);
+  if (on('glm')) loadGlmEvaluation(force);
+  if (on('sentiment-v1')) loadSentimentV1IfNeeded(force);
+  if (on('comparison')) loadComparisonIfNeeded(force);
+  if (on('alerts')) { loadSystemStatus(force); loadV1Alerts(force); }
+  if (on('settings')) renderSettings();
+  if (on('portfolio')) loadPortfolio(force);
 }
 function goRoute(target){
   _route = resolveRoute(target);
   if (location.hash !== '#' + _route.canonical) history.replaceState(null, '', '#' + _route.canonical);
-  if (_route.openLearning) document.getElementById('learningDetails').open = true;
   renderNav();
   window.scrollTo(0, 0);
 }
@@ -5496,674 +5368,6 @@ async function loadLabModelHealth(){
 // my own earlier tests had all appended test code at the end of the file,
 // which always runs after the whole script has already executed once,
 // masking exactly this class of mid-script ordering bug.
-// ═══════════════════════════════════════════════════════════════════
-// AI LEARNING VIEW
-//
-// Backend reality check, as of this build:
-//   REAL, LIVE, deployed today:      GET /select-variant, GET /selection-history
-//   REAL, code exists, not deployed: GET /api/learning/daily, GET /api/learning/chatgpt
-//     (branch feature/continuous-learning-foundation, PulseWorkerV2 —
-//     expected to 404 against production until that PR merges; handled
-//     as an Unavailable state below, never assumed to work.)
-//   NOT IMPLEMENTED ANYWHERE:        Gemini investigation query endpoint,
-//     per-experiment lifecycle API (EXP-NNN/stages), model_variants and
-//     variant_history tables (don't exist in D1 — confirmed by querying
-//     it directly), any GEMINI/CHATGPT/CLAUDE/HUMAN-attributed audit
-//     entries (selection_decisions rows are always SYSTEM-authored).
-// Every render function below shows an explicit unavailable/empty state
-// for anything in the second and third category — nothing is guessed,
-// and no browser-side recalculation of accuracy/Brier/calibration/
-// eligibility ever happens; those numbers are used exactly as returned.
-//
-// KNOWN OVERLAP, not resolved in this pass: the existing Lab tab's
-// "Selected Model" card (loadSelectedModel(), further up this file) ALSO
-// calls GET /selection-history for the current coin/horizon, independently
-// of Section 4/5/9/10 below. Both fire when Lab has already loaded once
-// (refreshAll()'s existing eager-fetch pattern) and the Learning tab is
-// then opened — a real, minor duplicate fetch this pass didn't
-// consolidate. SELECTION_VARIANT_LABELS (defined with that card) IS
-// reused here for consistent display names, which was a quick, safe win;
-// sharing the actual fetch/cache between the two is a reasonable
-// follow-up, not done here to avoid touching that existing card's code
-// under time pressure.
-// ═══════════════════════════════════════════════════════════════════
-
-const learningApi = {
-  async getDailyOverview(){
-    try{
-      const r = await apiFetch(WORKER_URL + '/api/learning/daily');
-      if(!r.ok) return { ok:false, unavailable:true };
-      const d = await r.json();
-      if(d.ok === false) return { ok:false, unavailable:true };
-      return { ok:true, data:d };
-    }catch(e){ return { ok:false, unavailable:true }; }
-  },
-  async getChatGptOverview(){
-    try{
-      const r = await apiFetch(WORKER_URL + '/api/learning/chatgpt');
-      if(!r.ok) return { ok:false, unavailable:true };
-      const d = await r.json();
-      if(d.ok === false) return { ok:false, unavailable:true };
-      return { ok:true, data:d };
-    }catch(e){ return { ok:false, unavailable:true }; }
-  },
-  async getSelection(coin, horizon){
-    try{
-      const r = await apiFetch(WORKER_URL + '/select-variant?coin=' + coin + '&horizon=' + horizon);
-      if(!r.ok) return { ok:false, unavailable:true };
-      const d = await r.json();
-      if(d.ok === false) return { ok:false, unavailable:true };
-      return { ok:true, data:d };
-    }catch(e){ return { ok:false, unavailable:true }; }
-  },
-  async getSelectionHistory(coin, horizon, limit){
-    try{
-      const r = await apiFetch(WORKER_URL + '/selection-history?coin=' + coin + '&horizon=' + horizon + '&limit=' + (limit || 20));
-      if(!r.ok) return { ok:false, unavailable:true };
-      const d = await r.json();
-      if(d.ok === false) return { ok:false, unavailable:true };
-      return { ok:true, data:d };
-    }catch(e){ return { ok:false, unavailable:true }; }
-  },
-  // The four below have no dedicated backend endpoint at all yet. Kept as
-  // explicit adapter methods, per the requested shape, so wiring a real
-  // endpoint later is a one-line change here rather than a new
-  // integration — each currently derives from a call above instead of
-  // hitting an invented URL. See the render functions using them for
-  // exactly what's real vs. derived.
-  async getVariants(coin, horizon){ return this.getSelection(coin, horizon); },
-  async getRegimePerformance(){ return this.getDailyOverview(); },
-  async getExperiments(){ return this.getDailyOverview(); },
-  async getEvents(coin, horizon){ return this.getSelectionHistory(coin, horizon, 20); },
-  async getAuditTrail(coin, horizon){ return this.getSelectionHistory(coin, horizon, 20); },
-  async getStatus(){ return null; }, // status grid composes the calls above directly — see renderLearningStatus
-};
-
-let _learningLoaded = false;
-let _learningGlobalCache = null;
-let _learningSelectionCache = {};
-
-const STATUS_COLORS = {
-  Healthy:     { dot: '#4AE176', text: '#4AE176' },
-  Active:      { dot: '#00E0FF', text: '#00E0FF' },
-  Pending:     { dot: '#FFB020', text: '#FFB020' },
-  Awaiting:    { dot: '#FFB020', text: '#FFB020' },
-  Blocked:     { dot: '#FFB4AB', text: '#FFB4AB' },
-  Unavailable: { dot: '#4B5563', text: '#BAC9CD' },
-  Unknown:     { dot: '#4B5563', text: '#BAC9CD' },
-};
-function statusChip(label, status, text, ts, tooltip){
-  const c = STATUS_COLORS[status] || STATUS_COLORS.Unknown;
-  const tsHtml = ts ? `<p class="text-[9px] text-[#8A9599] mt-1 font-mono-data">${fmtUtc(ts)}</p>` : '';
-  return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5"${tooltip ? ` title="${String(tooltip).replace(/"/g,'&quot;')}"` : ''}>
-    <p class="text-[9px] text-[#8A9599] uppercase tracking-wide mb-1">${label}</p>
-    <div class="flex items-center gap-1.5 mb-1">
-      <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${c.dot}"></span>
-      <span class="text-[10px] font-semibold" style="color:${c.text}">${status}</span>
-    </div>
-    <p class="text-[10px] text-[#BAC9CD] leading-tight">${text}</p>
-    ${tsHtml}
-  </div>`;
-}
-
-async function loadLearningOverview(){
-  _learningLoaded = true;
-  renderLearningLoop(null, null);
-  renderAiResponsibilities(null, null);
-  // Analyst Relay no longer auto-fetches here -- it does ~15-20 sequential
-  // D1 queries (buildInvestigationContext, per asset) and only matters when
-  // a human is actually about to use it. The "Check for a candidate"
-  // button in its own section triggers loadAnalystRelayPrompt() on demand.
-  const [daily, chatgpt] = await Promise.all([
-    learningApi.getDailyOverview(),
-    learningApi.getChatGptOverview(),
-  ]);
-  _learningGlobalCache = { daily, chatgpt };
-  renderLearningStatus(daily, chatgpt);
-  renderLearningLoop(daily, chatgpt);
-  renderLearningKpis(daily);
-  renderExperiments(daily);
-  renderAiResponsibilities(daily, chatgpt);
-  renderRegimePerformance(daily);
-  loadLearningSelection();
-}
-
-async function loadLearningSelection(){
-  const key = currentCoin + ':' + currentHorizon;
-  document.getElementById('learnSelectionCoinLabel').textContent = currentCoin + ' · ' + currentHorizon + 'H';
-  document.getElementById('learnEventsCoinLabel').textContent = currentCoin + ' · ' + currentHorizon + 'H';
-  document.getElementById('learnVariantsCoinLabel').textContent = currentCoin + ' · ' + currentHorizon + 'H';
-  document.getElementById('learnSelectionBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-  document.getElementById('learnEventsBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-  document.getElementById('learnVariantsBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-  document.getElementById('learnAuditBody').innerHTML = '<p class="text-xs text-[#BAC9CD]">Loading…</p>';
-
-  const [selection, history] = await Promise.all([
-    learningApi.getSelection(currentCoin, currentHorizon),
-    learningApi.getSelectionHistory(currentCoin, currentHorizon, 20),
-  ]);
-  _learningSelectionCache[key] = { selection, history };
-  const cachedDaily = _learningGlobalCache ? _learningGlobalCache.daily : null;
-  const cachedChatgpt = _learningGlobalCache ? _learningGlobalCache.chatgpt : null;
-  renderLearningStatus(cachedDaily, cachedChatgpt);
-  renderLearningLoop(cachedDaily, cachedChatgpt);
-  renderCurrentSelection(selection, history);
-  renderLearningEvents(history);
-  renderVariantComparison(selection);
-  renderLearningAudit(history);
-}
-
-// ---- Section 1: Status grid ----
-function renderLearningStatus(daily, chatgpt){
-  const items = [];
-  const selCache = _learningSelectionCache[currentCoin + ':' + currentHorizon];
-  const sel = selCache && selCache.selection && selCache.selection.ok ? selCache.selection.data : null;
-
-  items.push(sel
-    ? statusChip('Prediction Ledger', 'Active', 'Predictions are being logged', null, 'Inferred from a successful GET /select-variant response.')
-    : statusChip('Prediction Ledger', 'Unknown', 'Not checked yet', null, 'Open Current Selection below to check.'));
-
-  items.push(sel && sel.comparison_count > 0
-    ? statusChip('Outcome Resolution', 'Active', sel.comparison_count + ' variant(s) with resolved outcomes', null, null)
-    : sel
-      ? statusChip('Outcome Resolution', 'Pending', 'No resolved comparisons yet for this coin/horizon', null, null)
-      : statusChip('Outcome Resolution', 'Unknown', 'Not checked yet', null, null));
-
-  if (daily && daily.ok){
-    const s = daily.data.status;
-    items.push(s === 'GREEN'
-      ? statusChip('Learning Engine', 'Healthy', 'Daily report is current', daily.data.generated_at, null)
-      : s === 'YELLOW'
-        ? statusChip('Learning Engine', 'Active', 'Report generated, flagged for review', daily.data.generated_at, null)
-        : statusChip('Learning Engine', 'Blocked', 'Report flags a data/model issue', daily.data.generated_at, null));
-  } else {
-    items.push(statusChip('Learning Engine', 'Unavailable', 'GET /api/learning/daily did not respond', null, 'Code exists on an unmerged branch — expected to 404 until it deploys.'));
-  }
-
-  items.push(chatgpt && chatgpt.ok
-    ? statusChip('ChatGPT Audit', 'Active', 'Audit-ready data package available', chatgpt.data.generated_at, "This is the data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced.")
-    : statusChip('ChatGPT Audit', 'Unavailable', 'GET /api/learning/chatgpt did not respond', null, null));
-
-  if (daily && daily.ok){
-    const n = (daily.data.candidate_experiments || []).length;
-    items.push(n > 0
-      ? statusChip('Claude Experiments', 'Active', n + ' candidate experiment(s)', null, null)
-      : statusChip('Claude Experiments', 'Awaiting', 'No candidate experiments identified yet', null, null));
-  } else {
-    items.push(statusChip('Claude Experiments', 'Unavailable', 'Depends on /api/learning/daily', null, null));
-  }
-
-  items.push(statusChip('Validation', 'Unavailable', 'No experiment validation endpoint exists yet', null, null));
-  items.push(statusChip('Production Gate', 'Unavailable', 'Human-gated by design — no live production-state endpoint', null, 'No AI role in this system can write directly to Production.'));
-
-  document.getElementById('learnStatusGrid').innerHTML = items.join('');
-}
-
-// ---- Section 2: Learning Loop (static structure + honest wiring badges) ----
-// Computes each stage's real status from the same daily/chatgpt/sel data
-// renderLearningStatus already uses -- no new backend calls, matching
-// that function's established pattern exactly. 5 of the 10 stages have a
-// genuine live signal available in this frontend's existing data model
-// and are computed for real; the other 5 (Intelligence, Engineering,
-// Validation, Human Approval, Production) have no queryable signal at
-// all -- Analyst Relay is human-relayed rather than continuously
-// automated, engineering activity lives in git history not an API,
-// there's no validation/approval/production-state endpoint. Those stay
-// fixed, but with accurate, explained descriptions instead of silently
-// implying they're being checked when they aren't.
-function computeLearningLoopStages(daily, chatgpt, sel){
-  const dailyOk = daily && daily.ok;
-  const nExp = dailyOk ? (daily.data.candidate_experiments || []).length : 0;
-  return [
-    { label:'Prediction', desc:'What the model predicted', wired: sel ? true : false },
-    { label:'Outcomes', desc:'What actually happened', wired: (sel && sel.comparison_count > 0) ? true : false },
-    { label:'Performance', desc:'How the prediction performed', wired: dailyOk ? (daily.data.status === 'GREEN' ? true : 'partial') : false },
-    { label:'Intelligence', desc:'Market conditions/catalysts via Analyst Relay — human-relayed, real when used, not continuously automated', wired:'partial' },
-    { label:'Audit', desc:'Independent challenge of the interpretation', wired: (chatgpt && chatgpt.ok) ? true : false },
-    { label:'Experiment', desc:'What change should be tested', wired: dailyOk ? (nExp > 0 ? true : 'partial') : false },
-    { label:'Engineering', desc:'What Claude is implementing — tracked via GitHub commits/PRs, no in-app live signal', wired:'partial' },
-    { label:'Validation', desc:'Backtest / OOS / statistical validation — no experiment validation endpoint exists yet', wired:false },
-    { label:'Human Approval', desc:'Production decision — no dedicated approval-tracking endpoint exists', wired:false },
-    { label:'Production', desc:'Current approved model — models are live; no formal approval-gate workflow tracked', wired:'partial' },
-  ];
-}
-function renderLearningLoop(daily, chatgpt){
-  const selCache = _learningSelectionCache[currentCoin + ':' + currentHorizon];
-  const sel = selCache && selCache.selection && selCache.selection.ok ? selCache.selection.data : null;
-  const stages = computeLearningLoopStages(daily, chatgpt, sel);
-  const wiredBadge = (w) => w === true
-    ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20 whitespace-nowrap">connected</span>'
-    : w === 'partial'
-      ? '<span class="text-[8px] px-1.5 py-0.5 rounded bg-[#FFB020]/10 text-[#FFB020] border border-[#FFB020]/20 whitespace-nowrap">partial</span>'
-      : '<span class="text-[8px] px-1.5 py-0.5 rounded bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C] whitespace-nowrap">not yet wired</span>';
-  document.getElementById('learnLoop').innerHTML = stages.map((s, i) => `
-    <div class="flex-1 flex flex-col md:flex-row items-stretch gap-1.5">
-      <div class="w-full bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
-        <div class="flex items-center justify-between gap-1 mb-1">
-          <span class="text-[9px] font-mono-data text-[#8A9599]">${i+1}</span>
-          ${wiredBadge(s.wired)}
-        </div>
-        <p class="text-[11px] font-semibold text-[#E1E2E7]">${s.label}</p>
-        <p class="text-[9px] text-[#BAC9CD] mt-0.5 leading-tight">${s.desc}</p>
-      </div>
-      ${i < stages.length - 1 ? '<div class="flex items-center justify-center"><span class="material-symbols-outlined text-[16px] text-[#3B494C] rotate-90 md:rotate-0">arrow_forward</span></div>' : ''}
-    </div>
-  `).join('');
-}
-
-// ---- Section 3: KPI snapshot ----
-function kpiCard(label, value, sub){
-  return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
-    <p class="text-[9px] text-[#8A9599] uppercase tracking-wide mb-1">${label}</p>
-    <p class="text-lg font-bold font-mono-data ${value === '—' ? 'text-[#8A9599]' : 'text-[#E1E2E7]'}">${value}</p>
-    ${sub ? `<p class="text-[9px] text-[#BAC9CD] mt-0.5">${sub}</p>` : ''}
-  </div>`;
-}
-function renderLearningKpis(daily){
-  if (!daily || !daily.ok){
-    document.getElementById('learnKpiGrid').innerHTML = [
-      'Resolved Predictions','Accuracy','Brier Score','Calibration Error',
-      'Active Experiments','Awaiting Audit','Awaiting Validation','Awaiting Approval'
-    ].map(l => kpiCard(l, '—', 'Not available')).join('');
-    return;
-  }
-  const d = daily.data;
-  const btc = d.overall_performance && d.overall_performance.BTC;
-  const isOk = !!(btc && btc.status === 'ok');
-  const resolvedTotal = ['BTC','LINK','ETH'].reduce((sum, a) =>
-    sum + ((d.dataset_health && d.dataset_health[a] && d.dataset_health[a].resolved_in_period) || 0), 0);
-  const nExp = (d.candidate_experiments || []).length;
-  document.getElementById('learnKpiGrid').innerHTML = [
-    kpiCard('Resolved Predictions', resolvedTotal || '—', resolvedTotal ? 'BTC+LINK+ETH, this period' : 'Not available'),
-    kpiCard('Accuracy (BTC)', isOk ? (btc.accuracy*100).toFixed(1)+'%' : '—', isOk ? 'n=' + btc.n : 'Insufficient sample'),
-    kpiCard('Brier Score (BTC)', isOk ? btc.brier_score.toFixed(4) : '—', isOk ? 'lower is better' : 'Insufficient sample'),
-    kpiCard('Calibration Error (BTC)', isOk && btc.calibration_error != null ? btc.calibration_error.toFixed(4) : '—', 'lower is better'),
-    kpiCard('Active Experiments', String(nExp), null),
-    kpiCard('Awaiting Audit', '—', 'Not available'),
-    kpiCard('Awaiting Validation', '—', 'Not available'),
-    kpiCard('Awaiting Approval', '—', 'Not available'),
-  ].join('');
-}
-
-// ---- Section 4: Current selection (live) ----
-function renderCurrentSelection(selection, history){
-  const el = document.getElementById('learnSelectionBody');
-  if (!selection || !selection.ok){
-    el.innerHTML = `<div class="text-xs text-[#BAC9CD]">
-      <p class="text-[#FFB4AB] font-semibold mb-1">Selection data unavailable</p>
-      <p>GET /select-variant did not respond. Prediction functionality is unaffected — this only affects the learning display.</p>
-    </div>`;
-    return;
-  }
-  const s = selection.data;
-  const gateHtml = s.cleared_gate
-    ? `<span class="text-[#4AE176] font-semibold">CLEARED</span>`
-    : `<span class="text-[#BAC9CD] font-semibold">NOT CLEARED</span>`;
-  const correctedAlpha = s.comparison_count ? (0.05 / s.comparison_count) : null;
-  const bestLca = (s.scores && s.scores.length) ? Math.max(...s.scores.map(x => x.lca)) : null;
-
-  const scoresHtml = (s.scores || []).length ? `
-    <div class="mt-3 overflow-x-auto">
-      <table class="w-full text-[11px]">
-        <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
-        <tbody>${s.scores.map(sc => `<tr class="border-t border-[#3B494C]/50">
-          <td class="py-1 pr-3 font-semibold ${sc.variant === s.chosen_variant ? 'text-[#00E0FF]' : 'text-[#E1E2E7]'}">${SELECTION_VARIANT_LABELS[sc.variant] || sc.variant}${sc.variant === s.chosen_variant ? ' <span class="text-[8px] px-1 py-0.5 rounded bg-[#00E0FF]/10 border border-[#00E0FF]/30">SELECTED</span>' : ''}</td>
-          <td class="py-1 pr-3 font-mono-data">${(sc.p_up*100).toFixed(1)}%</td>
-          <td class="py-1 pr-3 font-mono-data">${(sc.lca*100).toFixed(1)}%</td>
-          <td class="py-1 font-mono-data">${sc.n_matched}</td>
-        </tr>`).join('')}</tbody>
-      </table>
-    </div>` : '';
-
-  let neighborhoodHtml = '';
-  if (history && history.ok && history.data.decisions && history.data.decisions[0] && history.data.decisions[0].neighborhood_json){
-    let neighbors = [];
-    try { neighbors = JSON.parse(history.data.decisions[0].neighborhood_json); } catch(e){}
-    if (neighbors.length){
-      neighborhoodHtml = `
-      <details class="mt-3">
-        <summary class="text-[11px] text-[#00E0FF] cursor-pointer select-none">Matched neighborhood (k=${s.k_sel || '—'}, z-score normalized Euclidean distance)</summary>
-        <div class="mt-2 max-h-40 overflow-y-auto">
-          <table class="w-full text-[10px]">
-            <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">#</th><th class="pb-1 pr-3">Timestamp</th><th class="pb-1">Distance</th></tr></thead>
-            <tbody>${neighbors.map((n,i) => `<tr class="border-t border-[#3B494C]/50"><td class="py-1 pr-3 font-mono-data">${i+1}</td><td class="py-1 pr-3 font-mono-data">${fmtUtc(n.ts)}</td><td class="py-1 font-mono-data">${n.dist}</td></tr>`).join('')}</tbody>
-          </table>
-        </div>
-        <details class="mt-2"><summary class="text-[10px] text-[#8A9599] cursor-pointer select-none">Raw JSON</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(neighbors, null, 2)}</pre></details>
-      </details>`;
-    }
-  }
-
-  el.innerHTML = `
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Asset</p><p class="text-sm font-bold">${s.coin || currentCoin}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Selected Variant</p><p class="text-sm font-bold text-[#00E0FF]">${SELECTION_VARIANT_LABELS[s.chosen_variant] || s.chosen_variant}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Gate</p><p class="text-sm">${gateHtml}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Selection Score</p><p class="text-sm font-mono-data">${bestLca != null ? (bestLca*100).toFixed(1)+'%' : '—'}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Corrected Threshold</p><p class="text-sm font-mono-data">${correctedAlpha != null ? '+' + (correctedAlpha*100).toFixed(1) + 'pts' : '—'}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Comparison Count</p><p class="text-sm font-mono-data">${s.comparison_count ?? '—'}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">Eligible Variants</p><p class="text-sm font-mono-data">${(s.scores || []).length}</p></div>
-      <div><p class="text-[9px] text-[#8A9599] uppercase">k (neighborhood)</p><p class="text-sm font-mono-data">${s.k_sel ?? '—'}</p></div>
-    </div>
-    <div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5 mb-2">
-      <p class="text-[9px] text-[#8A9599] uppercase mb-1">Decision Reason</p>
-      <p class="text-xs text-[#BAC9CD] leading-relaxed">${s.reason || '—'}</p>
-    </div>
-    ${scoresHtml}
-    ${neighborhoodHtml}
-  `;
-}
-
-// ---- Section 5: Recent learning events ----
-function renderLearningEvents(history){
-  const el = document.getElementById('learnEventsBody');
-  if (!history || !history.ok){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Learning events unavailable — GET /selection-history did not respond.</p>`;
-    return;
-  }
-  const decisions = history.data.decisions || [];
-  if (!decisions.length){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No learning events available yet.</p>`;
-    return;
-  }
-  el.innerHTML = decisions.map(d => `
-    <div class="border-b border-[#3B494C]/50 last:border-0 py-2">
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-[10px] font-mono-data text-[#8A9599]">${fmtUtc(d.ts)}</p>
-        <span class="text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap ${d.cleared_gate ? 'bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20' : 'bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]'}">${d.cleared_gate ? 'gate cleared' : 'gate not cleared'}</span>
-      </div>
-      <p class="text-xs font-semibold mt-0.5">Selection decision — <span class="text-[#00E0FF]">${SELECTION_VARIANT_LABELS[d.chosen_variant] || d.chosen_variant}</span></p>
-      <p class="text-[11px] text-[#BAC9CD] mt-0.5 leading-relaxed">${d.reason}</p>
-    </div>
-  `).join('');
-}
-
-// ---- Section 6: Experiments ----
-function renderExperiments(daily){
-  const el = document.getElementById('learnExperimentsBody');
-  if (!daily || !daily.ok){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Experiment data unavailable — GET /api/learning/daily did not respond.</p>`;
-    return;
-  }
-  const exps = daily.data.candidate_experiments || [];
-  if (!exps.length){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate experiments identified yet. Full lifecycle tracking (EXP-NNN, stages, backtest/OOS results) lives in <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning" target="_blank" rel="noopener noreferrer" class="text-[#00E0FF] underline">PulseWorkerV2's /learning/ directory ↗</a> once something exists there — not yet exposed as an API.</p>`;
-    return;
-  }
-  el.innerHTML = `<div class="space-y-2">${exps.map(e => `
-    <div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl px-3 py-2.5">
-      <p class="text-xs font-semibold text-[#E1E2E7]">${e.observation || e.hypothesis || 'Candidate experiment'}</p>
-      ${e.hypothesis ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#8A9599]">Hypothesis:</span> ${e.hypothesis}</p>` : ''}
-      ${e.suggested_experiment ? `<p class="text-[11px] text-[#BAC9CD] mt-1"><span class="text-[#8A9599]">Suggested:</span> ${e.suggested_experiment}</p>` : ''}
-      <details class="mt-1"><summary class="text-[9px] text-[#8A9599] cursor-pointer">Raw</summary><pre class="text-[9px] text-[#BAC9CD] mt-1 overflow-x-auto">${JSON.stringify(e, null, 2)}</pre></details>
-    </div>`).join('')}</div>`;
-}
-
-// ---- Section 6.5: Analyst Relay -- the investigation mechanism. Backend
-// never writes this to gemini_investigations, so nothing here can be
-// mistaken for a machine-verified result -- see PulseWorkerV2's
-// recordAnalystRelay for the full reasoning. ----
-let _relayCurrentCandidate = null;
-
-async function loadAnalystRelayPrompt(){
-  const el = document.getElementById('relayContent');
-  el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Checking for a candidate…</p>`;
-  let data;
-  try {
-    const res = await apiFetch(WORKER_URL + '/analyst-relay/prompt');
-    data = await res.json();
-  } catch (e) {
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Could not reach the Worker to check for a candidate.</p>`;
-    return;
-  }
-  if (!data || !data.ok){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Could not check for a candidate right now.</p>`;
-    return;
-  }
-  if (!data.hasCandidate){
-    _relayCurrentCandidate = null;
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No candidate clears the priority bar this cycle. Nothing worth relaying right now.</p>`;
-    return;
-  }
-  _relayCurrentCandidate = data;
-  el.innerHTML = `
-    <p class="text-[11px] text-[#BAC9CD] mb-2">Candidate: <span class="font-semibold text-[#E1E2E7]">${data.assets.join(', ')}</span></p>
-
-    <p class="text-[9px] uppercase tracking-wide text-[#00E0A0] font-semibold mb-1">Factual Data</p>
-    <p class="text-[9px] text-[#8A9599] mb-1.5">Real observations only — the same evidence Gemini receives, before any interpretation.</p>
-    <pre id="relayFactualSummary" class="w-full bg-[#0B0E11] border border-[#00E0A0]/30 rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-3 whitespace-pre-wrap"></pre>
-
-    <p class="text-[9px] uppercase tracking-wide text-[#8A9599] font-semibold mb-1">Prompt to relay</p>
-    <textarea id="relayPromptText" readonly class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#BAC9CD] font-mono mb-2" onclick="this.select()"></textarea>
-    <button id="relayCopyBtn" class="w-full bg-[#1A2530] border border-[#3B494C] rounded-xl py-2 text-xs font-semibold mb-3 text-[#E1E2E7]">Copy Prompt</button>
-    <p class="text-[10px] text-[#8A9599] mb-2">Paste the Gemini app's response below:</p>
-    <textarea id="relayResponseInput" placeholder="Paste Gemini's response here…" class="w-full h-28 bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7] mb-2"></textarea>
-    <button id="relaySubmitBtn" class="w-full bg-[#00E0FF] text-[#0B0E11] rounded-xl py-2 text-xs font-bold">Submit</button>
-    <div class="mt-2">
-      <label for="relayKeyInput" class="block text-[9px] text-[#8A9599] mb-1">Write key (admin token). Required to submit. Kept in this tab only and cleared when the tab closes.</label>
-      <input id="relayKeyInput" type="password" autocomplete="off" placeholder="Admin token" class="w-full bg-[#0B0E11] border border-[#3B494C] rounded-xl p-2 text-[10px] text-[#E1E2E7]">
-    </div>
-    <div id="relayResult" class="mt-2"></div>
-    <p class="text-[9px] text-[#8A9599] mt-2 font-mono-data">context ${(data.contextHash || '').slice(0, 12)}…</p>
-  `;
-  // Set via textContent, not template-string interpolation, so a prompt
-  // containing backticks/${...}-looking text can never break out of the
-  // template literal above. Applies to both the factual summary and the
-  // prompt -- same reasoning, same risk either way.
-  document.getElementById('relayFactualSummary').textContent = data.factualSummary || '(no factual summary returned)';
-  document.getElementById('relayPromptText').textContent = data.prompt;
-  document.getElementById('relayCopyBtn').onclick = () => {
-    navigator.clipboard.writeText(data.prompt).then(() => {
-      const btn = document.getElementById('relayCopyBtn');
-      const original = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = original; }, 1500);
-    });
-  };
-  document.getElementById('relaySubmitBtn').onclick = submitAnalystRelay;
-}
-
-async function submitAnalystRelay(){
-  const textarea = document.getElementById('relayResponseInput');
-  const text = textarea.value.trim();
-  const resultEl = document.getElementById('relayResult');
-  if (!text){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Paste a response first.</p>`; return; }
-  if (!_relayCurrentCandidate){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">No candidate loaded — refresh first.</p>`; return; }
-  // The Worker accepts relay submissions only with the owner's admin token (Authorization: Bearer). It is held
-  // in sessionStorage: this tab only, never written to disk-persistent storage, never sent anywhere else.
-  const keyInput = document.getElementById('relayKeyInput');
-  let relayKey = (keyInput && keyInput.value.trim()) || '';
-  try { if (relayKey) sessionStorage.setItem('cp_relay_key', relayKey); else relayKey = sessionStorage.getItem('cp_relay_key') || ''; } catch (e) { /* storage unavailable: use the field value */ }
-  if (!relayKey){ resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Enter the write key first. Submissions are owner-only.</p>`; return; }
-  resultEl.innerHTML = `<p class="text-[10px] text-[#BAC9CD]">Submitting…</p>`;
-  try {
-    const res = await fetch(WORKER_URL + '/analyst-relay/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + relayKey },
-      body: JSON.stringify({
-        candidateId: _relayCurrentCandidate.candidateId,
-        assets: _relayCurrentCandidate.assets,
-        promptRequestedTs: _relayCurrentCandidate.promptRequestedTs,
-        rawResponseText: text,
-        // Round-tripped so the stored record reflects exactly the
-        // evidence shown above, not a freshly-rebuilt (potentially
-        // drifted) context.
-        context: _relayCurrentCandidate.context,
-      }),
-    });
-    const data = await res.json();
-    if (res.status === 401){
-      try { sessionStorage.removeItem('cp_relay_key'); } catch (e) { /* nothing stored */ }
-      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Write key rejected. Nothing was saved. Check the key and try again.</p>`;
-      return;
-    }
-    if (res.status === 503){
-      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submissions are disabled on the backend (no admin token configured). Nothing was saved.</p>`;
-      return;
-    }
-    if (!data.ok){
-      resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submission failed: ${String(data.error || 'unknown error').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</p>`;
-      return;
-    }
-    const statusColor = data.validationStatus === 'ok' ? '#00E0A0' : (data.validationStatus === 'no_catalyst_found' ? '#BAC9CD' : '#FFB020');
-    resultEl.innerHTML = `<p class="text-[10px]" style="color:${statusColor}">Status: ${data.validationStatus} — ${data.catalystsWritten} catalyst(s) written.</p>
-      <p class="text-[9px] text-[#8A9599] mt-1 font-mono-data">${data.relayId}</p>
-      <p class="text-[9px] text-[#8A9599] mt-0.5">Reported findings, not verified fact — grounding on a relayed response can't be independently confirmed the way a real API response can.</p>`;
-    if (data.validationStatus === 'ok' || data.validationStatus === 'no_catalyst_found'){
-      textarea.value = '';
-      setTimeout(loadAnalystRelayPrompt, 2500); // move on to the next candidate, if any
-    }
-  } catch (e) {
-    resultEl.innerHTML = `<p class="text-[10px] text-[#FFB020]">Submission failed — could not reach the Worker.</p>`;
-  }
-}
-
-// ---- Section 7: AI responsibility cards ----
-function roleCard(icon, name, question, bodyHtml){
-  return `<div class="bg-[#0B0E11] border border-[#3B494C] rounded-xl p-3">
-    <div class="flex items-center gap-2 mb-1">
-      <span class="material-symbols-outlined text-[16px] text-[#00E0FF]">${icon}</span>
-      <p class="text-xs font-bold">${name}</p>
-    </div>
-    <p class="text-[10px] text-[#8A9599] italic mb-2">"${question}"</p>
-    ${bodyHtml}
-  </div>`;
-}
-function renderAiResponsibilities(daily, chatgpt){
-  const geminiBody = `<p class="text-[11px] text-[#BAC9CD]">Market intelligence, catalyst evidence — via the free consumer app only. Paid API grounding was removed; see the Analyst Relay section above for how Gemini's analysis actually reaches this system now.</p>
-    <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#00E0A0"></span><span class="text-[#BAC9CD]">Active, via Analyst Relay</span></p>`;
-
-  const chatgptBody = (chatgpt && chatgpt.ok)
-    ? `<p class="text-[11px] text-[#BAC9CD]">Audit-ready data package generated ${fmtUtc(chatgpt.data.generated_at)}, status <span class="font-semibold">${chatgpt.data.status}</span>.</p>
-       <p class="text-[10px] text-[#8A9599] mt-1">This is data prepared FOR ChatGPT's audit, not a conclusion ChatGPT has produced — no API exposes ChatGPT's actual assessment.</p>`
-    : `<p class="text-[11px] text-[#BAC9CD]">Independent audit, challenges conclusions.</p>
-       <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable — GET /api/learning/chatgpt did not respond</span></p>`;
-
-  const claudeBody = (daily && daily.ok)
-    ? (() => { const n = (daily.data.candidate_experiments || []).length;
-        return `<p class="text-[11px] text-[#BAC9CD]">${n > 0 ? n + ' candidate experiment(s) awaiting implementation.' : 'No active experiment implementation right now.'}</p>
-        <p class="text-[10px] text-[#8A9599] mt-1">See <a href="https://github.com/quiquandon-oss/PulseWorkerV2/tree/feature/continuous-learning-foundation/learning/claude_tasks" target="_blank" rel="noopener noreferrer" class="text-[#00E0FF] underline">claude_tasks/ ↗</a> for anything in progress.</p>`; })()
-    : `<p class="text-[11px] text-[#BAC9CD]">Engineering implementation, experiment creation.</p>
-       <p class="text-[10px] mt-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#4B5563"></span><span class="text-[#BAC9CD]">Unavailable</span></p>`;
-
-  const humanBody = `<p class="text-[11px] text-[#BAC9CD]">Sole production authority. No AI role in this system — Gemini, ChatGPT, or Claude — can promote a change to Production.</p>
-    <p class="text-[10px] text-[#FFB020] mt-1.5 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-[13px]">lock</span>Every promotion requires explicit human approval.</p>`;
-
-  // ANALYST (YOU) card removed -- redundant with the Analyst Relay section
-  // directly above this grid, which already explains the same mechanism.
-
-  document.getElementById('learnRolesGrid').innerHTML =
-    roleCard('travel_explore', 'GEMINI', 'What happened?', geminiBody) +
-    roleCard('fact_check', 'CHATGPT', 'What does it mean?', chatgptBody) +
-    roleCard('code', 'CLAUDE', 'What can we test?', claudeBody) +
-    roleCard('shield_person', 'HUMAN', 'Should it reach Production?', humanBody);
-}
-
-// ---- Section 8: Learning by regime ----
-function renderRegimePerformance(daily){
-  const el = document.getElementById('learnRegimeBody');
-  if (!daily || !daily.ok){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Regime data unavailable — GET /api/learning/daily did not respond.</p>`;
-    return;
-  }
-  const regimeByAsset = daily.data.regime_analysis || {};
-  const assets = Object.keys(regimeByAsset);
-  if (!assets.length){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No regime data returned for this period.</p>`;
-    return;
-  }
-  el.innerHTML = assets.map(asset => {
-    const buckets = regimeByAsset[asset] || {};
-    const bucketKeys = Object.keys(buckets);
-    if (!bucketKeys.length) return '';
-    return `
-    <div class="mb-3 last:mb-0">
-      <p class="text-[11px] font-semibold text-[#E1E2E7] mb-1">${asset}</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-[10px]">
-          <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Regime</th><th class="pb-1 pr-3">n</th><th class="pb-1 pr-3">Accuracy</th><th class="pb-1 pr-3">Brier</th><th class="pb-1">Calibration Err</th></tr></thead>
-          <tbody>${bucketKeys.map(k => {
-            const b = buckets[k];
-            const ok = b && b.status === 'ok';
-            return `<tr class="border-t border-[#3B494C]/50">
-              <td class="py-1 pr-3">${k}</td>
-              <td class="py-1 pr-3 font-mono-data">${b ? b.n : '—'}</td>
-              <td class="py-1 pr-3 font-mono-data">${ok ? (b.accuracy*100).toFixed(1)+'%' : '—'}</td>
-              <td class="py-1 pr-3 font-mono-data">${ok ? b.brier_score.toFixed(3) : '—'}</td>
-              <td class="py-1 font-mono-data">${ok && b.calibration_error != null ? b.calibration_error.toFixed(3) : '—'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ---- Section 9: Model variant comparison (reuses the selection fetch) ----
-function renderVariantComparison(selection){
-  const el = document.getElementById('learnVariantsBody');
-  if (!selection || !selection.ok || !selection.data.scores || !selection.data.scores.length){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">${selection && selection.ok ? 'No eligible variants for this coin/horizon yet (each needs 50+ resolved predictions).' : 'Variant data unavailable — GET /select-variant did not respond.'}</p>`;
-    return;
-  }
-  const s = selection.data;
-  el.innerHTML = `<div class="overflow-x-auto">
-    <table class="w-full text-[11px]">
-      <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Variant</th><th class="pb-1 pr-3">Status</th><th class="pb-1 pr-3">p(up)</th><th class="pb-1 pr-3">LCA score</th><th class="pb-1">n matched</th></tr></thead>
-      <tbody>${s.scores.map(sc => {
-        const isSelected = sc.variant === s.chosen_variant;
-        return `<tr class="border-t border-[#3B494C]/50">
-          <td class="py-1.5 pr-3 font-semibold">${SELECTION_VARIANT_LABELS[sc.variant] || sc.variant}</td>
-          <td class="py-1.5 pr-3 whitespace-nowrap">
-            <span class="text-[9px] px-1.5 py-0.5 rounded bg-[#00E0FF]/10 text-[#00E0FF] border border-[#00E0FF]/20 mr-1">ELIGIBLE</span>
-            ${isSelected ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-[#4AE176]/10 text-[#4AE176] border border-[#4AE176]/20">SELECTED</span>' : ''}
-          </td>
-          <td class="py-1.5 pr-3 font-mono-data">${(sc.p_up*100).toFixed(1)}%</td>
-          <td class="py-1.5 pr-3 font-mono-data">${(sc.lca*100).toFixed(1)}%</td>
-          <td class="py-1.5 font-mono-data">${sc.n_matched}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>
-  </div>
-  <p class="text-[10px] text-[#8A9599] mt-2">Only variants with 50+ resolved predictions appear here — the backend doesn't return variants below that bar, so an "active but not-yet-eligible" variant (if one exists) isn't visible in this table.</p>`;
-}
-
-// ---- Section 10: Audit trail (reuses the selection-history fetch) ----
-function toggleLearnAudit(){
-  const body = document.getElementById('learnAuditBody');
-  const chevron = document.getElementById('learnAuditChevron');
-  const btn = document.getElementById('learnAuditToggleBtn');
-  const hidden = body.classList.toggle('hidden');
-  chevron.style.transform = hidden ? '' : 'rotate(180deg)';
-  btn.setAttribute('aria-expanded', String(!hidden));
-}
-function renderLearningAudit(history){
-  const el = document.getElementById('learnAuditBody');
-  if (!history || !history.ok){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">Audit trail unavailable — GET /selection-history did not respond.</p>`;
-    return;
-  }
-  const decisions = history.data.decisions || [];
-  if (!decisions.length){
-    el.innerHTML = `<p class="text-xs text-[#BAC9CD]">No audit entries yet.</p>`;
-    return;
-  }
-  el.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-[10px]">
-    <thead><tr class="text-[#8A9599] text-left"><th class="pb-1 pr-3">Timestamp</th><th class="pb-1 pr-3">Event</th><th class="pb-1 pr-3">Entity</th><th class="pb-1 pr-3">Actor</th><th class="pb-1 pr-3">New State</th><th class="pb-1">Reason</th></tr></thead>
-    <tbody>${decisions.map(d => `<tr class="border-t border-[#3B494C]/50 align-top">
-      <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${fmtUtc(d.ts)}</td>
-      <td class="py-1.5 pr-3 whitespace-nowrap">Model selection</td>
-      <td class="py-1.5 pr-3 font-mono-data whitespace-nowrap">${d.coin} · ${d.horizon_hours}H</td>
-      <td class="py-1.5 pr-3"><span class="text-[9px] px-1.5 py-0.5 rounded bg-[#4B5563]/10 text-[#BAC9CD] border border-[#3B494C]">SYSTEM</span></td>
-      <td class="py-1.5 pr-3 font-semibold whitespace-nowrap">${SELECTION_VARIANT_LABELS[d.chosen_variant] || d.chosen_variant}</td>
-      <td class="py-1.5 text-[#BAC9CD]">${d.reason}</td>
-    </tr>`).join('')}</tbody>
-  </table></div>
-  <p class="text-[10px] text-[#8A9599] mt-2">Actor is always SYSTEM — these are automated selectBestVariant runs. No GEMINI/CHATGPT/CLAUDE/HUMAN-attributed audit entries exist in the backend yet.</p>`;
-}
-
-document.getElementById('learnRefreshBtn').onclick = () => { _learningGlobalCache = null; loadLearningOverview(); };
-
 // ═══ EXPERIMENTS ═══
 // Everything below is read from existing endpoints and displayed as the
 // backend reports it. Statuses are never inferred here: the registry's own
@@ -6374,18 +5578,6 @@ function renderRegistry(){
 }
 
 document.getElementById('expRefreshBtn').onclick = () => { apiCacheClear(); _experimentsLoaded = false; loadExperimentsIfNeeded(); };
-// The learning block (former AI Learning view) loads only when opened.
-document.getElementById('learningDetails').addEventListener('toggle', (ev) => {
-  if (ev.target.open && !_learningLoaded) loadLearningOverview();
-});
-if (_openLearningOnLoad) document.getElementById('learningDetails').open = true;
-// renderNav() (called above, right after NAV is defined) already triggers
-// loadLearningOverview()/loadDashboardIfNeeded()/loadLabIfNeeded() for
-// whichever view is actually active on page load -- no separate calls
-// needed here. A duplicate unconditional call used to live here
-// (`if (activeView === 'learning') loadLearningOverview();`, with no
-// !_learningLoaded guard) which would have double-fired the Learning
-// tab's load whenever the page opened directly to #learning.
 </script>
 </body>
 </html>

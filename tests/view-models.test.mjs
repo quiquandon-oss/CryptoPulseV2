@@ -202,10 +202,9 @@ test('alerts: passing needs no open alert and a recent successful run; unreadabl
 });
 
 test('page source: one write request, user-entered key only, no embedded secrets', () => {
-  // Exactly three POSTs, each named: the analyst relay (pre-existing), Hyperliquid allMids (a read-only market-data
-  // query that the API only offers as POST) and V1's /gemini-outlook (Narrative parity, only on an explicit click).
+  // Every POST named: Hyperliquid market-data reads (the API only offers POST) and V1's two Gemini routes (explicit clicks).
   const posts = SRC.match(/method:\s*['"]POST['"]/g) || [];
-  assert.equal(posts.length, 7, 'seven POSTs: analyst relay, Hyperliquid allMids + 3 candleSnapshot reads (read-only market data; one is the portfolio value history), V1 Narrative and Trader Analysis (clicks)');
+  assert.equal(posts.length, 6, 'six POSTs: Hyperliquid allMids + 3 candleSnapshot reads (read-only market data; one is the portfolio value history), V1 Narrative and Trader Analysis (clicks). The analyst relay left with Learning & Audit');
   assert.match(SRC, /type: 'candleSnapshot', req: \{ coin: a, interval: '1d'/);
   const tr = SRC.slice(SRC.indexOf('async function runTraderAnalysis()'), SRC.indexOf('// ---- Settings:'));
   assert.match(tr, /fetch\(V1_WORKER_URL \+ '\/trader-analysis-gemini', \{ method: 'POST'/);
@@ -213,8 +212,8 @@ test('page source: one write request, user-entered key only, no embedded secrets
   const nar = SRC.slice(SRC.indexOf('async function pfRunNarrative()'), SRC.indexOf('// ---- Settings:'));
   assert.match(nar, /fetch\(V1_WORKER_URL \+ '\/gemini-outlook', \{ method: 'POST'/);
   assert.match(nar, /portfolio: m\.allocation\.map\(a => \(\{ sym: a\.asset, weight:/, 'only symbols and weights are sent');
-  assert.ok(/fetch\(WORKER_URL \+ '\/analyst-relay\/submit'/.test(SRC), 'the POST bypasses the GET memo');
-  assert.equal((SRC.match(/[^a-zA-Z]fetch\(WORKER_URL/g) || []).length, 1, 'every other Worker request goes through apiFetch');
+  assert.doesNotMatch(SRC, /analyst-relay/, 'the analyst relay left with Learning & Audit');
+  assert.equal((SRC.match(/[^a-zA-Z]fetch\(WORKER_URL/g) || []).length, 0, 'every Worker request goes through apiFetch (GET only)');
   assert.ok(!/(ghp_|github_pat_|sk-[A-Za-z0-9]{20}|Bearer [A-Za-z0-9_\-]{20,})/.test(SRC), 'no token-like literal');
   assert.ok(!/(OPS_ADMIN_TOKEN|STAGE7_ADMIN_TOKEN|RESEARCH_DISPATCH_TOKEN)\s*[:=]/.test(SRC), 'no admin secret assignment');
   for (const route of ['/btc-backfill', '/recalibrate-refresh', '/run-analysis', '/backtest-technical']) {
@@ -725,26 +724,34 @@ test('GLM influence: shadow mode or zero adjustment never changes the headline',
 });
 
 // ---- Stage 2 frontend foundation: navigation, global chart standard, Comparison (descriptive) ----
-test('navigation: nine areas in the contract order; Forecast is a Sentiment V2 tab; no Forecasting Lab', () => {
-  assert.deepEqual(plain(H.AREAS.map((a) => a.label)), ['Overview', 'Portfolio', 'Sentiment V1', 'Sentiment V2', 'Comparison', 'Research', 'Learning & Audit', 'Alerts', 'Settings']);
-  const v2 = H.AREAS.find((a) => a.key === 'sentiment-v2');
-  assert.deepEqual(plain(v2.tabs.map((t) => t.key)), ['overview', 'forecast', 'model']);
-  assert.ok(!H.AREAS.some((a) => /lab/i.test(a.label)), 'no Lab area');
+test('navigation (owner restructure 2026-11-21): Portfolio first; Sentiment V1 and V2 apart; Model Comparison; no Learning & Audit', () => {
+  assert.deepEqual(plain(H.AREAS.map((a) => a.label)), ['Portfolio', 'Sentiment V1', 'Sentiment V2', 'Model Comparison', 'Research', 'Alerts', 'Settings']);
+  const tabs = (k) => plain(H.AREAS.find((a) => a.key === k).tabs.map((t) => [t.key, t.views]));
+  assert.deepEqual(tabs('sentiment-v1'), [['overview', ['sentiment-v1']], ['trader', ['trader']]]);
+  assert.deepEqual(tabs('sentiment-v2'), [['overview', ['dashboard', 'sentiment']], ['forecast', ['forecast']], ['evidence', ['glm']], ['history', ['history', 'lab']]]);
+  assert.ok(!H.AREAS.some((a) => /lab|learning/i.test(a.label)), 'no Lab or Learning area');
   assert.doesNotMatch(SRC, />Forecasting Lab</, 'no Forecasting Lab heading or nav label');
-  assert.equal(H.MOBILE_PRIMARY_AREAS.length, 4, 'four primary phone items plus More');
+  assert.deepEqual(plain(H.MOBILE_PRIMARY_AREAS), ['portfolio', 'sentiment-v1', 'sentiment-v2', 'comparison']);
   for (const v of H.allAreaViews()) assert.match(SRC, new RegExp('id="view-' + v + '"'), 'container for ' + v);
+  assert.doesNotMatch(SRC, /id="view-learning(block)?"|id="learningDetails"|learningApi|\/api\/learning\//, 'Learning & Audit frontend retired');
+  // Trader Analysis calls V1 (sentiment-ff75 /trader-analysis-gemini): it lives under Sentiment V1. The Model Challenger
+  // (variants, calibration, selection) runs on PulseWorkerV2 only: it stays under Sentiment V2.
+  const trader = SRC.slice(SRC.indexOf('<div id="view-trader"'), SRC.indexOf('<div id="view-glm"'));
+  assert.match(trader, /id="traderCard"/);
+  const lab = SRC.slice(SRC.indexOf('<div id="view-lab"'), SRC.indexOf('<div id="view-experiments"'));
+  assert.doesNotMatch(lab, /V1_WORKER_URL|sentiment-ff75/);
 });
 
-test('navigation: routes resolve, unknown falls back to Overview, legacy links redirect', () => {
+test('navigation: Portfolio is the landing page; unknown routes fall back to it; old links redirect to their new place', () => {
   const r = (h) => plain(H.resolveRoute(h));
-  assert.deepEqual([r('').area, r('').view, r('').canonical], ['overview', 'dashboard', 'overview']);
-  assert.deepEqual([r('#nonsense').canonical], ['overview']);
-  assert.deepEqual([r('#sentiment-v2').canonical, r('#sentiment-v2').view], ['sentiment-v2/overview', 'sentiment']);
+  assert.deepEqual([r('').area, r('').view, r('').canonical], ['portfolio', 'portfolio', 'portfolio/holdings']);
+  assert.deepEqual([r('#nonsense').canonical], ['portfolio/holdings']);
+  assert.deepEqual([r('#sentiment-v2').canonical, r('#sentiment-v2').views], ['sentiment-v2/overview', ['dashboard', 'sentiment']]);
   assert.deepEqual([r('#sentiment-v2/forecast').view, r('#sentiment-v2/bogus').tab], ['forecast', 'overview']);
-  assert.deepEqual([r('#forecast').canonical, r('#lab').canonical, r('#dashboard').canonical, r('#sentiment').canonical], ['sentiment-v2/forecast', 'sentiment-v2/model', 'overview', 'sentiment-v2/overview']);
-  assert.deepEqual([r('#experiments').canonical, r('#history').canonical], ['research', 'learning']);
-  assert.deepEqual([r('#learning').canonical, r('#learning').openLearning, r('#history').openLearning], ['learning', true, false]);
-  assert.deepEqual(r('#learning').views, ['history', 'learningblock']);
+  assert.deepEqual([r('#overview').canonical, r('#dashboard').canonical, r('#forecast').canonical, r('#lab').canonical, r('#sentiment-v2/model').canonical, r('#sentiment').canonical],
+    ['sentiment-v2/overview', 'sentiment-v2/overview', 'sentiment-v2/forecast', 'sentiment-v2/history', 'sentiment-v2/history', 'sentiment-v2/overview']);
+  assert.deepEqual([r('#experiments').canonical, r('#history').canonical, r('#learning').canonical], ['research', 'sentiment-v2/history', 'sentiment-v2/history']);
+  assert.deepEqual([r('#sentiment-v1/trader').views, r('#trader').canonical, r('#glm').canonical], [['trader'], 'sentiment-v1/trader', 'sentiment-v2/evidence']);
   assert.equal(r('#SETTINGS').area, 'settings', 'case-insensitive');
 });
 

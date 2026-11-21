@@ -727,8 +727,10 @@ test('GLM influence: shadow mode or zero adjustment never changes the headline',
 test('navigation (owner restructure 2026-11-21): Portfolio first; Sentiment V1 and V2 apart; Model Comparison; no Learning & Audit', () => {
   assert.deepEqual(plain(H.AREAS.map((a) => a.label)), ['Portfolio', 'Sentiment V1', 'Sentiment V2', 'Model Comparison', 'Research', 'Alerts', 'Settings']);
   const tabs = (k) => plain(H.AREAS.find((a) => a.key === k).tabs.map((t) => [t.key, t.views]));
-  assert.deepEqual(tabs('sentiment-v1'), [['overview', ['sentiment-v1']], ['trader', ['trader']]]);
-  assert.deepEqual(tabs('sentiment-v2'), [['overview', ['dashboard', 'sentiment']], ['forecast', ['forecast']], ['evidence', ['glm']], ['history', ['history', 'lab']]]);
+  // The k-NN forecast engine and its Model Challenger use V1 sentiment as input (worker.js runPrediction reads V1 history),
+  // so they are under Sentiment V1; Sentiment V2 keeps the V2 score, its evidence/GLM and the price-only models.
+  assert.deepEqual(tabs('sentiment-v1'), [['overview', ['sentiment-v1']], ['forecast', ['dashboard']], ['history', ['history', 'lab']], ['trader', ['trader']]]);
+  assert.deepEqual(tabs('sentiment-v2'), [['overview', ['sentiment']], ['forecast', ['forecast']], ['evidence', ['glm']]]);
   assert.ok(!H.AREAS.some((a) => /lab|learning/i.test(a.label)), 'no Lab or Learning area');
   assert.doesNotMatch(SRC, />Forecasting Lab</, 'no Forecasting Lab heading or nav label');
   assert.deepEqual(plain(H.MOBILE_PRIMARY_AREAS), ['portfolio', 'sentiment-v1', 'sentiment-v2', 'comparison']);
@@ -738,20 +740,18 @@ test('navigation (owner restructure 2026-11-21): Portfolio first; Sentiment V1 a
   // (variants, calibration, selection) runs on PulseWorkerV2 only: it stays under Sentiment V2.
   const trader = SRC.slice(SRC.indexOf('<div id="view-trader"'), SRC.indexOf('<div id="view-glm"'));
   assert.match(trader, /id="traderCard"/);
-  const lab = SRC.slice(SRC.indexOf('<div id="view-lab"'), SRC.indexOf('<div id="view-experiments"'));
-  assert.doesNotMatch(lab, /V1_WORKER_URL|sentiment-ff75/);
 });
 
 test('navigation: Portfolio is the landing page; unknown routes fall back to it; old links redirect to their new place', () => {
   const r = (h) => plain(H.resolveRoute(h));
   assert.deepEqual([r('').area, r('').view, r('').canonical], ['portfolio', 'portfolio', 'portfolio/holdings']);
   assert.deepEqual([r('#nonsense').canonical], ['portfolio/holdings']);
-  assert.deepEqual([r('#sentiment-v2').canonical, r('#sentiment-v2').views], ['sentiment-v2/overview', ['dashboard', 'sentiment']]);
+  assert.deepEqual([r('#sentiment-v2').canonical, r('#sentiment-v2').views], ['sentiment-v2/overview', ['sentiment']]);
   assert.deepEqual([r('#sentiment-v2/forecast').view, r('#sentiment-v2/bogus').tab], ['forecast', 'overview']);
-  assert.deepEqual([r('#overview').canonical, r('#dashboard').canonical, r('#forecast').canonical, r('#lab').canonical, r('#sentiment-v2/model').canonical, r('#sentiment').canonical],
-    ['sentiment-v2/overview', 'sentiment-v2/overview', 'sentiment-v2/forecast', 'sentiment-v2/history', 'sentiment-v2/history', 'sentiment-v2/overview']);
-  assert.deepEqual([r('#experiments').canonical, r('#history').canonical, r('#learning').canonical], ['research', 'sentiment-v2/history', 'sentiment-v2/history']);
-  assert.deepEqual([r('#sentiment-v1/trader').views, r('#trader').canonical, r('#glm').canonical], [['trader'], 'sentiment-v1/trader', 'sentiment-v2/evidence']);
+  assert.deepEqual([r('#overview').canonical, r('#dashboard').canonical, r('#forecast').canonical, r('#lab').canonical, r('#sentiment-v2/model').canonical, r('#sentiment-v2/history').canonical, r('#sentiment').canonical],
+    ['sentiment-v1/forecast', 'sentiment-v1/forecast', 'sentiment-v2/forecast', 'sentiment-v1/history', 'sentiment-v1/history', 'sentiment-v1/history', 'sentiment-v2/overview']);
+  assert.deepEqual([r('#experiments').canonical, r('#history').canonical, r('#learning').canonical], ['research', 'sentiment-v1/history', 'sentiment-v1/history']);
+  assert.deepEqual([r('#sentiment-v1/forecast').views, r('#sentiment-v1/trader').views, r('#trader').canonical, r('#glm').canonical], [['dashboard'], ['trader'], 'sentiment-v1/trader', 'sentiment-v2/evidence']);
   assert.equal(r('#SETTINGS').area, 'settings', 'case-insensitive');
 });
 
@@ -1109,7 +1109,7 @@ test('comparison dashboard: no difference is claimed without backend support', (
   assert.match(t('insufficient_sample', 0.5, 0.7).text, /Not enough/);
   assert.match(t('v2_higher_observational', 0.5, 0.7).text, /^Yes, observationally/); assert.equal(t('v2_higher_observational', 0.5, 0.7).tone, 'good');
   assert.match(t('v1_higher_observational', 0.7, 0.5).text, /^No: V1/); assert.equal(t('v1_higher_observational', 0.7, 0.5).tone, 'bad');
-  assert.match(H.cmpHeadline([]).text, /no V1 vs V2/i);
+  assert.match(H.cmpHeadline([]).text, /no comparison data/i);
   // real production summary: the claim is the backend's and is passed through
   const real = H.cmpSummaryModel({ ok: true, data: CMP_SUM });
   assert.equal(H.cmpExecutive([{ asset: 'BTC', model: real }], []).claims[0].claim, CMP_SUM.summary.claim);

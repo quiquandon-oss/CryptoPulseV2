@@ -97,6 +97,7 @@
       <div class="flex items-baseline justify-between gap-2 flex-wrap mb-2">
         <h2 id="overviewTitle" class="text-[10px] uppercase tracking-[0.18em] text-[#00E0FF] font-bold">All forecasts</h2>
         <p class="text-[10px] text-[#BAC9CD]">Chance of a positive return over the horizon · latest logged prediction · times UTC · select one for detail</p>
+        <p class="text-[10px] text-[#8A9599] mt-0.5">k-NN forecast engine (runs on PulseWorkerV2). Inputs: V1 sentiment (score, regime, bottom score) and technicals for BTC and LINK; technicals only for ETH. BTC 24 h can also carry the GLM adjustment from Sentiment V2 evidence.</p>
       </div>
       <div id="overviewBody" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2" aria-live="polite"></div>
     </section>
@@ -155,7 +156,7 @@
           <p class="hidden text-xs text-[#BAC9CD] mb-3 leading-relaxed" id="evidenceNote">Resolved predictions only — every logged call for this coin/horizon whose horizon has passed. Accuracy is the share of correct direction calls; Brier score measures probability quality (lower is better) and is compared with the best constant guess. 50 resolved predictions is the backend's minimum before a variant is even considered for model selection; below that the sample is marked insufficient. Past resolved accuracy is not a guarantee of future accuracy, and no figure here is a test of statistical significance.</p>
           <div id="evidenceBody" class="text-xs" aria-live="polite"><p class="text-[#BAC9CD]">Loading…</p></div>
           <p id="calibNote" class="text-[10px] text-[#BAC9CD] mt-3 pt-3 border-t border-[#3B494C] leading-relaxed"></p>
-          <button type="button" onclick="goRoute('sentiment-v2/model')" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
+          <button type="button" onclick="goRoute('sentiment-v1/history')" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">Compare every model in the Lab →</button>
         </section>
         <section id="dqCard" aria-labelledby="dqTitle" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-5">
           <div class="flex items-center justify-between gap-2 mb-2">
@@ -669,8 +670,8 @@
 
   <div id="view-comparison" class="hidden">
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpTitle">
-      <h2 id="cmpTitle" class="text-lg font-bold tracking-tight">Is Sentiment V2 better than V1? <span class="text-xs font-normal text-[#BAC9CD]">· outcome comparison, read-only</span></h2>
-      <p class="text-xs text-[#BAC9CD] mt-1">Each V2 prediction is a decision. V1's reading at or before it (at most 3 h old) is aligned to it, and V1, V2 baseline and V2 final are scored against the same resolved market outcome. V1 is a market-wide sentiment score: the same V1 reading is compared with every asset. V1 direction uses the <b class="text-[#E1E2E7]">proposed</b> 45/55 convention (OD-12), not production logic. Nothing here changes either engine.</p>
+      <h2 id="cmpTitle" class="text-lg font-bold tracking-tight">Does the forecast engine beat V1 sentiment? <span class="text-xs font-normal text-[#BAC9CD]">· outcome comparison, read-only</span></h2>
+      <p class="text-xs text-[#BAC9CD] mt-1">Each forecast-engine prediction is a decision. V1's reading at or before it (at most 3 h old) is aligned to it, and V1, Forecast and Forecast + GLM are scored against the same resolved market outcome. V1 is a market-wide sentiment score: the same V1 reading is compared with every asset. <b class="text-[#E1E2E7]">What is compared:</b> "V1 sentiment" is V1's score turned into a direction; "Forecast" is the k-NN forecast engine (it runs on PulseWorkerV2; its BTC and LINK models use V1 sentiment as an input, ETH uses technicals only); "Forecast + GLM" adds the Sentiment V2 evidence layer (BTC 24 h only). No forecast uses the Sentiment V2 score itself yet, so its predictive value is not measured here. V1 direction uses the <b class="text-[#E1E2E7]">proposed</b> 45/55 convention (OD-12), not production logic. Nothing here changes either engine.</p>
       <div class="flex gap-x-4 gap-y-2 flex-wrap mt-3">
         <label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">Asset</span><div id="cmpAssets" role="group" aria-label="Asset" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></label>
         <label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">Horizon</span><div id="cmpHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></label>
@@ -685,10 +686,10 @@
       <p class="text-[11px] text-[#8A9599] mb-2">Resolved and called decisions only, bucketed by the week of the decision. Hollow points and dashed lines mark weeks with fewer than 5 scored calls (unreliable). Pending decisions are shown as bars and never enter an accuracy.</p>
       <div id="cmpTrendState" class="text-xs" role="status">Loading…</div>
       <div id="cmpTrendWrap" class="relative h-[280px] hidden"><canvas id="cmpTrendChart" role="img" aria-label="V1 and V2 directional accuracy by week"></canvas></div></section>
-    <section id="cmpSecC" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpCTitle"><h3 id="cmpCTitle" class="text-sm font-semibold mb-1">C. Agreement and disagreement <span class="text-[#BAC9CD] font-normal text-xs">· V1 against V2 final</span></h3>
+    <section id="cmpSecC" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpCTitle"><h3 id="cmpCTitle" class="text-sm font-semibold mb-1">C. Agreement and disagreement <span class="text-[#BAC9CD] font-normal text-xs">· V1 against Forecast + GLM</span></h3>
       <p class="text-[11px] text-[#8A9599] mb-2">Share of decisions where both made the same call, opposite calls, either made no call, or V1 had no reading. Per asset when All is selected.</p>
       <div id="cmpAgreeState" class="text-xs" role="status">Loading…</div>
-      <div id="cmpAgreeWrap" class="relative h-[200px] hidden"><canvas id="cmpAgreeChart" role="img" aria-label="Agreement between V1 and V2 final"></canvas></div>
+      <div id="cmpAgreeWrap" class="relative h-[200px] hidden"><canvas id="cmpAgreeChart" role="img" aria-label="Agreement between V1 and Forecast + GLM"></canvas></div>
       <div id="cmpOpposite" class="mt-3 text-xs overflow-x-auto"></div></section>
     <section id="cmpSecD" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpDTitle"><h3 id="cmpDTitle" class="text-sm font-semibold mb-1">D. Asset and horizon analysis</h3>
       <p class="text-[11px] text-[#8A9599] mb-2">Accuracy of V1 and V2 per asset (at the selected horizon) and per horizon (assets pooled), with the number of scored calls above each bar. Assets the backend does not serve yet are listed, not drawn.</p>
@@ -1583,16 +1584,20 @@ var AREAS = [
     { key: 'holdings', label: 'Holdings', views: ['portfolio'] },
     { key: 'transactions', label: 'Transactions', views: ['portfolio'] },
     { key: 'planning', label: 'Planning', views: ['portfolio'] }] },
-  // V1 = the sentiment-ff75 Worker. Its series and Foufi digest, and Trader Analysis (V1's Gemini route). The forecast and
-  // Model Challenger pages run on PulseWorkerV2 (/predict, variants, calibration, selection), so they belong to V2.
+  // V1 sentiment and everything driven by it. The k-NN forecast engine and its Model Challenger run on PulseWorkerV2,
+  // but their inputs are V1 sentiment (V1 history: score, regime, bottom score; ETH uses technicals only), so they sit
+  // here. Trader Analysis posts to V1's Gemini route.
   { key: 'sentiment-v1', label: 'Sentiment V1', short: 'V1', icon: 'history_edu', tabs: [
     { key: 'overview', label: 'Overview', views: ['sentiment-v1'] },
+    { key: 'forecast', label: 'Forecast', views: ['dashboard'] },
+    { key: 'history', label: 'History & model', views: ['history', 'lab'] },
     { key: 'trader', label: 'Trader Analysis', views: ['trader'] }] },
+  // Sentiment V2: the V2 sentiment score and its evidence, the GLM evidence layer, and the price-only forecast models
+  // (TimesFM, Chronos) that feed GLM.
   { key: 'sentiment-v2', label: 'Sentiment V2', short: 'V2', icon: 'insights', tabs: [
-    { key: 'overview', label: 'Overview', views: ['dashboard', 'sentiment'] },
-    { key: 'forecast', label: 'Forecast', views: ['forecast'] },
-    { key: 'evidence', label: 'Evidence / GLM', views: ['glm'] },
-    { key: 'history', label: 'History & model', views: ['history', 'lab'] }] },
+    { key: 'overview', label: 'Overview', views: ['sentiment'] },
+    { key: 'forecast', label: 'Price models', views: ['forecast'] },
+    { key: 'evidence', label: 'Evidence / GLM', views: ['glm'] }] },
   { key: 'comparison', label: 'Model Comparison', short: 'Compare', icon: 'compare_arrows', views: ['comparison'] },
   { key: 'research', label: 'Research', icon: 'science', views: ['experiments'] },
   { key: 'alerts', label: 'Alerts', icon: 'notifications', views: ['alerts'] },
@@ -1600,9 +1605,9 @@ var AREAS = [
 ];
 var MOBILE_PRIMARY_AREAS = ['portfolio', 'sentiment-v1', 'sentiment-v2', 'comparison'];
 // Old links keep working.
-var LEGACY_ROUTES = { overview: 'sentiment-v2/overview', dashboard: 'sentiment-v2/overview', lab: 'sentiment-v2/history', forecast: 'sentiment-v2/forecast',
-  sentiment: 'sentiment-v2', experiments: 'research', history: 'sentiment-v2/history', learning: 'sentiment-v2/history', 'sentiment-v2/model': 'sentiment-v2/history',
-  glm: 'sentiment-v2/evidence', trader: 'sentiment-v1/trader', 'sentiment-v2/trader': 'sentiment-v1/trader' };
+var LEGACY_ROUTES = { overview: 'sentiment-v1/forecast', dashboard: 'sentiment-v1/forecast', lab: 'sentiment-v1/history', forecast: 'sentiment-v2/forecast',
+  sentiment: 'sentiment-v2', experiments: 'research', history: 'sentiment-v1/history', learning: 'sentiment-v1/history', 'sentiment-v2/model': 'sentiment-v1/history',
+  'sentiment-v2/history': 'sentiment-v1/history', glm: 'sentiment-v2/evidence', trader: 'sentiment-v1/trader', 'sentiment-v2/trader': 'sentiment-v1/trader' };
 function allAreaViews(){ const out = []; for(const a of AREAS) for(const v of (a.tabs ? a.tabs.flatMap((t) => t.views) : a.views)) if(!out.includes(v)) out.push(v); return out; }
 function resolveRoute(hash){
   let h = String(hash || '').replace(/^#/, '').trim().toLowerCase();
@@ -1805,7 +1810,7 @@ function cmpBuckets(records, minN){
       v1: one(sc.v1), v2b: one(sc.v2b), v2f: one(sc.v2f) };
   });
 }
-// agree / disagree / no-call / missing V1 (against V2 final) and the opposite-direction cases with who was right
+// agree / disagree / no-call / missing V1 (against Forecast + GLM) and the opposite-direction cases with who was right
 function cmpAgreement(records){
   const o = { total: 0, agree: 0, disagree: 0, noCall: 0, missing: 0, opposite: { n: 0, v1Right: 0, v2Right: 0, pending: 0, other: 0 } };
   for(const r of records){
@@ -1880,12 +1885,12 @@ function cmpDifference(m){
 function cmpHeadline(entries){
   const ok = entries.filter((e) => e.model && e.model.state === 'ok');
   const p = (a) => (a.rate === null ? '—' : (a.rate * 100).toFixed(1) + '%') + (a.ci ? ' [' + (a.ci[0] * 100).toFixed(1) + '–' + (a.ci[1] * 100).toFixed(1) + '%]' : '');
-  if(!ok.length) return { tone: 'neutral', text: 'There is no V1 vs V2 comparison data to answer the question yet.' };
+  if(!ok.length) return { tone: 'neutral', text: 'There is no comparison data to answer the question yet.' };
   const one = (m) => {
-    if(m.claim === 'v2_higher_observational') return `Yes, observationally: V2 final was right more often than V1 (${p(m.accV2f)} vs ${p(m.accV1)}) and the 95% intervals do not overlap.`;
-    if(m.claim === 'v1_higher_observational') return `No: V1 was right more often than V2 final (${p(m.accV1)} vs ${p(m.accV2f)}) and the 95% intervals do not overlap, so V2 shows no improvement here.`;
-    if(m.claim === 'no_supported_difference') return `Not demonstrated: V2 final ${p(m.accV2f)} vs V1 ${p(m.accV1)}, and the backend finds no supported difference.`;
-    return `Not enough resolved comparisons yet to say whether V2 improves on V1 (${m.nResolvedPairs || 0} resolved pairs; at least 30 are needed).`;
+    if(m.claim === 'v2_higher_observational') return `Yes, observationally: Forecast + GLM was right more often than V1 (${p(m.accV2f)} vs ${p(m.accV1)}) and the 95% intervals do not overlap.`;
+    if(m.claim === 'v1_higher_observational') return `No: V1 was right more often than Forecast + GLM (${p(m.accV1)} vs ${p(m.accV2f)}) and the 95% intervals do not overlap, so the forecast shows no improvement here.`;
+    if(m.claim === 'no_supported_difference') return `Not demonstrated: Forecast + GLM ${p(m.accV2f)} vs V1 ${p(m.accV1)}, and the backend finds no supported difference.`;
+    return `Not enough resolved comparisons yet to say whether the forecast improves on V1 sentiment (${m.nResolvedPairs || 0} resolved pairs; at least 30 are needed).`;
   };
   const tone = ok.some((e) => e.model.claim === 'v1_higher_observational') ? 'bad' : ok.some((e) => e.model.claim === 'v2_higher_observational') ? 'good' : 'neutral';
   const text = ok.length === 1 && entries.length === 1 ? one(ok[0].model) : ok.map((e) => e.asset + ': ' + one(e.model)).join(' ');
@@ -3917,17 +3922,17 @@ function renderCmpExec(x){
     : '<p class="text-[#8A9599] mt-1">no resolved calls</p>'}${sub ? `<p class="text-[10px] text-[#8A9599] mt-1">${sub}</p>` : ''}</div>`;
   const cell = (k, v, sub) => `<div class="${CMP_CELL}"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] mt-1 text-sm">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
   const diffs = x.claims.filter(c => c.diff);
-  const diffCell = diffs.length ? diffs.map(c => `${x.claims.length > 1 ? esc(c.asset) + ': ' : ''}V2 final − V1 = <b>${c.diff.pp > 0 ? '+' : ''}${c.diff.pp} pp</b> (${c.diff.higher === 'v2' ? 'V2 higher' : 'V1 higher'})`).join('<br>')
+  const diffCell = diffs.length ? diffs.map(c => `${x.claims.length > 1 ? esc(c.asset) + ': ' : ''}Forecast + GLM − V1 = <b>${c.diff.pp > 0 ? '+' : ''}${c.diff.pp} pp</b> (${c.diff.higher === 'v2' ? 'V2 higher' : 'V1 higher'})`).join('<br>')
     : '<span class="text-[#8A9599]">none supported</span>';
   const claimChips = x.claims.map(c => `${x.claims.length > 1 ? `<span class="text-[#8A9599]">${esc(c.asset)}</span> ` : ''}${chip(String(c.claim || '').replace(/_/g, ' ').toUpperCase(), c.claim === 'insufficient_sample' ? 'neutral' : c.observational ? 'warn' : 'info')}`).join(' ');
   host.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      ${acc('V1 production (proposed 45/55)', x.acc.v1, CMP_COLORS.v1)}
-      ${acc('V2 final (after GLM)', x.acc.v2f, CMP_COLORS.v2f)}
-      ${acc('V2 baseline (before GLM)', x.acc.v2b, CMP_COLORS.v2b)}</div>
+      ${acc('V1 sentiment (proposed 45/55)', x.acc.v1, CMP_COLORS.v1)}
+      ${acc('Forecast + GLM (Sentiment V2 evidence)', x.acc.v2f, CMP_COLORS.v2f)}
+      ${acc('Forecast (k-NN, before GLM)', x.acc.v2b, CMP_COLORS.v2b)}</div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
       ${cell('Resolved comparable predictions', String(x.nResolvedPairs), `of ${x.nResolved} resolved, ${x.nAligned} decisions${x.truncated ? ' (newest 500 per asset)' : ''}`)}
       ${cell('V1 coverage / missing', `${cmpPct(x.coverage)} / ${cmpPct(x.missing)}`, 'decisions with / without a V1 reading within 3 h')}
-      ${cell('Agreement / disagreement', `${cmpPct(x.agreeRate)} / ${cmpPct(x.disagreeRate)}`, `V1 vs V2 final, both made a call, n=${x.agreeN}`)}
+      ${cell('Agreement / disagreement', `${cmpPct(x.agreeRate)} / ${cmpPct(x.disagreeRate)}`, `V1 vs Forecast + GLM, both made a call, n=${x.agreeN}`)}
       ${cell('Performance difference', diffCell, 'shown only when the backend claim supports it')}</div>
     <p class="mt-3">${claimChips}</p>
     ${x.claims.map(c => `<p class="text-[11px] text-[#BAC9CD] mt-1">${x.claims.length > 1 ? '<b>' + esc(c.asset) + '</b> · ' : ''}${esc(c.claimText)}</p>`).join('')}
@@ -3937,7 +3942,7 @@ function renderCmpExec(x){
 function cmpBackendDetails(m){
   const acc = (a) => a.n ? `${cmpPct(a.rate)} <span class="text-[#8A9599]">[${cmpCi(a)}] ${a.correct}/${a.n}</span>` : '—';
   return `<details class="mt-3"><summary class="cursor-pointer text-[11px] text-[#BAC9CD]">Backend summary details: Brier score and V1 threshold sensitivity</summary>
-    <p class="text-[11px] text-[#BAC9CD] mt-2">Brier (lower is better): V2 baseline ${m.brierV2b && m.brierV2b.score !== null ? m.brierV2b.score.toFixed(4) + ' (n=' + m.brierV2b.n + ')' : '—'} · V2 final ${m.brierV2f && m.brierV2f.score !== null ? m.brierV2f.score.toFixed(4) + ' (n=' + m.brierV2f.n + ')' : '—'} · V1 n/a: it gives no probability.</p>
+    <p class="text-[11px] text-[#BAC9CD] mt-2">Brier (lower is better): Forecast ${m.brierV2b && m.brierV2b.score !== null ? m.brierV2b.score.toFixed(4) + ' (n=' + m.brierV2b.n + ')' : '—'} · Forecast + GLM ${m.brierV2f && m.brierV2f.score !== null ? m.brierV2f.score.toFixed(4) + ' (n=' + m.brierV2f.n + ')' : '—'} · V1 n/a: it gives no probability.</p>
     <div class="overflow-x-auto"><table class="w-full text-xs mt-2"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">V1 band (DOWN below / UP above)</th><th class="px-2 font-normal">Coverage</th><th class="px-2 font-normal">No call</th><th class="px-2 font-normal">Accuracy [95% CI]</th></tr></thead><tbody>
     ${m.bands.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(b.band)}${b.proposed ? ' ' + chip('PROPOSED', 'info') : ''}</td><td class="px-2 font-mono-data">${cmpPct(b.coverage)}</td><td class="px-2 font-mono-data">${cmpPct(b.no_call_rate)}</td><td class="px-2 whitespace-nowrap">${acc({ n: b.accuracy.n, correct: b.accuracy.correct, rate: b.accuracy.rate, ci: b.accuracy.ci95 })}</td></tr>`).join('')}</tbody></table></div>
     <p class="text-[10px] text-[#8A9599] mt-2">${esc(m.version || '')} · generated ${esc(fmtUtc(m.generated))} (cached up to 5 min). Method: ${esc(m.methodology.claims || '')}</p></details>`;
@@ -3956,7 +3961,7 @@ function renderCmpTrend(feeds){
   const line = (key, label, color) => ({ type: 'line', label, data: b.map(x => x[key].rate === null ? null : Math.round(x[key].rate * 1000) / 10), $n: b.map(x => x[key].n), $low: b.map(x => x[key].low),
     borderColor: color, backgroundColor: color, borderWidth: 2, tension: 0, spanGaps: false, pointRadius: 4, pointBackgroundColor: b.map(x => x[key].low ? 'rgba(0,0,0,0)' : color), pointBorderColor: color, order: 1,
     segment: { borderDash: c => (b[c.p0DataIndex][key].low || b[c.p1DataIndex][key].low ? [5, 4] : undefined) } });
-  const data = { labels: b.map(x => x.label), datasets: [line('v1', 'V1 accuracy', CMP_COLORS.v1), line('v2f', 'V2 final accuracy', CMP_COLORS.v2f),
+  const data = { labels: b.map(x => x.label), datasets: [line('v1', 'V1 sentiment accuracy', CMP_COLORS.v1), line('v2f', 'Forecast + GLM accuracy', CMP_COLORS.v2f),
     { type: 'line', label: 'Chance (50%)', data: b.map(() => 50), borderColor: CMP_COLORS.neu, borderDash: [2, 4], borderWidth: 1, pointRadius: 0, order: 1 },
     { type: 'bar', label: 'Pending decisions (not scored)', data: b.map(x => x.pending), yAxisID: 'y1', backgroundColor: 'rgba(138,149,153,0.28)', borderWidth: 0, order: 3 }] };
   const opt = cmpBaseOptions();
@@ -3976,7 +3981,7 @@ function renderCmpAgree(feeds){
   const g = cmpGate(feeds);
   if(g.state !== 'ok'){ st.innerHTML = cmpGateText(g, 'agreement breakdown'); wrap.classList.add('hidden'); opp.innerHTML = ''; return; }
   const rows = cmpAgreementRows(feeds);
-  st.innerHTML = cmpUnavailChips(g.unavailable) || '<span class="text-[11px] text-[#8A9599]">Counts are decisions; bars show each row as a share of its own decisions. "No call" = V1 or V2 final abstained; "V1 missing" = no V1 reading within 3 h.</span>';
+  st.innerHTML = cmpUnavailChips(g.unavailable) || '<span class="text-[11px] text-[#8A9599]">Counts are decisions; bars show each row as a share of its own decisions. "No call" = V1 or Forecast + GLM abstained; "V1 missing" = no V1 reading within 3 h.</span>';
   wrap.classList.remove('hidden'); wrap.style.height = (90 + rows.length * 42) + 'px';
   const share = (k) => rows.map(r => r.total ? Math.round(r[k] / r.total * 1000) / 10 : 0);
   const ds = (k, label, color) => ({ label, data: share(k), backgroundColor: color, borderWidth: 0, $c: rows.map(r => r[k]) });
@@ -3986,7 +3991,7 @@ function renderCmpAgree(feeds){
   opt.plugins.tooltip.callbacks = { label: it => `${it.dataset.label}: ${it.dataset.$c[it.dataIndex]} (${it.parsed.x}%)` };
   cmpChart('agree', 'cmpAgreeChart', { type: 'bar', data, options: opt }, rows);
   const pct = (a, n) => n ? ` <span class="text-[#8A9599]">${Math.round(a / n * 100)}%</span>` : '';
-  opp.innerHTML = `<p class="text-[11px] text-[#BAC9CD] mb-1">Opposite-direction decisions (V1 UP and V2 final DOWN, or the reverse) and who was right after resolution</p>
+  opp.innerHTML = `<p class="text-[11px] text-[#BAC9CD] mb-1">Opposite-direction decisions (V1 UP and Forecast + GLM DOWN, or the reverse) and who was right after resolution</p>
     <table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset</th><th class="px-2 font-normal">Opposite calls</th><th class="px-2 font-normal">V1 right</th><th class="px-2 font-normal">V2 right</th><th class="px-2 font-normal">Pending</th></tr></thead><tbody>
     ${rows.map(r => { const o = r.opposite, res = o.v1Right + o.v2Right + o.other; return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold whitespace-nowrap">${esc(r.asset)}</td><td class="px-2 font-mono-data">${o.n} <span class="text-[#8A9599]">of ${r.agree + r.disagree} both-called</span></td>
       <td class="px-2 font-mono-data" style="color:${CMP_COLORS.v1}">${o.v1Right}${pct(o.v1Right, res)}</td><td class="px-2 font-mono-data" style="color:${CMP_COLORS.v2f}">${o.v2Right}${pct(o.v2Right, res)}</td><td class="px-2 font-mono-data text-[#8A9599]">${o.pending}</td></tr>`; }).join('')}</tbody></table>
@@ -4005,7 +4010,7 @@ function renderCmpAssets(feeds, h){
   wrap.classList.remove('hidden');
   document.getElementById('cmpDAssetH').textContent = h + ' h';
   const bars = (items) => { const ds = (k, label, color) => ({ label, data: items.map(r => r[k] && r[k].n ? Math.round(r[k].rate * 1000) / 10 : null), $n: items.map(r => r[k].n), $ci: items.map(r => r[k].ci), backgroundColor: color, borderWidth: 0 });
-    return [ds('v1', 'V1', CMP_COLORS.v1), ds('v2b', 'V2 baseline', CMP_COLORS.v2b), ds('v2f', 'V2 final', CMP_COLORS.v2f)]; };
+    return [ds('v1', 'V1 sentiment', CMP_COLORS.v1), ds('v2b', 'Forecast', CMP_COLORS.v2b), ds('v2f', 'Forecast + GLM', CMP_COLORS.v2f)]; };
   const opt = () => { const o = cmpBaseOptions(); o.layout = { padding: { top: 14 } };
     o.scales = { x: { ticks: CMP_TICK, grid: { display: false } }, y: { min: 0, max: 100, ticks: { ...CMP_TICK, callback: v => v + '%' }, grid: CMP_GRID } };
     o.plugins.tooltip.callbacks = { label: it => { const ds = it.dataset, ci = ds.$ci[it.dataIndex]; return it.parsed.y === null ? ds.label + ': no scored calls (n=0)' : `${ds.label}: ${it.parsed.y}% (n=${ds.$n[it.dataIndex]}${ci ? ', 95% CI ' + (ci[0] * 100).toFixed(1) + '–' + (ci[1] * 100).toFixed(1) + '%' : ''})`; } }; return o; };
@@ -4027,14 +4032,14 @@ function renderCmpGlm(feeds){
   const a = (r) => r.n ? `<b class="text-[#E1E2E7]">${cmpPct(r.rate)}</b> <span class="text-[#8A9599]">[${cmpCi(r)}] n=${r.n}</span>` : '<span class="text-[#8A9599]">no resolved calls (n=0)</span>';
   const cell = (k, v, sub) => `<div class="${CMP_CELL}"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] mt-1">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
   host.innerHTML = intro + `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-    ${cell('V2 baseline accuracy', a(gl.base), 'before GLM, BTC 24 h')}
-    ${cell('V2 final accuracy', a(gl.fin), 'after GLM, BTC 24 h')}
+    ${cell('Forecast accuracy', a(gl.base), 'before GLM, BTC 24 h')}
+    ${cell('Forecast + GLM accuracy', a(gl.fin), 'after GLM, BTC 24 h')}
     ${cell('Decisions adjusted by GLM', `${gl.adjusted} of ${gl.total} <span class="text-[#8A9599]">${cmpPct(gl.adjustedRate)}</span>`, gl.meanAbsAdj === null ? 'mean |adjustment| n/a' : 'mean |adjustment| ' + (gl.meanAbsAdj * 100).toFixed(2) + ' pp')}
     ${cell('Calls changed by GLM', String(gl.changedCalls), 'expected 0: GLM never flips a call')}</div>
-    <div class="overflow-x-auto mt-3"><table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Outcome accuracy</th><th class="px-2 font-normal">Decisions</th><th class="px-2 font-normal">V2 final</th><th class="px-2 font-normal">V2 baseline</th></tr></thead><tbody>
+    <div class="overflow-x-auto mt-3"><table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Outcome accuracy</th><th class="px-2 font-normal">Decisions</th><th class="px-2 font-normal">Forecast + GLM</th><th class="px-2 font-normal">Forecast</th></tr></thead><tbody>
     <tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2">GLM adjusted</td><td class="px-2 font-mono-data">${gl.adjustedGroup.n}</td><td class="px-2">${a(gl.adjustedGroup.fin)}</td><td class="px-2">${a(gl.adjustedGroup.base)}</td></tr>
     <tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2">Not adjusted</td><td class="px-2 font-mono-data">${gl.unadjustedGroup.n}</td><td class="px-2">${a(gl.unadjustedGroup.fin)}</td><td class="px-2">${a(gl.unadjustedGroup.base)}</td></tr></tbody></table></div>
-    ${gl.adjusted === 0 ? '<p class="text-[11px] text-[#8A9599] mt-2">No decision has been adjusted yet, so V2 final equals V2 baseline everywhere in this window and GLM has no measurable contribution.</p>' : gl.adjusted < 30 ? '<p class="text-[11px] text-[#FBBF24] mt-2">Fewer than 30 adjusted decisions: too few to say whether GLM helps.</p>' : ''}`;
+    ${gl.adjusted === 0 ? '<p class="text-[11px] text-[#8A9599] mt-2">No decision has been adjusted yet, so Forecast + GLM equals Forecast everywhere in this window and GLM has no measurable contribution.</p>' : gl.adjusted < 30 ? '<p class="text-[11px] text-[#FBBF24] mt-2">Fewer than 30 adjusted decisions: too few to say whether GLM helps.</p>' : ''}`;
 }
 function renderCmpTable(feeds){
   const host = document.getElementById('cmpTable'), more = document.getElementById('cmpMore'), cnt = document.getElementById('cmpTableCount');
@@ -4045,7 +4050,7 @@ function renderCmpTable(feeds){
   const mark = (v) => v === true ? '<span class="text-[#4AE176]">✓</span>' : v === false ? '<span class="text-[#FFB4AB]">✗</span>' : '<span class="text-[#8A9599]">—</span>';
   const p = (v) => (v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%');
   const th = (t) => `<th class="px-2 font-normal">${t}</th>`;
-  host.innerHTML = `<table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset</th>${['Horizon', 'Decision (UTC)', 'V1', 'V2 baseline', 'V2 final', 'Outcome', 'V1 correct', 'V2 correct', 'GLM'].map(th).join('')}</tr></thead><tbody>${d.rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top">
+  host.innerHTML = `<table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset</th>${['Horizon', 'Decision (UTC)', 'V1', 'Forecast', 'Forecast + GLM', 'Outcome', 'V1 correct', 'V2 correct', 'GLM'].map(th).join('')}</tr></thead><tbody>${d.rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top">
     <td class="py-1 px-2 font-semibold">${esc(r.asset || '')}</td><td class="px-2">${r.horizon || ''} h</td><td class="px-2 font-mono-data">${esc(fmtUtc(r.ts))}</td>
     <td class="px-2">${r.v1 ? `<span class="font-mono-data">${esc(String(r.v1.score))}</span> ${dir(r.v1.dir)}` : '<span class="text-[#8A9599]">no reading</span>'}</td>
     <td class="px-2"><span class="font-mono-data">${p(r.base.p_up)}</span> ${dir(r.base.direction)}</td>

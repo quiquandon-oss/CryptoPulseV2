@@ -15,7 +15,7 @@ const res = []; const ok = (c, m) => res.push((c ? 'PASS ' : 'FAIL ') + m);
       if (q.method() === 'POST' && u.pathname === '/trader-analysis-gemini') { sent = JSON.parse(q.postData() || 'null'); return r.fulfill({ status: 200, headers: h, body: JSON.stringify({ analysis: 'FIXTURE TRADER READ', ts: Date.now() }) }); }
       return r.fulfill({ status: 404, headers: h, body: '{}' }); });
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-    await p.goto(BASE + '#sentiment-v2/overview'); await p.waitForTimeout(2500);
+    await p.goto(BASE + '#sentiment-v1/trader'); await p.waitForTimeout(2500);
     ok((await p.textContent('#traderOut')).trim() === '', `${name}: nothing is called before the click`);
     await p.click('#traderBtn'); await p.waitForTimeout(8000);
     const out = await p.textContent('#traderOut'), inp = (await p.textContent('#traderInputs')).replace(/\s+/g, ' ');

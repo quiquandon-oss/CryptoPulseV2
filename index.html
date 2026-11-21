@@ -805,6 +805,34 @@
       </section>
     </div>
 
+    <div id="pf-projection" class="hidden">
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pjTitle">
+        <div class="flex items-start justify-between gap-2 flex-wrap"><h3 id="pjTitle" class="text-sm font-semibold">Projection portfolio <span class="text-xs font-normal text-[#BAC9CD]">· a copy of your portfolio, used only here</span></h3>
+          <span class="flex gap-2 flex-wrap"><button type="button" id="pjCopyBtn" class="px-3 py-1.5 rounded-lg border border-[#00E5FF] text-[#00E5FF] text-xs font-semibold">Create copy</button></span></div>
+        <p id="pjCopyNote" class="text-[11px] text-[#8A9599] mt-1" role="status"></p>
+      </section>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pjProjTitle">
+        <div class="flex items-center justify-between gap-2 flex-wrap"><h3 id="pjProjTitle" class="text-sm font-semibold">Projected value: Neutral, Sentiment V1, V2 and V2 research</h3>
+          <div class="flex gap-1" role="group" aria-label="Horizon" id="pjHorizonBtns"></div></div>
+        <p id="pjAnswer" class="text-xs text-[#E1E2E7] mt-2" role="status">Loading…</p>
+        <div id="pjTable" class="overflow-x-auto text-xs mt-2"></div>
+        <p id="pjNotes" class="text-[10px] text-[#8A9599] mt-2"></p>
+      </section>
+      <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pjEvalTitle">
+        <h3 id="pjEvalTitle" class="text-sm font-semibold mb-1">Does sentiment help? <span class="text-xs font-normal text-[#BAC9CD]">· walk-forward test on BTC</span></h3>
+        <div id="pjEval" class="overflow-x-auto text-xs" role="status"></div>
+        <p class="text-[10px] text-[#8A9599] mt-2">Each past day is projected using only outcomes known on that day, then scored against what BTC did (pinball loss of P10/P50/P90; lower is better). Skill = improvement over Neutral on the same days. A line counts as better only with at least 30 independent windows and a skill of +2% or more (rule fixed before the first result, docs/PORTFOLIO_PROJECTION.md).</p>
+      </section>
+      <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6"><summary class="cursor-pointer text-sm font-semibold text-[#BAC9CD]">How the projection works</summary>
+        <ul class="text-[11px] text-[#BAC9CD] mt-2 space-y-1 list-disc pl-4">
+          <li><b>Neutral</b>: BTC moves with zero expected drift and the volatility of the last 180 daily closes; every other asset follows BTC through its own beta plus its own extra volatility (Hyperliquid daily closes). Cash stays as it is.</li>
+          <li><b>Sentiment lines</b>: the current reading is placed in its signal's low / middle / high third (from its own history). The average BTC return that followed that third, minus the average after all readings, shifts BTC's drift. The shift is shrunk toward zero by n / (n + 10), where n counts independent windows, so little history means a projection close to Neutral.</li>
+          <li><b>V2 research</b> uses the forecast-family score that is still in research stage (not the production score). It starts with no history.</li>
+          <li>Only outcomes known on the as-of day are used. Readings older than 36 h do not condition the projection. All lines use the same random draws, so differences come only from the drift.</li>
+          <li>Range = P10 to P90 of 4,000 simulated outcomes. A model with strong assumptions: not a forecast and not advice.</li>
+        </ul></details>
+    </div>
+
     <div id="pf-planning" class="hidden">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="pfDryTitle"><h3 id="pfDryTitle" class="text-sm font-semibold mb-1">Cash ready to invest · planner</h3>
@@ -1619,7 +1647,9 @@ var AREAS = [
   { key: 'portfolio', label: 'Portfolio', icon: 'account_balance_wallet', tabs: [
     { key: 'holdings', label: 'Holdings', views: ['portfolio'] },
     { key: 'transactions', label: 'Transactions', views: ['portfolio'] },
-    { key: 'planning', label: 'Planning', views: ['portfolio'] }] },
+    { key: 'planning', label: 'Planning', views: ['portfolio'] },
+    // OD-15: projections run on a separate COPY of the ledger; the accounting tabs above never read sentiment
+    { key: 'projection', label: 'Projection', views: ['portfolio'] }] },
   // V1 sentiment and everything driven by it. The k-NN forecast engine and its Model Challenger run on PulseWorkerV2,
   // but their inputs are V1 sentiment (V1 history: score, regime, bottom score; ETH uses technicals only), so they sit
   // here. Trader Analysis posts to V1's Gemini route.
@@ -2818,6 +2848,174 @@ function uxCaptionFor(keys){ for(const k of keys){ if(k && UX_CAPTIONS[k]) retur
 function uxCardOpenByDefault(viewId, i, id){
   const list = UX_FOLD_VIEWS[viewId]; if(!list) return null;
   return list.includes('#' + i) || (!!id && list.includes(id));
+}
+// ---- Portfolio projection (owner decision OD-15, 2026-11-21; docs/PORTFOLIO_PROJECTION.md). Works on a COPY of the
+// portfolio (separate storage key), never on the accounting ledger itself. Four lines, one engine: Neutral (zero drift),
+// Sentiment V1, Sentiment V2 (production sentiment_score) and Sentiment V2 research (forecast_research.enhanced_score).
+// A line differs from Neutral only by a BTC drift shift measured from that signal's own history (tertile bands of the
+// signal, forward BTC log returns, shrunk toward zero by n_eff / (n_eff + k)). Point-in-time: only outcomes resolved by
+// the as-of day are used. Research stage: not a forecast and not advice. ----
+var PJ_VERSION = 'pj-0.1';
+var PJ_LINES = [
+  { key: 'neutral', label: 'Neutral', note: 'zero drift, BTC volatility' },
+  { key: 'v1', label: 'Sentiment V1', note: 'V1 score' },
+  { key: 'v2', label: 'Sentiment V2', note: 'V2 production sentiment_score' },
+  { key: 'v2r', label: 'Sentiment V2 research', note: 'forecast family enhanced_score (research stage)' }];
+var PJ_HORIZONS = [1, 7];                 // days
+var PJ_K = 10;                            // PROPOSED shrinkage, same prior strength as the V2 forecast family
+var PJ_MIN_BAND = 3;                      // fewer resolved pairs than this in the current band: no shift
+var PJ_LOOKBACK_DAYS = 180;               // volatility, beta and residual volatility window
+var PJ_MIN_RETURNS = 30;                  // fewer daily returns than this: volatility / beta not estimated
+var PJ_STALE_MS = 36 * 3600000;           // a reading older than this does not condition the projection
+var PJ_MIN_EVAL_NEFF = 30;                // non-overlapping evaluated windows before any claim
+var PJ_SIMS = 4000;
+var PJ_Z90 = 1.2815515655446004;
+function pjDayAdd(day, n){ return new Date(Date.parse(day + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
+function pjDayIndex(day){ return Math.round(Date.parse(day + 'T00:00:00Z') / 86400000); }
+// Completed daily closes only: today's candle is still open, so it is dropped.
+function pjCloses(daily, todayDay){ const o = {}; for(const [d, v] of Object.entries(daily || {})) if(d < todayDay && v > 0) o[d] = v; return o; }
+// Points [{ts, v}] -> {day: {ts, v}} keeping the last reading of each UTC day.
+function pjSignalDaily(points){
+  const o = {};
+  for(const p of points || []){ const ts = Number(p && p.ts), v = Number(p && p.v);
+    if(!Number.isFinite(ts) || !Number.isFinite(v) || p.v === null) continue;
+    const d = new Date(ts).toISOString().slice(0, 10); if(!o[d] || ts > o[d].ts) o[d] = { ts, v }; }
+  return o;
+}
+// /api/sentiment-v2/comparison points -> per-signal point lists; /api/sentiment-v2/forecast-research points -> v2r.
+function pjSignalsFrom(cmpPoints, researchPoints){
+  const pick = (k) => (cmpPoints || []).filter((p) => p && typeof p[k] === 'number').map((p) => ({ ts: p.ts, v: p[k] }));
+  const v2r = (researchPoints || []).filter((p) => p && p.research && Number.isFinite(p.research.enhanced_score))
+    .map((p) => ({ ts: p.decision_ts, v: p.research.enhanced_score }));
+  return { v1: pick('v1'), v2: pick('v2'), v2r };
+}
+function pjPairs(sigDaily, closes, H){
+  const out = [];
+  for(const [d, s] of Object.entries(sigDaily || {})){ const c0 = closes[d], d1 = pjDayAdd(d, H), c1 = closes[d1];
+    if(c0 > 0 && c1 > 0) out.push({ day: d, s: s.v, r: Math.log(c1 / c0), resolved: d1 }); }
+  return out.sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+function pjQuantile(sorted, q){ if(!sorted.length) return null; const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i); return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo); }
+function pjMean(a){ return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; }
+function pjStd(a){ if(a.length < 2) return null; const m = pjMean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / (a.length - 1)); }
+function pjNeff(days, H){ return new Set(days.map((d) => Math.floor(pjDayIndex(d) / H))).size; }
+// Drift shift for the current reading, from pairs whose outcome was known by asOfDay.
+function pjConditional(pairs, asOfDay, current, H, k = PJ_K, minBand = PJ_MIN_BAND){
+  const use = (pairs || []).filter((p) => p.resolved <= asOfDay);
+  const base = { n: use.length, shift: 0, weight: 0, band: null, cuts: null, nBand: 0, neffBand: 0, meanBand: null, meanAll: null };
+  if(!Number.isFinite(current)) return { ...base, state: 'no_reading' };
+  if(use.length < 3 * minBand) return { ...base, state: 'insufficient' };
+  const s = use.map((p) => p.s).sort((a, b) => a - b), cuts = [pjQuantile(s, 1 / 3), pjQuantile(s, 2 / 3)];
+  // inclusive cuts when they differ, so tied (integer) scores still split into thirds; equal cuts leave a middle only
+  const bandOf = (v) => (cuts[0] < cuts[1] ? (v <= cuts[0] ? 'low' : v >= cuts[1] ? 'high' : 'mid') : (v < cuts[0] ? 'low' : v > cuts[1] ? 'high' : 'mid'));
+  const band = bandOf(current), inBand = use.filter((p) => bandOf(p.s) === band);
+  const meanAll = pjMean(use.map((p) => p.r)), meanBand = pjMean(inBand.map((p) => p.r)), neffBand = pjNeff(inBand.map((p) => p.day), H);
+  const out = { ...base, band, cuts, nBand: inBand.length, neffBand, meanBand, meanAll };
+  if(inBand.length < minBand) return { ...out, state: 'insufficient' };
+  const weight = neffBand / (neffBand + k);
+  return { ...out, state: 'ok', weight, shift: weight * (meanBand - meanAll) };
+}
+// Daily log returns {day: r} from closes (consecutive days only).
+function pjReturns(closes){ const o = {}; for(const d of Object.keys(closes || {}).sort()){ const p = pjDayAdd(d, -1); if(closes[p] > 0) o[d] = Math.log(closes[d] / closes[p]); } return o; }
+// BTC volatility and, per asset, beta to BTC and residual volatility, over the lookback ending at asOfDay.
+function pjMarket(closesByAsset, asOfDay, lookback = PJ_LOOKBACK_DAYS){
+  const from = pjDayAdd(asOfDay, -lookback), win = (o) => Object.fromEntries(Object.entries(o).filter(([d]) => d > from && d <= asOfDay));
+  const rb = win(pjReturns((closesByAsset || {}).BTC || {})), bVals = Object.values(rb);
+  const sigma = bVals.length >= PJ_MIN_RETURNS ? pjStd(bVals) : null;
+  const assets = { BTC: sigma === null ? { state: 'no_history', n: bVals.length } : { state: 'ok', beta: 1, residSigma: 0, n: bVals.length } };
+  for(const [a, closes] of Object.entries(closesByAsset || {})){ if(a === 'BTC') continue;
+    const ra = win(pjReturns(closes)), days = Object.keys(ra).filter((d) => d in rb);
+    if(sigma === null || days.length < PJ_MIN_RETURNS){ assets[a] = { state: 'no_history', n: days.length }; continue; }
+    const x = days.map((d) => rb[d]), y = days.map((d) => ra[d]), mx = pjMean(x), my = pjMean(y);
+    let cov = 0, vx = 0; for(let i = 0; i < x.length; i++){ cov += (x[i] - mx) * (y[i] - my); vx += (x[i] - mx) * (x[i] - mx); }
+    const beta = vx > 0 ? cov / vx : 0, resid = y.map((v, i) => v - my - beta * (x[i] - mx));
+    assets[a] = { state: 'ok', beta, residSigma: pjStd(resid), n: days.length };
+  }
+  return { asOfDay, lookback, sigma, assets };
+}
+function pjRng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function pjNormals(rand, n){ const z = new Array(n); for(let i = 0; i < n; i += 2){ const u = Math.max(rand(), 1e-12), v = rand(), r = Math.sqrt(-2 * Math.log(u)); z[i] = r * Math.cos(2 * Math.PI * v); if(i + 1 < n) z[i + 1] = r * Math.sin(2 * Math.PI * v); } return z; }
+// Portfolio value P10/P50/P90 per line. Same random draws for every line (common random numbers), so lines differ only
+// by their drift shift. Holdings without a price history are held at today's price; cash is constant.
+function pjSimulate(holdings, cashUsd, market, H, shifts, n = PJ_SIMS, seed = 20261121){
+  const rand = pjRng(seed), zb = pjNormals(rand, n), mod = [], fixed = [];
+  let fixedValue = Number(cashUsd) || 0;
+  for(const h of holdings || []){ const st = market.assets[h.asset];
+    if(market.sigma !== null && st && st.state === 'ok') mod.push({ ...h, beta: st.beta, rs: st.residSigma, z: h.asset === 'BTC' ? null : pjNormals(rand, n) });
+    else { fixed.push(h.asset); fixedValue += h.qty * h.price; } }
+  const sd = market.sigma === null ? 0 : market.sigma * Math.sqrt(H), out = {};
+  for(const [line, shift] of Object.entries(shifts)){
+    const vals = new Float64Array(n);
+    for(let i = 0; i < n; i++){ const R = shift + sd * zb[i]; let v = fixedValue;
+      for(const h of mod) v += h.qty * h.price * Math.exp(h.beta * R + (h.z ? h.rs * Math.sqrt(H) * h.z[i] : 0));
+      vals[i] = v; }
+    const s = Array.from(vals).sort((a, b) => a - b);
+    out[line] = { p10: pjQuantile(s, 0.1), p50: pjQuantile(s, 0.5), p90: pjQuantile(s, 0.9) };
+  }
+  return { lines: out, fixedAssets: fixed, modelledAssets: mod.map((h) => h.asset), nowValue: fixedValue + mod.reduce((x, h) => x + h.qty * h.price, 0) };
+}
+function pjPinball(q, y, tau){ const e = y - q; return Math.max(tau * e, (tau - 1) * e); }
+// Walk-forward (pseudo-prospective) scoring on BTC: at each decision day only outcomes resolved by that day feed the
+// shift and the volatility. Scores the P10/P50/P90 of the line against Neutral on the same days.
+function pjEvaluate(pairs, btcCloses, H, k = PJ_K){
+  const taus = [[0.1, -PJ_Z90], [0.5, 0], [0.9, PJ_Z90]];
+  let n = 0, active = 0, plL = 0, plN = 0, covL = 0, covN = 0; const days = [];
+  for(const p of pairs || []){
+    const c = pjConditional(pairs, p.day, p.s, H, k), m = pjMarket({ BTC: btcCloses }, p.day);
+    if(m.sigma === null) continue;
+    const sd = m.sigma * Math.sqrt(H); n++; days.push(p.day); if(c.shift !== 0) active++;
+    for(const [tau, z] of taus){ plL += pjPinball(c.shift + sd * z, p.r, tau) / 3; plN += pjPinball(sd * z, p.r, tau) / 3; }
+    if(p.r >= c.shift - sd * PJ_Z90 && p.r <= c.shift + sd * PJ_Z90) covL++;
+    if(p.r >= -sd * PJ_Z90 && p.r <= sd * PJ_Z90) covN++;
+  }
+  const neff = pjNeff(days, H);
+  return { horizon: H, n, neff, active, sufficient: neff >= PJ_MIN_EVAL_NEFF,
+    pinballLine: n ? plL / n : null, pinballNeutral: n ? plN / n : null, skill: n && plN > 0 ? 1 - plL / plN : null,
+    coverageLine: n ? covL / n : null, coverageNeutral: n ? covN / n : null, firstDay: days[0] || null, lastDay: days[days.length - 1] || null };
+}
+// Copy of the accounting ledger for projections only (owner decision OD-15). The accounting ledger is read once, here.
+function pjMakeCopy(store, now){
+  const s = store || {};
+  return JSON.parse(JSON.stringify({ version: 1, kind: 'projection_copy', copied_at: now, source_rows: (s.txs || []).length,
+    accounts: s.accounts || [], txs: s.txs || [], fxRates: s.fxRates || null }));
+}
+function pjValidCopy(c){ return !!(c && c.version === 1 && c.kind === 'projection_copy' && Array.isArray(c.accounts) && Array.isArray(c.txs)); }
+// Whole projection view model (pure). input: { positions (pfCompute of the copy), cashUsd, cashComplete, dailyByAsset,
+// signals {v1, v2, v2r: [{ts, v}]}, now, H }.
+function pjModel(input){
+  const now = input.now, today = new Date(now).toISOString().slice(0, 10), asOf = pjDayAdd(today, -1), H = input.H;
+  const closes = {}; for(const [a, o] of Object.entries(input.dailyByAsset || {})) closes[a] = pjCloses(o, today);
+  const held = (input.positions || []).filter((p) => p.qty > 1e-12);
+  const unpriced = held.filter((p) => !(p.price > 0)).map((p) => p.asset);
+  const holdings = held.filter((p) => p.price > 0).map((p) => ({ asset: p.asset, qty: p.qty, price: p.price }));
+  const market = pjMarket(closes, asOf);
+  const btc = closes.BTC || {}, lines = [], shifts = { neutral: 0 }, evals = {};
+  for(const L of PJ_LINES){
+    if(L.key === 'neutral'){ lines.push({ ...L, state: 'ok', reading: null, cond: null }); continue; }
+    const pts = (input.signals || {})[L.key] || [], latest = pts.reduce((a, p) => (!a || p.ts > a.ts ? p : a), null);
+    const pairs = pjPairs(pjSignalDaily(pts), btc, H);
+    evals[L.key] = pjEvaluate(pairs, btc, H);
+    if(!latest){ lines.push({ ...L, state: 'no_reading', reading: null, cond: null }); shifts[L.key] = 0; continue; }
+    const stale = now - latest.ts > PJ_STALE_MS;
+    const cond = pjConditional(pairs, asOf, stale ? NaN : latest.v, H);
+    shifts[L.key] = cond.shift;
+    lines.push({ ...L, state: stale ? 'stale' : cond.state, reading: latest, cond, pairs: pairs.length });
+  }
+  const sim = holdings.length ? pjSimulate(holdings, input.cashUsd, market, H, shifts) : null;
+  const band = (k) => { const l = lines.find((x) => x.key === k); return l && l.cond && l.state === 'ok' ? l.cond.band : null; };
+  const b1 = band('v1'), b2 = band('v2');
+  const disagree = !!(b1 && b2 && ((b1 === 'low' && b2 === 'high') || (b1 === 'high' && b2 === 'low')));
+  return { version: PJ_VERSION, H, asOfDay: asOf, market, lines, shifts, sim, evals, disagree, bands: { v1: b1, v2: b2 }, unpriced,
+    cashUsd: input.cashUsd, cashComplete: input.cashComplete !== false };
+}
+// Pre-declared reading of the walk-forward score (docs/PORTFOLIO_PROJECTION.md §5): a line "beats Neutral" only with at
+// least PJ_MIN_EVAL_NEFF non-overlapping windows and a pinball skill of at least +2%.
+var PJ_MIN_SKILL = 0.02;
+function pjVerdict(ev){
+  if(!ev || !ev.n) return { code: 'no_data', text: 'No resolved history yet' };
+  if(!ev.sufficient) return { code: 'insufficient', text: `Not enough history (${ev.neff} of ${PJ_MIN_EVAL_NEFF} independent windows)` };
+  if(ev.active === 0) return { code: 'inactive', text: 'Never moved away from Neutral' };
+  return ev.skill >= PJ_MIN_SKILL ? { code: 'beats', text: 'Beats Neutral on this sample' } : { code: 'no_gain', text: 'No measurable improvement over Neutral' };
 }
 // ---- END view-model helpers ----
 
@@ -4499,7 +4697,8 @@ function renderPortfolio(){
     _pf.prices ? `Prices: Hyperliquid mid prices (USD), fetched ${esc(fmtUtc(_pf.pricesAt))}.` : 'Loading prices…';
   const fxLine = m.fxUse.ecb || m.fxUse.manual || m.fxUse.missing ? ` · Currency conversion: ${m.fxUse.manual} with your own rate, ${m.fxUse.ecb} with the ECB reference rate${m.fxSource ? ' (fetched ' + esc(fmtUtc(m.fxSource.fetchedAt)) + ')' : ''}, ${m.fxUse.missing} missing${m.fxUse.missing ? ' (<button type="button" class="underline" onclick="goRoute(\'portfolio/transactions\')">fetch ECB rates</button>)' : ''}.` : '';
   document.getElementById('pfPriceNote').innerHTML = priceLine + fxLine + (_pf.fxNow ? ` · EUR/USD ${_pf.fxNow.toFixed(4)} (ECB via Frankfurter${_pf.fxDate ? ', ' + esc(_pf.fxDate) : ''}), used only to show cash held in EUR.` : _pf.fxErr ? ' · EUR/USD unavailable: EUR cash is not converted.' : '');
-  for(const k of ['holdings', 'transactions', 'planning']) document.getElementById('pf-' + k).classList.toggle('hidden', k !== tab);
+  for(const k of ['holdings', 'transactions', 'planning', 'projection']) document.getElementById('pf-' + k).classList.toggle('hidden', k !== tab);
+  if(tab === 'projection'){ renderProjection(); return; }
   if(tab === 'holdings') renderPfHoldings(m);
   if(tab === 'transactions') renderPfTransactions(m);
   if(tab === 'planning') renderPfPlanning(m);
@@ -4896,6 +5095,114 @@ async function loadBeHistory(assets){
   }catch(e){ _beHist.err = e.message; }
   _beHist.busy = false;
   if(activeView === 'portfolio' && pfView() === 'planning') renderPortfolio();
+}
+// ---- Portfolio › Projection (OD-15). Reads only the projection COPY (its own storage key); the accounting ledger is
+// read once, when the owner clicks "Create copy" / "Refresh copy". Inputs: V1/V2 history (comparison, all), V2 research
+// scores (forecast-research), Hyperliquid daily closes (free). Nothing is sent anywhere; nothing is written server-side. ----
+var PJ_COPY_KEY = 'cpv2_portfolio_projection_v1';
+var _pj = { copy: undefined, copyErr: null, H: 7, cmp: null, research: null, daily: {}, dailyAt: 0, loadedAt: 0, busy: false, err: [], models: null, modelKey: null, tried: new Set() };
+function pjLoadCopy(){
+  if(_pj.copy !== undefined) return _pj.copy;
+  try{ const c = JSON.parse(localStorage.getItem(PJ_COPY_KEY) || 'null'); _pj.copy = pjValidCopy(c) ? c : null; }catch(e){ _pj.copy = null; }
+  return _pj.copy;
+}
+function pjCopyNow(){
+  const c = pjMakeCopy(pfLoad(), Date.now());
+  try{ localStorage.setItem(PJ_COPY_KEY, JSON.stringify(c)); _pj.copy = c; _pj.copyErr = null; }catch(e){ _pj.copyErr = 'could not save the copy in this browser (' + e.message + ')'; }
+  _pj.modelKey = null; renderProjection(); pjLoad(false);
+}
+async function pjLoad(force){
+  const copy = pjLoadCopy(); if(!copy || _pj.busy) return;
+  const m = pfCompute(copy, _pf.prices, _pf.fxNow);
+  const assets = [...new Set(['BTC'].concat(m.positions.filter((p) => p.qty > PF_EPS && !pfIsFiat(p.asset)).map((p) => p.asset)))];
+  // assets already tried count as loaded (a failed asset is not retried on every render; it is held at today's price)
+  const fresh = !force && _pj.loadedAt && Date.now() - _pj.loadedAt < 30 * 60000 && assets.every((a) => _pj.tried.has(a));
+  if(fresh) return;
+  _pj.busy = true; const errs = [];
+  const now = Date.now(), start = now - 400 * 86400000;
+  const [cmp, fr] = await Promise.all([sv2Comparison('all', !!force), getJson(WORKER_URL + '/api/sentiment-v2/forecast-research?limit=96')]);
+  if(cmp.ok) _pj.cmp = cmp.data; else errs.push('V1/V2 history: ' + cmp.error);
+  if(fr.ok) _pj.research = fr.data; else errs.push('V2 research scores: ' + fr.error);
+  for(const a of assets){
+    try{ const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'candleSnapshot', req: { coin: a, interval: '1d', startTime: start, endTime: now } }) });
+      if(!r.ok) throw new Error('HTTP ' + r.status); _pj.daily[a] = pfCandlesToDaily(await r.json()); }
+    catch(e){ errs.push(a + ' prices: ' + e.message); }
+    _pj.tried.add(a);
+  }
+  _pj.err = errs; _pj.loadedAt = Date.now(); _pj.busy = false; _pj.modelKey = null;
+  if(activeView === 'portfolio' && pfView() === 'projection') renderProjection();
+}
+function pjModels(){
+  const copy = pjLoadCopy(); if(!copy || !_pj.cmp) return null;
+  const key = [copy.copied_at, _pf.pricesAt, _pj.loadedAt, _pf.fxNow].join('|');
+  if(_pj.modelKey === key && _pj.models) return _pj.models;
+  const m = pfCompute(copy, _pf.prices, _pf.fxNow);
+  const signals = pjSignalsFrom(_pj.cmp.points, _pj.research ? _pj.research.points : null), now = Date.now();
+  const positions = m.positions.filter((p) => !pfIsFiat(p.asset));
+  const input = { positions, cashUsd: m.totals.cashUsd.usd, cashComplete: m.totals.cashUsd.complete, dailyByAsset: _pj.daily, signals, now };
+  _pj.models = {}; for(const H of PJ_HORIZONS) _pj.models[H] = pjModel({ ...input, H });
+  _pj.modelKey = key; return _pj.models;
+}
+function renderProjection(){
+  const copy = pjLoadCopy(), btn = document.getElementById('pjCopyBtn');
+  btn.textContent = copy ? 'Refresh copy' : 'Create copy';
+  btn.onclick = () => { if(!copy || confirm('Replace the projection copy with the current portfolio? The accounting portfolio itself is not changed.')) pjCopyNow(); };
+  const main = pfLoad();
+  document.getElementById('pjCopyNote').innerHTML = (_pj.copyErr ? chip('NOT SAVED', 'bad') + ' ' + esc(_pj.copyErr) + ' · ' : '') + (copy
+    ? `Copy made ${esc(fmtUtc(copy.copied_at))} from ${copy.source_rows} ledger row${copy.source_rows === 1 ? '' : 's'}${main.txs.length !== copy.source_rows ? ` · <span class="text-[#FBBF24]">the portfolio now has ${main.txs.length} rows: refresh the copy to include the changes</span>` : ''}. Stored only in this browser, separately from the accounting ledger, which this page does not read or change. Savings interest is not included.`
+    : 'No copy yet. "Create copy" duplicates your portfolio (accounts and transactions) into a separate projection portfolio in this browser. Projections use only that copy.');
+  const hb = document.getElementById('pjHorizonBtns');
+  hb.innerHTML = PJ_HORIZONS.map((H) => `<button type="button" data-h="${H}" aria-pressed="${H === _pj.H}" class="px-2 py-1 rounded-md border text-xs ${H === _pj.H ? 'border-[#00E5FF] text-[#00E5FF]' : 'border-[#3B494C] text-[#BAC9CD]'}">${H === 1 ? '1 day' : H + ' days'}</button>`).join('');
+  hb.querySelectorAll('button').forEach((b) => { b.onclick = () => { _pj.H = +b.dataset.h; renderProjection(); }; });
+  const ans = document.getElementById('pjAnswer'), tbl = document.getElementById('pjTable'), notes = document.getElementById('pjNotes'), ev = document.getElementById('pjEval');
+  if(!copy){ ans.textContent = 'Create the projection copy to see the projection.'; tbl.innerHTML = ''; notes.innerHTML = ''; ev.innerHTML = ''; return; }
+  pjLoad(false);
+  if(_pf.pricesErr){ ans.innerHTML = `${chip('PRICES UNAVAILABLE', 'bad')} ${esc(_pf.pricesErr)}: no projection rather than a guess.`; tbl.innerHTML = ''; return; }
+  const models = _pf.prices ? pjModels() : null;
+  if(!models){ ans.textContent = _pj.err.length ? 'Data unavailable: ' + _pj.err.join(' · ') : 'Loading history and prices…'; tbl.innerHTML = ''; ev.innerHTML = ''; return; }
+  const M = models[_pj.H], hTxt = _pj.H === 1 ? '1 day' : _pj.H + ' days';
+  if(!M.sim){ ans.textContent = 'The copy holds no priced assets: nothing to project.'; tbl.innerHTML = ''; }
+  else {
+    const N = M.sim.lines.neutral, pct = (v) => (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(2) + '%';
+    const others = M.lines.filter((l) => l.key !== 'neutral').map((l) => { const d = M.sim.lines[l.key].p50 - N.p50;
+      return l.state === 'ok' && Math.abs(d) >= 0.5 ? `${esc(l.label)} moves the median by ${pfSigned(d)}` : `${esc(l.label)}: ${esc(pjStateText(l))}`; });
+    ans.innerHTML = `In ${hTxt}, the projection portfolio (now ${pfMoney(M.sim.nowValue)}) is projected between <b>${pfMoney(N.p10)}</b> and <b>${pfMoney(N.p90)}</b> (Neutral, median ${pfMoney(N.p50)}). ${others.join(' · ')}.`
+      + (M.disagree ? ` ${chip('V1 AND V2 DISAGREE', 'warn')} V1 is in its ${M.bands.v1} third and V2 in its ${M.bands.v2} third.` : '');
+    const lo = Math.min(...Object.values(M.sim.lines).map((x) => x.p10)), hi = Math.max(...Object.values(M.sim.lines).map((x) => x.p90)), W = hi - lo || 1;
+    const bar = (x) => `<div class="relative h-3 w-40 max-w-full bg-[#0B0E11] rounded" aria-hidden="true"><div class="absolute h-3 rounded bg-[#00E5FF]/30" style="left:${(x.p10 - lo) / W * 100}%;width:${Math.max(1, (x.p90 - x.p10) / W * 100)}%"></div><div class="absolute h-3 w-0.5 bg-[#00E5FF]" style="left:${(x.p50 - lo) / W * 100}%"></div></div>`;
+    tbl.innerHTML = `<table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Line</th><th class="px-2 font-normal">Reading now</th><th class="px-2 font-normal text-right">BTC drift</th><th class="px-2 font-normal text-right">P10</th><th class="px-2 font-normal text-right">Median</th><th class="px-2 font-normal text-right">P90</th><th class="px-2 font-normal">Range</th><th class="px-2 font-normal">Evidence</th></tr></thead><tbody>
+      ${M.lines.map((l) => { const x = M.sim.lines[l.key];
+        return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold whitespace-nowrap">${esc(l.label)}</td><td class="px-2">${pjReadingText(l)}</td><td class="px-2 font-mono-data text-right">${pct(M.shifts[l.key] || 0)}</td><td class="px-2 font-mono-data text-right">${pfMoney(x.p10, 0)}</td><td class="px-2 font-mono-data text-right">${pfMoney(x.p50, 0)}</td><td class="px-2 font-mono-data text-right">${pfMoney(x.p90, 0)}</td><td class="px-2">${bar(x)}</td><td class="px-2 text-[#8A9599]">${esc(pjEvidenceText(l))}</td></tr>`; }).join('')}
+    </tbody></table>`;
+  }
+  const mk = M.market, betas = Object.entries(mk.assets).filter(([a, s]) => a !== 'BTC' && s.state === 'ok').map(([a, s]) => `${esc(a)} β ${s.beta.toFixed(2)}`);
+  notes.innerHTML = [`As of the ${esc(M.asOfDay)} close · BTC daily volatility ${mk.sigma === null ? 'unknown' : (mk.sigma * 100).toFixed(2) + '%'} (last ${PJ_LOOKBACK_DAYS} days)${betas.length ? ' · ' + betas.join(' · ') : ''}`,
+    M.sim && M.sim.fixedAssets.length ? `Held at today's price (no price history): ${M.sim.fixedAssets.map(esc).join(', ')}` : '',
+    M.unpriced.length ? `No current price, left out: ${M.unpriced.map(esc).join(', ')}` : '',
+    M.cashComplete ? '' : 'Some cash has no USD rate and is left out.',
+    _pj.err.length ? 'Partly unavailable: ' + _pj.err.map(esc).join(' · ') : '',
+    'Research stage, not a forecast and not advice.'].filter(Boolean).join(' · ');
+  ev.innerHTML = `<table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Line</th><th class="px-2 font-normal">Horizon</th><th class="px-2 font-normal text-right">Days scored</th><th class="px-2 font-normal text-right">Independent</th><th class="px-2 font-normal text-right">Moved off Neutral</th><th class="px-2 font-normal text-right">In P10–P90 (line / Neutral)</th><th class="px-2 font-normal text-right">Skill</th><th class="px-2 font-normal">Reading</th></tr></thead><tbody>
+    ${PJ_LINES.filter((l) => l.key !== 'neutral').flatMap((l) => PJ_HORIZONS.map((H) => { const e = models[H].evals[l.key], v = pjVerdict(e);
+      const tone = v.code === 'beats' ? 'good' : v.code === 'no_gain' ? 'warn' : 'neutral';
+      return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold whitespace-nowrap">${esc(l.label)}</td><td class="px-2">${H === 1 ? '1 day' : H + ' days'}</td><td class="px-2 font-mono-data text-right">${e.n}</td><td class="px-2 font-mono-data text-right">${e.neff}</td><td class="px-2 font-mono-data text-right">${e.active}</td><td class="px-2 font-mono-data text-right">${e.n ? Math.round(e.coverageLine * 100) + '% / ' + Math.round(e.coverageNeutral * 100) + '%' : '—'}</td><td class="px-2 font-mono-data text-right">${e.skill === null ? '—' : (e.skill >= 0 ? '+' : '−') + Math.abs(e.skill * 100).toFixed(1) + '%'}</td><td class="px-2">${chip(v.code === 'beats' ? 'BETTER' : v.code === 'no_gain' ? 'NO GAIN' : 'NOT YET', tone)} <span class="text-[#8A9599]">${esc(v.text)}</span></td></tr>`; })).join('')}
+  </tbody></table>`;
+}
+function pjStateText(l){
+  if(l.state === 'no_reading') return 'no reading yet';
+  if(l.state === 'stale') return 'latest reading older than 36 h, not used';
+  if(l.state === 'insufficient') return 'not enough history, so same as Neutral';
+  return 'no shift';
+}
+function pjReadingText(l){
+  if(!l.reading) return l.key === 'neutral' ? '<span class="text-[#8A9599]">—</span>' : '<span class="text-[#8A9599]">none yet</span>';
+  const band = l.cond && l.cond.band ? ` · ${l.cond.band}` : '', h = Math.max(0, Math.round((Date.now() - l.reading.ts) / 3600000));
+  return `<span class="whitespace-nowrap" title="reading of ${esc(fmtUtc(l.reading.ts))}"><span class="font-mono-data">${Number(l.reading.v).toFixed(1)}</span><span class="text-[#8A9599]">${esc(band)} · ${h < 1 ? 'now' : h + ' h ago'}</span></span>`;
+}
+function pjEvidenceText(l){
+  if(l.key === 'neutral') return 'baseline';
+  if(!l.cond || l.state !== 'ok') return pjStateText(l);
+  return `${l.cond.neffBand} independent windows in this third · weight ${Math.round(l.cond.weight * 100)}%`;
 }
 function renderPfBreakEvenProb(m){
   const host = document.getElementById('pfBeProb');

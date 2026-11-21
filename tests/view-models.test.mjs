@@ -205,7 +205,12 @@ test('alerts: passing needs no open alert and a recent successful run; unreadabl
 test('page source: one write request, user-entered key only, no embedded secrets', () => {
   // Every POST named: Hyperliquid market-data reads (the API only offers POST) and V1's two Gemini routes (explicit clicks).
   const posts = SRC.match(/method:\s*['"]POST['"]/g) || [];
-  assert.equal(posts.length, 6, 'six POSTs: Hyperliquid allMids + 3 candleSnapshot reads (read-only market data; one is the portfolio value history), V1 Narrative and Trader Analysis (clicks). The analyst relay left with Learning & Audit');
+  assert.equal(posts.length, 7, 'seven POSTs: Hyperliquid allMids + 4 candleSnapshot reads (read-only market data; one is the portfolio value history, one the Projection tab, OD-15), V1 Narrative and Trader Analysis (clicks). The analyst relay left with Learning & Audit');
+  // Projection tab (OD-15): its only POST is a Hyperliquid daily-candle read; it sends no holdings anywhere.
+  const pj = SRC.slice(SRC.indexOf('async function pjLoad('), SRC.indexOf('function pjModels('));
+  assert.equal((pj.match(/method:\s*['"]POST['"]/g) || []).length, 1);
+  assert.match(pj, /type: 'candleSnapshot', req: \{ coin: a, interval: '1d', startTime: start, endTime: now \}/);
+  assert.equal((pj.match(/body:/g) || []).length, 1, 'one request body: the asset symbol and dates only');
   assert.match(SRC, /type: 'candleSnapshot', req: \{ coin: a, interval: '1d'/);
   const tr = SRC.slice(SRC.indexOf('async function runTraderAnalysis()'), SRC.indexOf('// ---- Settings:'));
   assert.match(tr, /fetch\(V1_WORKER_URL \+ '\/trader-analysis-gemini', \{ method: 'POST'/);

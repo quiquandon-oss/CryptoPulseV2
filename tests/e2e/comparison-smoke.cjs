@@ -69,8 +69,8 @@ async function common(p, name, errs) {
         const s = SUM.summary;
         if (scenario === 'btc-only') {
           ok(exec.includes(pct(s.accuracy.v1.rate)) && exec.includes(pct(s.accuracy.v2_final.rate)), `${tag}: A shows the backend V1 / V2 accuracy`);
-          ok(/V2 baseline/.test(exec) && /95% CI/.test(exec) && new RegExp('n=' + s.accuracy.v1.n).test(exec), `${tag}: A shows baseline, CI and n`);
-        } else ok(/V1 production/.test(exec) && /V2 final/.test(exec) && /V2 baseline/.test(exec) && /95% CI \d/.test(exec) && /n=\d+/.test(exec), `${tag}: A shows pooled V1 / V2 / baseline with CI and n`);
+          ok(/Forecast \(/.test(exec) && /95% CI/.test(exec) && new RegExp('n=' + s.accuracy.v1.n).test(exec), `${tag}: A shows baseline, CI and n`);
+        } else ok(/V1 sentiment/.test(exec) && /Forecast \+ GLM/.test(exec) && /Forecast \(/.test(exec) && /95% CI \d/.test(exec) && /n=\d+/.test(exec), `${tag}: A shows pooled V1 / V2 / baseline with CI and n`);
         ok(/Resolved comparable predictions/.test(exec) && /V1 coverage \/ missing/.test(exec) && /Agreement \/ disagreement/.test(exec), `${tag}: A coverage, missing, agreement`);
         ok(/V1 higher/.test(exec) && /\+?-?\d+(\.\d)? pp/.test(exec), `${tag}: difference shown because the backend claim supports it (${s.claim})`);
         ok(/^BTC: No: V1 was right more often|^No: V1 was right more often/.test(head), `${tag}: headline follows the backend claim`);

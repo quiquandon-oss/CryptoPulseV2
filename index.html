@@ -669,19 +669,44 @@
 
   <div id="view-comparison" class="hidden">
     <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpTitle">
-      <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div class="min-w-0"><h2 id="cmpTitle" class="text-lg font-bold tracking-tight">Comparison <span class="text-xs font-normal text-[#BAC9CD]">· V1 vs V2 baseline vs V2 final, read-only</span></h2>
-        <p class="text-xs text-[#BAC9CD] mt-1">BTC. Each V2 prediction is a decision; V1's reading at or before it (at most 3 h old) is aligned to it, and all three are scored against the same resolved market outcome. Read from the backend's comparison route; nothing here changes either engine.</p></div>
-        <div class="flex gap-2 flex-wrap"><div id="cmpHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div><div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></div>
+      <h2 id="cmpTitle" class="text-lg font-bold tracking-tight">Is Sentiment V2 better than V1? <span class="text-xs font-normal text-[#BAC9CD]">· outcome comparison, read-only</span></h2>
+      <p class="text-xs text-[#BAC9CD] mt-1">Each V2 prediction is a decision. V1's reading at or before it (at most 3 h old) is aligned to it, and V1, V2 baseline and V2 final are scored against the same resolved market outcome. V1 is a market-wide sentiment score: the same V1 reading is compared with every asset. V1 direction uses the <b class="text-[#E1E2E7]">proposed</b> 45/55 convention (OD-12), not production logic. Nothing here changes either engine.</p>
+      <div class="flex gap-x-4 gap-y-2 flex-wrap mt-3">
+        <label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">Asset</span><div id="cmpAssets" role="group" aria-label="Asset" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></label>
+        <label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">Horizon</span><div id="cmpHorizons" role="group" aria-label="Horizon" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></label>
+        <label class="flex flex-col gap-0.5 min-w-0"><span class="text-[10px] text-[#8A9599]">Window (decisions)</span><div id="cmpPresets" role="group" aria-label="Time range" class="flex gap-1 bg-[#0B0E11] border border-[#3B494C] rounded-lg p-1"></div></label>
       </div>
-      <div id="cmpOutcome" class="mt-3 text-xs" role="status">Loading…</div>
+      <p class="text-[10px] text-[#8A9599] mt-2">The window selects decisions; short windows rarely reach a usable sample, so All is the default. Up to the newest 500 decisions per asset and horizon are read.</p>
+      <div id="cmpHeadline" class="mt-3 text-sm" role="status">Loading…</div>
     </section>
-    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpRecTitle"><h3 id="cmpRecTitle" class="text-sm font-semibold mb-1">Recent aligned decisions</h3>
-      <p class="text-[11px] text-[#8A9599] mb-2">Newest first, up to 50. V1 direction uses the proposed 45/55 band; "—" means V1 had no reading within 3 h. Outcomes appear only after resolution.</p>
-      <div id="cmpRecords" class="overflow-x-auto text-xs">Loading…</div></section>
-    <section class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpSentTitle"><h3 id="cmpSentTitle" class="text-sm font-semibold mb-1">Sentiment levels <span class="text-[#BAC9CD] font-normal text-xs">· descriptive</span></h3>
-      <p class="text-[11px] text-[#8A9599] mb-2">V1 and V2 sentiment at the same timestamps (no outcomes). Same range as above.</p>
-      <div id="cmpSummary" class="text-xs" role="status">Loading…</div></section>
+    <section id="cmpSecA" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpATitle"><h3 id="cmpATitle" class="text-sm font-semibold mb-2">A. Executive comparison <span class="text-[#BAC9CD] font-normal text-xs">· directional accuracy on resolved calls</span></h3>
+      <div id="cmpExec" class="text-xs" role="status">Loading…</div></section>
+    <section id="cmpSecB" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpBTitle"><h3 id="cmpBTitle" class="text-sm font-semibold mb-1">B. Performance over time <span class="text-[#BAC9CD] font-normal text-xs">· accuracy by calendar week (UTC)</span></h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Resolved and called decisions only, bucketed by the week of the decision. Hollow points and dashed lines mark weeks with fewer than 5 scored calls (unreliable). Pending decisions are shown as bars and never enter an accuracy.</p>
+      <div id="cmpTrendState" class="text-xs" role="status">Loading…</div>
+      <div id="cmpTrendWrap" class="relative h-[280px] hidden"><canvas id="cmpTrendChart" role="img" aria-label="V1 and V2 directional accuracy by week"></canvas></div></section>
+    <section id="cmpSecC" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpCTitle"><h3 id="cmpCTitle" class="text-sm font-semibold mb-1">C. Agreement and disagreement <span class="text-[#BAC9CD] font-normal text-xs">· V1 against V2 final</span></h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Share of decisions where both made the same call, opposite calls, either made no call, or V1 had no reading. Per asset when All is selected.</p>
+      <div id="cmpAgreeState" class="text-xs" role="status">Loading…</div>
+      <div id="cmpAgreeWrap" class="relative h-[200px] hidden"><canvas id="cmpAgreeChart" role="img" aria-label="Agreement between V1 and V2 final"></canvas></div>
+      <div id="cmpOpposite" class="mt-3 text-xs overflow-x-auto"></div></section>
+    <section id="cmpSecD" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpDTitle"><h3 id="cmpDTitle" class="text-sm font-semibold mb-1">D. Asset and horizon analysis</h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Accuracy of V1 and V2 per asset (at the selected horizon) and per horizon (assets pooled), with the number of scored calls above each bar. Assets the backend does not serve yet are listed, not drawn.</p>
+      <div id="cmpDState" class="text-xs" role="status">Loading…</div>
+      <div id="cmpDWrap" class="grid grid-cols-1 lg:grid-cols-2 gap-4 hidden">
+        <div class="min-w-0"><p class="text-[11px] text-[#BAC9CD] mb-1">Per asset · <span id="cmpDAssetH"></span></p><div class="relative h-[240px]"><canvas id="cmpAssetChart" role="img" aria-label="Accuracy per asset"></canvas></div></div>
+        <div class="min-w-0"><p class="text-[11px] text-[#BAC9CD] mb-1">Per horizon · selected assets pooled</p><div class="relative h-[240px]"><canvas id="cmpHorizonChart" role="img" aria-label="Accuracy per horizon"></canvas></div></div></div>
+      <div id="cmpAvail" class="mt-3 text-xs overflow-x-auto"></div></section>
+    <section id="cmpSecE" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpETitle"><h3 id="cmpETitle" class="text-sm font-semibold mb-1">E. V2 incremental contribution <span class="text-[#BAC9CD] font-normal text-xs">· GLM, BTC 24 h only</span></h3>
+      <div id="cmpGlm" class="text-xs" role="status">Loading…</div>
+      <button type="button" onclick="goRoute('sentiment-v2/evidence')" class="mt-3 text-[11px] font-semibold text-[#00E0FF] hover:underline">GLM evidence and the GLM-PE-1 evaluation (coverage, freshness) →</button></section>
+    <section id="cmpSecF" class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6" aria-labelledby="cmpFTitle"><h3 id="cmpFTitle" class="text-sm font-semibold mb-1">F. Detailed decisions</h3>
+      <p class="text-[11px] text-[#8A9599] mb-2">Newest first, following the controls above. ✓ right, ✗ wrong, — not scored (no call, no V1 reading, or still pending). Scroll sideways inside the table.</p>
+      <div id="cmpTable" class="overflow-x-auto text-xs max-w-full" role="status">Loading…</div>
+      <div class="mt-2 flex items-center gap-3 flex-wrap"><button type="button" id="cmpMore" class="hidden px-3 py-1.5 rounded-md text-xs font-semibold border border-[#3B494C] text-[#BAC9CD] hover:text-[#E1E2E7]">Show more</button><span id="cmpTableCount" class="text-[11px] text-[#8A9599]"></span></div></section>
+    <details class="rounded-2xl border border-[#3B494C] bg-[#191C1F] p-4 sm:p-5 mb-6"><summary class="cursor-pointer text-sm font-semibold" id="cmpSentTitle">Sentiment levels <span class="text-[#BAC9CD] font-normal text-xs">· descriptive, BTC, no outcomes</span></summary>
+      <p class="text-[11px] text-[#8A9599] my-2">V1 and V2 sentiment at the same timestamps (no outcomes). Same window as above.</p>
+      <div id="cmpSummary" class="text-xs" role="status">Loading…</div></details>
   </div>
 
   <div id="view-portfolio" class="hidden">
@@ -1678,6 +1703,7 @@ var CMP_CLAIM_TEXT = {
 function cmpSummaryModel(res){
   if(!res || !res.ok){
     const d = res && res.data, err = (res && res.error) || 'request failed';
+    if(cmpFeedStatus(res).state === 'unavailable') return { state: 'unavailable', note: 'Not available yet: the deployed backend does not serve this asset (' + err + ').' };
     if(err === 'not_found') return { state: 'not_deployed', note: 'The comparison route is not live on this backend yet (PulseWorkerV2 #182 is merged; its production deploy is pending).' };
     return { state: 'error', note: 'The comparison could not be loaded (' + err + (d && d.reason ? ', ' + d.reason : '') + ').' };
   }
@@ -1695,8 +1721,198 @@ function cmpRecordRows(res, n){
   const recs = res && res.ok && res.data && Array.isArray(res.data.records) ? res.data.records : null;
   if(!recs) return null;
   return recs.slice(0, n).map((r) => ({ ts: r.decision_ts, target: r.target_ts, sha: r.git_commit_sha ? String(r.git_commit_sha).slice(0, 7) : null,
-    v1: r.v1 && r.v1.score !== null && r.v1.score !== undefined ? { score: r.v1.score, dir: r.v1.direction, source: r.v1.source, ageMin: r.v1.age_ms !== null ? Math.round(r.v1.age_ms / 60000) : null } : null,
-    v1Missing: r.v1 ? r.v1.missing_reason : 'missing', base: r.v2_baseline || {}, fin: r.v2_final || {}, outcome: r.outcome || { status: 'pending' } }));
+    v1: r.v1 && r.v1.score !== null && r.v1.score !== undefined ? { score: r.v1.score, dir: r.v1.direction, source: r.v1.source, ageMin: typeof r.v1.age_ms === 'number' ? Math.round(r.v1.age_ms / 60000) : null } : null,
+    asset: r.asset || null, horizon: r.horizon_hours || null, v1Missing: r.v1 ? r.v1.missing_reason : 'missing', base: r.v2_baseline || {}, fin: r.v2_final || {}, outcome: r.outcome || { status: 'pending' } }));
+}
+// ---- Comparison dashboard (pure; the Worker's values and resolved outcomes only, no look-ahead, nothing invented).
+// Accuracy counts only outcome.status === 'resolved' records whose direction is UP or DOWN; NO_CALL and missing are
+// excluded and counted separately; pending decisions are never mixed into accuracy. Significance is the backend's
+// `claim` only: nothing here computes a test. ----
+var CMP_ASSETS = ['BTC', 'ETH', 'LINK'];
+var CMP_HORIZONS = [12, 24];
+var CMP_MIN_BUCKET_N = 5;
+var CMP_COLORS = { v1: '#3B82F6', v2b: '#A78BFA', v2f: '#00E0FF', pos: '#4AE176', neg: '#FFB4AB', neu: '#8A9599' };
+// classify one GET response: ok | unavailable (asset not supported by the deployed backend yet) | not_deployed | error
+function cmpFeedStatus(res){
+  if(res && res.ok) return { state: 'ok', note: '' };
+  const err = String((res && res.error) || ''), d = res && res.data;
+  if(/unsupported asset/i.test(err) || (d && /unsupported asset/i.test(String(d.error || '')))) return { state: 'unavailable', note: err };
+  if(err === 'not_found') return { state: 'not_deployed', note: err };
+  return { state: 'error', note: err || 'request failed' };
+}
+// one asset x horizon feed of aligned records
+function cmpFeed(asset, horizon, res){
+  const st = cmpFeedStatus(res);
+  if(st.state !== 'ok') return { asset, horizon, state: st.state, note: st.note, records: [], truncated: false };
+  const recs = res.data && Array.isArray(res.data.records) ? res.data.records : null;
+  if(!recs) return { asset, horizon, state: 'error', note: 'unexpected response', records: [], truncated: false };
+  return { asset, horizon, state: recs.length ? 'ok' : 'empty', note: '', records: recs, truncated: !!res.data.truncated };
+}
+// overall state of a set of feeds: ok if any has records; otherwise error > not_deployed > unavailable (all) > empty
+function cmpGate(feeds){
+  const unavailable = feeds.filter((f) => f.state === 'unavailable').map((f) => f.asset).filter((a, i, l) => l.indexOf(a) === i);
+  if(feeds.some((f) => f.state === 'ok')) return { state: 'ok', unavailable };
+  const err = feeds.find((f) => f.state === 'error');
+  if(err) return { state: 'error', note: err.note, unavailable };
+  if(feeds.some((f) => f.state === 'not_deployed')) return { state: 'not_deployed', unavailable };
+  if(feeds.length && feeds.every((f) => f.state === 'unavailable')) return { state: 'unavailable', unavailable };
+  return { state: 'empty', unavailable };
+}
+// true / false when the call was UP or DOWN and the outcome resolved; null otherwise (no call, missing, pending)
+function cmpDirCorrect(dir, outcome){
+  if(!outcome || outcome.status !== 'resolved') return null;
+  if(dir !== 'UP' && dir !== 'DOWN') return null;
+  if(outcome.direction !== 'UP' && outcome.direction !== 'DOWN') return null;
+  return dir === outcome.direction;
+}
+function cmpRate(t){ return { n: t.n, correct: t.correct, rate: t.n ? t.correct / t.n : null, ci: t.n ? flWilson(t.correct, t.n) : null }; }
+function cmpHasV1(r){ return !!(r && r.v1 && r.v1.score !== null && r.v1.score !== undefined); }
+// accuracy of the three series on resolved + called records, with the exclusions counted separately
+function cmpScore(records){
+  const t = { v1: { n: 0, correct: 0 }, v2b: { n: 0, correct: 0 }, v2f: { n: 0, correct: 0 } };
+  const s = { total: records.length, resolved: 0, pending: 0, withV1: 0, resolvedWithV1: 0, v1Missing: 0, v1NoCall: 0, v2NoCall: 0 };
+  for(const r of records){
+    const done = !!(r.outcome && r.outcome.status === 'resolved'), has = cmpHasV1(r);
+    if(done) s.resolved++; else s.pending++;
+    if(has){ s.withV1++; if(done) s.resolvedWithV1++; if(r.v1.direction === 'NO_CALL') s.v1NoCall++; } else s.v1Missing++;
+    const f = r.v2_final && r.v2_final.direction;
+    if(f !== 'UP' && f !== 'DOWN') s.v2NoCall++;
+    for(const [k, dir] of [['v1', has ? r.v1.direction : null], ['v2b', r.v2_baseline && r.v2_baseline.direction], ['v2f', f]]){
+      const c = cmpDirCorrect(dir, r.outcome);
+      if(c !== null){ t[k].n++; if(c) t[k].correct++; }
+    }
+  }
+  return { ...s, v1: cmpRate(t.v1), v2b: cmpRate(t.v2b), v2f: cmpRate(t.v2f) };
+}
+// Monday 00:00 UTC of the calendar week containing ts
+function cmpWeekStart(ts){
+  const d = new Date(ts), back = (d.getUTCDay() + 6) % 7;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back);
+}
+// accuracy per calendar week (UTC) of decision_ts; n per bucket; buckets under minN are flagged `low`; pending decisions are
+// counted per bucket and never enter an accuracy.
+function cmpBuckets(records, minN){
+  const min = minN === undefined ? CMP_MIN_BUCKET_N : minN, m = new Map();
+  for(const r of records){
+    const k = cmpWeekStart(r.decision_ts);
+    if(!m.has(k)) m.set(k, { weekTs: k, decisions: 0, pending: 0, recs: [] });
+    const b = m.get(k); b.decisions++; b.recs.push(r);
+    if(!(r.outcome && r.outcome.status === 'resolved')) b.pending++;
+  }
+  return [...m.values()].sort((a, b) => a.weekTs - b.weekTs).map((b) => {
+    const sc = cmpScore(b.recs), one = (a) => ({ n: a.n, correct: a.correct, rate: a.rate, low: a.n < min });
+    return { weekTs: b.weekTs, label: new Date(b.weekTs).toISOString().slice(0, 10), decisions: b.decisions, pending: b.pending,
+      v1: one(sc.v1), v2b: one(sc.v2b), v2f: one(sc.v2f) };
+  });
+}
+// agree / disagree / no-call / missing V1 (against V2 final) and the opposite-direction cases with who was right
+function cmpAgreement(records){
+  const o = { total: 0, agree: 0, disagree: 0, noCall: 0, missing: 0, opposite: { n: 0, v1Right: 0, v2Right: 0, pending: 0, other: 0 } };
+  for(const r of records){
+    o.total++;
+    const a = cmpHasV1(r) ? r.v1.direction : null, b = r.v2_final && r.v2_final.direction;
+    if(!a) o.missing++;
+    else if(a !== 'UP' && a !== 'DOWN') o.noCall++;
+    else if(b !== 'UP' && b !== 'DOWN') o.noCall++;
+    else if(a === b) o.agree++;
+    else {
+      o.disagree++; o.opposite.n++;
+      if(r.outcome && r.outcome.status === 'resolved'){
+        const w = r.outcome.direction;
+        if(w === a) o.opposite.v1Right++; else if(w === b) o.opposite.v2Right++; else o.opposite.other++;
+      } else o.opposite.pending++;
+    }
+  }
+  o.agreeRate = o.agree + o.disagree ? o.agree / (o.agree + o.disagree) : null;
+  return o;
+}
+function cmpOkRecords(feeds){ return feeds.filter((f) => f.state === 'ok').flatMap((f) => f.records); }
+// agreement per available asset, preceded by an All row when two or more assets have data
+function cmpAgreementRows(feeds){
+  const ok = feeds.filter((f) => f.state === 'ok'), rows = [];
+  if(ok.length > 1) rows.push({ asset: 'All', ...cmpAgreement(cmpOkRecords(ok)) });
+  for(const f of ok) rows.push({ asset: f.asset, ...cmpAgreement(f.records) });
+  return rows;
+}
+// one row per asset x horizon (D): scores plus the missing / non-comparable counts; unavailable assets stay explicit rows
+function cmpAssetRows(feeds){
+  return feeds.map((f) => {
+    if(f.state !== 'ok') return { asset: f.asset, horizon: f.horizon, state: f.state, note: f.note, n: 0 };
+    return { asset: f.asset, horizon: f.horizon, state: 'ok', n: f.records.length, ...cmpScore(f.records) };
+  });
+}
+// pooled over the available assets, one row per horizon
+function cmpHorizonRows(feeds){
+  return CMP_HORIZONS.map((h) => {
+    const ok = feeds.filter((f) => f.state === 'ok' && f.horizon === h);
+    return ok.length ? { horizon: h, state: 'ok', assets: ok.map((f) => f.asset), ...cmpScore(cmpOkRecords(ok)) } : { horizon: h, state: 'empty', assets: [] };
+  });
+}
+// GLM influence: only BTC 24 h is in scope. Adjusted vs unadjusted decisions are scored on resolved + called records.
+function cmpGlmSplit(feeds){
+  const f = feeds.filter((x) => x.state === 'ok' && x.asset === 'BTC' && x.horizon === 24);
+  if(!f.length) return { applicable: false };
+  const recs = f.flatMap((x) => x.records), adj = recs.filter((r) => r.v2_final && r.v2_final.glm_applied), una = recs.filter((r) => !(r.v2_final && r.v2_final.glm_applied));
+  const sa = cmpScore(adj), su = cmpScore(una), all = cmpScore(recs);
+  const changed = recs.filter((r) => { const x = r.v2_baseline && r.v2_baseline.direction, y = r.v2_final && r.v2_final.direction; return x && y && x !== y; }).length;
+  const adjs = adj.map((r) => Math.abs(Number(r.v2_final.adjustment))).filter((v) => isFinite(v));
+  return { applicable: true, total: recs.length, adjusted: adj.length, adjustedRate: recs.length ? adj.length / recs.length : null, changedCalls: changed,
+    meanAbsAdj: adjs.length ? adjs.reduce((p, c) => p + c, 0) / adjs.length : null, base: all.v2b, fin: all.v2f,
+    adjustedGroup: { n: adj.length, base: sa.v2b, fin: sa.v2f }, unadjustedGroup: { n: una.length, base: su.v2b, fin: su.v2f } };
+}
+// detailed table rows across the available feeds, newest first
+function cmpDetailRows(feeds, limit){
+  const recs = cmpOkRecords(feeds).slice().sort((a, b) => (b.decision_ts - a.decision_ts) || String(a.asset).localeCompare(String(b.asset)));
+  const rows = cmpRecordRows({ ok: true, data: { records: recs } }, limit);
+  return { total: recs.length, rows: rows.map((r, i) => {
+    const o = r.outcome;
+    return { ...r, v1Ok: r.v1 ? cmpDirCorrect(r.v1.dir, o) : null, v2Ok: cmpDirCorrect(r.fin.direction, o), baseOk: cmpDirCorrect(r.base.direction, o),
+      glmApplied: !!r.fin.glm_applied, glmAdj: r.fin.adjustment === undefined ? null : r.fin.adjustment, glmReason: r.fin.reason || null }; }) };
+}
+var CMP_DIFF_CLAIMS = { v1_higher_observational: 'v1', v2_higher_observational: 'v2' };
+// the performance difference is shown only when the backend's claim supports it
+function cmpDifference(m){
+  const who = CMP_DIFF_CLAIMS[m && m.claim];
+  if(!who || !m.accV1 || !m.accV2f || m.accV1.rate === null || m.accV2f.rate === null) return null;
+  return { higher: who, pp: Math.round((m.accV2f.rate - m.accV1.rate) * 1000) / 10 };
+}
+// one plain sentence, driven only by the backend claim and the intervals
+function cmpHeadline(entries){
+  const ok = entries.filter((e) => e.model && e.model.state === 'ok');
+  const p = (a) => (a.rate === null ? '—' : (a.rate * 100).toFixed(1) + '%') + (a.ci ? ' [' + (a.ci[0] * 100).toFixed(1) + '–' + (a.ci[1] * 100).toFixed(1) + '%]' : '');
+  if(!ok.length) return { tone: 'neutral', text: 'There is no V1 vs V2 comparison data to answer the question yet.' };
+  const one = (m) => {
+    if(m.claim === 'v2_higher_observational') return `Yes, observationally: V2 final was right more often than V1 (${p(m.accV2f)} vs ${p(m.accV1)}) and the 95% intervals do not overlap.`;
+    if(m.claim === 'v1_higher_observational') return `No: V1 was right more often than V2 final (${p(m.accV1)} vs ${p(m.accV2f)}) and the 95% intervals do not overlap, so V2 shows no improvement here.`;
+    if(m.claim === 'no_supported_difference') return `Not demonstrated: V2 final ${p(m.accV2f)} vs V1 ${p(m.accV1)}, and the backend finds no supported difference.`;
+    return `Not enough resolved comparisons yet to say whether V2 improves on V1 (${m.nResolvedPairs || 0} resolved pairs; at least 30 are needed).`;
+  };
+  const tone = ok.some((e) => e.model.claim === 'v1_higher_observational') ? 'bad' : ok.some((e) => e.model.claim === 'v2_higher_observational') ? 'good' : 'neutral';
+  const text = ok.length === 1 && entries.length === 1 ? one(ok[0].model) : ok.map((e) => e.asset + ': ' + one(e.model)).join(' ');
+  return { tone, text };
+}
+// section A: backend summary for one asset, or (several assets with data) figures pooled from the records with Wilson intervals;
+// the claim is always per asset, never pooled.
+function cmpExecutive(entries, feeds){
+  const ok = entries.filter((e) => e.model.state === 'ok');
+  const headline = cmpHeadline(entries);
+  const unavailable = entries.filter((e) => e.model.state === 'unavailable').map((e) => e.asset);
+  if(!ok.length){
+    const bad = entries.find((e) => e.model.state === 'error' || e.model.state === 'not_deployed');
+    const state = bad ? bad.model.state : entries.length && unavailable.length === entries.length ? 'unavailable' : 'empty';
+    return { state, headline, unavailable, note: bad ? bad.model.note : '' };
+  }
+  const claims = ok.map((e) => ({ asset: e.asset, claim: e.model.claim, claimText: e.model.claimText, observational: e.model.observational, diff: cmpDifference(e.model) }));
+  if(ok.length === 1){
+    const m = ok[0].model, ag = m.agreement.v1_v2_final || {};
+    return { state: 'ok', mode: 'single', assets: [ok[0].asset], headline, unavailable, claims, acc: { v1: m.accV1, v2b: m.accV2b, v2f: m.accV2f }, nAligned: m.nAligned, nResolved: m.nResolved,
+      nResolvedPairs: m.nResolvedPairs, coverage: m.v1Coverage, missing: m.v1Coverage === null || m.v1Coverage === undefined ? null : 1 - m.v1Coverage,
+      agreeN: ag.n || 0, agreeRate: ag.rate === undefined ? null : ag.rate, disagreeRate: ag.rate === null || ag.rate === undefined ? null : 1 - ag.rate, truncated: m.truncated, model: m };
+  }
+  const recs = cmpOkRecords(feeds.filter((f) => ok.some((e) => e.asset === f.asset))), sc = cmpScore(recs), ag = cmpAgreement(recs);
+  return { state: 'ok', mode: 'pooled', assets: ok.map((e) => e.asset), headline, unavailable, claims, acc: { v1: sc.v1, v2b: sc.v2b, v2f: sc.v2f }, nAligned: sc.total, nResolved: sc.resolved,
+    nResolvedPairs: sc.resolvedWithV1, coverage: sc.total ? sc.withV1 / sc.total : null, missing: sc.total ? sc.v1Missing / sc.total : null,
+    agreeN: ag.agree + ag.disagree, agreeRate: ag.agreeRate, disagreeRate: ag.agreeRate === null ? null : 1 - ag.agreeRate, truncated: feeds.some((f) => f.truncated), model: null };
 }
 // ---- Trader Analysis (Gemini) parity (contracts §6). V1's technical indicator functions, copied verbatim from
 // CryptoPulse index.html@9a5810c (techSma 3613, techIchimoku 3618, techRsi 3624, findLocalExtrema, techIchimokuCloud
@@ -3616,72 +3832,231 @@ function renderSentimentV1(res, period){
         callbacks: { title: items => items.length ? fmtUtc(items[0].parsed.x) : '' } } } } });
   enableChartFullscreen('v1Chart', () => _v1.chart);
 }
-var _cmp = { period: '24h', horizon: 24, seq: 0 };
+var _cmp = { period: 'all', horizon: 24, asset: 'ALL', seq: 0, shown: 100, feeds: [], charts: {} };
+var CMP_CELL = 'rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3';
+function cmpAssetList(){ return _cmp.asset === 'ALL' ? CMP_ASSETS : [_cmp.asset]; }
 function loadComparisonIfNeeded(force){
-  v1Presets('cmpPresets', _cmp.period, k => { _cmp.period = k; loadComparisonIfNeeded(); });
-  flSeg('cmpHorizons', [[12, '12 h'], [24, '24 h']], _cmp.horizon, k => { _cmp.horizon = Number(k); loadComparisonIfNeeded(); });
-  const seq = ++_cmp.seq, period = _cmp.period, h = _cmp.horizon;
-  document.getElementById('cmpSummary').textContent = 'Loading…';
-  document.getElementById('cmpOutcome').textContent = 'Loading…';
-  document.getElementById('cmpRecords').textContent = 'Loading…';
+  const redo = () => { _cmp.shown = 100; loadComparisonIfNeeded(); };
+  v1Presets('cmpPresets', _cmp.period, k => { _cmp.period = k; redo(); });
+  flSeg('cmpHorizons', [[12, '12 h'], [24, '24 h']], _cmp.horizon, k => { _cmp.horizon = Number(k); redo(); });
+  flSeg('cmpAssets', [['ALL', 'All'], ...CMP_ASSETS.map(a => [a, a])], _cmp.asset, k => { _cmp.asset = k; redo(); });
+  const seq = ++_cmp.seq, period = _cmp.period, h = _cmp.horizon, assets = cmpAssetList();
+  ['cmpHeadline', 'cmpExec', 'cmpTrendState', 'cmpAgreeState', 'cmpDState', 'cmpGlm', 'cmpTable', 'cmpSummary'].forEach(id => { document.getElementById(id).textContent = 'Loading…'; });
+  ['cmpTrendWrap', 'cmpAgreeWrap', 'cmpDWrap'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById('cmpOpposite').textContent = ''; document.getElementById('cmpAvail').textContent = '';
+  document.getElementById('cmpMore').classList.add('hidden'); document.getElementById('cmpTableCount').textContent = '';
   if(force) apiCacheClear();
   sv2Comparison(period, force).then(res => { if(seq === _cmp.seq && activeView === 'comparison') renderComparison(res); });
-  const q = '?asset=BTC&horizon=' + h + '&period=' + period;
-  Promise.all([getJson(WORKER_URL + '/api/comparison/v1-v2/summary' + q), getJson(WORKER_URL + '/api/comparison/v1-v2' + q + '&limit=50')]).then(([sr, rr]) => {
+  const q = (a, hh) => '?asset=' + a + '&horizon=' + hh + '&period=' + period;
+  const sums = Promise.all(assets.map(a => getJson(WORKER_URL + '/api/comparison/v1-v2/summary' + q(a, h))));
+  const recs = Promise.all(assets.flatMap(a => CMP_HORIZONS.map(hh => getJson(WORKER_URL + '/api/comparison/v1-v2' + q(a, hh) + '&limit=500').then(r => ({ a, hh, r })))));
+  const guard = new Promise(res => setTimeout(() => res(null), 25000));
+  Promise.race([Promise.all([sums, recs]), guard]).then(out => {
     if(seq !== _cmp.seq || activeView !== 'comparison') return;
-    renderCmpOutcome(cmpSummaryModel(sr)); renderCmpRecords(cmpRecordRows(rr, 50), cmpSummaryModel(rr.ok ? { ok: true, data: { summary: { n_aligned: 1 } } } : rr));
+    const failed = { ok: false, error: 'request timed out' };
+    const sumRes = out ? out[0] : assets.map(() => failed);
+    const feeds = out ? out[1].map(x => cmpFeed(x.a, x.hh, x.r)) : assets.flatMap(a => CMP_HORIZONS.map(hh => cmpFeed(a, hh, failed)));
+    _cmp.feeds = feeds;
+    renderCmpDashboard(assets.map((a, i) => ({ asset: a, model: cmpSummaryModel(sumRes[i]) })), feeds, h);
   });
 }
 function cmpPct(v){ return v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%'; }
-function renderCmpOutcome(m){
-  const host = document.getElementById('cmpOutcome');
-  if(m.state === 'not_deployed' || m.state === 'error'){ host.innerHTML = `${chip(m.state === 'not_deployed' ? 'NOT LIVE YET' : 'UNAVAILABLE', m.state === 'error' ? 'bad' : 'neutral')} <span class="text-[#BAC9CD]">${esc(m.note)} No figures are shown in their place.</span>`; return; }
-  if(m.state === 'empty'){ host.innerHTML = `${chip('NO DECISIONS', 'neutral')} <span class="text-[#BAC9CD]">No V2 decision in this range. Choose a longer range.</span>`; return; }
-  const acc = (a) => a.n ? `<b class="text-[#E1E2E7]">${cmpPct(a.rate)}</b> <span class="text-[#8A9599]">[${a.ci ? cmpPct(a.ci[0]) + '–' + cmpPct(a.ci[1]) : '—'}]</span><br><span class="text-[10px] text-[#8A9599]">${a.correct} of ${a.n} calls</span>` : '<span class="text-[#8A9599]">no resolved calls</span>';
-  const tone = m.status === 'insufficient_sample' ? 'neutral' : m.observational ? 'warn' : 'info';
-  const sr = m.v1Sources;
-  host.innerHTML = `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3 mb-3"><p>${chip(String(m.claim || '').replace(/_/g, ' ').toUpperCase(), tone)} <span class="text-[#E1E2E7]">${esc(m.claimText)}</span></p>
-      ${m.observational ? '<p class="text-[11px] text-[#FBBF24] mt-1">Observational, not pre-registered. V1 is scored only on decisions where it had a reading and made a call (see coverage); V2 is scored on all of them, so the two samples differ. This does not show that either engine is better in general.</p>' : ''}</div>
-    <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal"></th><th class="px-2 font-normal">V1 production</th><th class="px-2 font-normal">V2 baseline (before GLM)</th><th class="px-2 font-normal">V2 final (after GLM)</th></tr></thead><tbody>
-      <tr class="border-t border-[#3B494C]/60 align-top"><td class="py-1.5 px-2 text-[#BAC9CD]">Direction accuracy [95% CI]</td><td class="px-2">${acc(m.accV1)}</td><td class="px-2">${acc(m.accV2b)}</td><td class="px-2">${acc(m.accV2f)}</td></tr>
-      <tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 text-[#BAC9CD]">Brier score (lower is better)</td><td class="px-2 text-[#8A9599]">n/a: V1 gives no probability</td><td class="px-2 font-mono-data">${m.brierV2b && m.brierV2b.score !== null ? m.brierV2b.score.toFixed(4) + ' <span class="text-[#8A9599]">n=' + m.brierV2b.n + '</span>' : '—'}</td><td class="px-2 font-mono-data">${m.brierV2f && m.brierV2f.score !== null ? m.brierV2f.score.toFixed(4) + ' <span class="text-[#8A9599]">n=' + m.brierV2f.n + '</span>' : '—'}</td></tr>
-      <tr class="border-t border-[#3B494C]/60"><td class="py-1.5 px-2 text-[#BAC9CD]">No call (abstention)</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v1)}</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v2_baseline)}</td><td class="px-2 font-mono-data">${cmpPct(m.noCall.v2_final)}</td></tr>
-    </tbody></table></div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">Coverage</p><dl class="space-y-0.5 text-[#BAC9CD]">
-        <div class="flex justify-between gap-2"><dt>V2 decisions in range</dt><dd class="font-mono-data">${m.nAligned}${m.truncated ? ' (newest 500)' : ''}</dd></div>
-        <div class="flex justify-between gap-2"><dt>Resolved</dt><dd class="font-mono-data">${m.nResolved}</dd></div>
-        <div class="flex justify-between gap-2"><dt>With a V1 reading</dt><dd class="font-mono-data">${cmpPct(m.v1Coverage)}</dd></div>
-        <div class="flex justify-between gap-2"><dt>Resolved with V1</dt><dd class="font-mono-data">${m.nResolvedPairs}</dd></div>
-        <div class="flex justify-between gap-2"><dt>V1 source: server / app / none</dt><dd class="font-mono-data">${sr.server_composite_readings ?? 0} / ${sr.history ?? 0} / ${sr.missing ?? 0}</dd></div></dl></div>
-      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">Agreement (both made a call)</p><dl class="space-y-0.5 text-[#BAC9CD]">
-        ${[['V1 · V2 baseline', 'v1_v2_baseline'], ['V1 · V2 final', 'v1_v2_final'], ['V2 baseline · final', 'v2_baseline_v2_final']].map(([l, k]) => { const a = m.agreement[k] || {}; return `<div class="flex justify-between gap-2"><dt>${l}</dt><dd class="font-mono-data">${cmpPct(a.rate)} <span class="text-[#8A9599]">n=${a.n ?? 0}</span></dd></div>`; }).join('')}</dl></div>
-      <div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold text-[#E1E2E7] mb-1">GLM influence (BTC 24 h only)</p><dl class="space-y-0.5 text-[#BAC9CD]">
-        <div class="flex justify-between gap-2"><dt>Decisions in GLM scope</dt><dd class="font-mono-data">${m.glm.rows_in_scope ?? 0}</dd></div>
-        <div class="flex justify-between gap-2"><dt>Adjusted by GLM</dt><dd class="font-mono-data">${m.glm.adjusted ?? 0}</dd></div>
-        <div class="flex justify-between gap-2"><dt>Calls changed (no-flip: expected 0)</dt><dd class="font-mono-data">${m.glm.changed_calls ?? 0}</dd></div>
-        <div class="flex justify-between gap-2"><dt>Mean |adjustment|</dt><dd class="font-mono-data">${m.glm.mean_abs_adjustment === null || m.glm.mean_abs_adjustment === undefined ? '—' : (m.glm.mean_abs_adjustment * 100).toFixed(2) + ' pp'}</dd></div></dl>
-        ${(m.glm.adjusted || 0) === 0 ? '<p class="text-[10px] text-[#8A9599] mt-1">No decision has been adjusted yet, so V2 final equals V2 baseline everywhere in this range.</p>' : ''}</div>
-    </div>
-    <h4 class="text-xs font-semibold mt-4 mb-1">V1 threshold sensitivity <span class="text-[#8A9599] font-normal">(45/55 is the proposed convention, not production logic)</span></h4>
-    <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">V1 band (DOWN below / UP above)</th><th class="px-2 font-normal">Coverage</th><th class="px-2 font-normal">No call</th><th class="px-2 font-normal">Accuracy [95% CI]</th></tr></thead><tbody>
-      ${m.bands.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data">${esc(b.band)}${b.proposed ? ' ' + chip('PROPOSED', 'info') : ''}</td><td class="px-2 font-mono-data">${cmpPct(b.coverage)}</td><td class="px-2 font-mono-data">${cmpPct(b.no_call_rate)}</td><td class="px-2">${acc({ n: b.accuracy.n, correct: b.accuracy.correct, rate: b.accuracy.rate, ci: b.accuracy.ci95 })}</td></tr>`).join('')}
-    </tbody></table></div>
-    <p class="text-[10px] text-[#8A9599] mt-3">Range ${esc(m.period)} · ${m.horizon} h · ${esc(m.version || '')} · generated ${esc(fmtUtc(m.generated))} (cached up to 5 min). Method: ${esc(m.methodology.claims || '')}</p>`;
+function cmpCi(a){ return a && a.ci ? cmpPct(a.ci[0]) + '–' + cmpPct(a.ci[1]) : '—'; }
+function cmpNote(kind, text){
+  const c = { unavailable: ['NOT AVAILABLE YET', 'neutral'], not_deployed: ['NOT LIVE YET', 'neutral'], error: ['UNAVAILABLE', 'bad'], empty: ['NO DATA', 'neutral'], insufficient: ['INSUFFICIENT SAMPLE', 'warn'] }[kind] || ['NOTE', 'neutral'];
+  return `${chip(c[0], c[1])} <span class="text-[#BAC9CD]">${esc(text)}</span>`;
 }
-function renderCmpRecords(rows, m){
-  const host = document.getElementById('cmpRecords');
-  if(m && (m.state === 'not_deployed' || m.state === 'error')){ host.innerHTML = `<span class="text-[#BAC9CD]">${esc(m.note)}</span>`; return; }
-  if(!rows || !rows.length){ host.innerHTML = '<span class="text-[#BAC9CD]">No decisions in this range.</span>'; return; }
-  const dir = (d) => d === 'UP' ? '<span class="text-[#4AE176]">UP</span>' : d === 'DOWN' ? '<span class="text-[#FFB4AB]">DOWN</span>' : d === 'NO_CALL' ? '<span class="text-[#8A9599]">no call</span>' : '—';
-  const hit = (d, o) => o.status !== 'resolved' || (d !== 'UP' && d !== 'DOWN') ? '' : d === o.direction ? ' ✓' : ' ✗';
+function cmpGateText(g, what){
+  const un = g.unavailable.length ? ' ' + g.unavailable.join(', ') + ': not available yet (the deployed backend serves BTC only for now).' : '';
+  if(g.state === 'unavailable') return cmpNote('unavailable', 'The backend does not serve ' + g.unavailable.join(', ') + ' yet, so there is nothing to show. No figures are shown in their place.');
+  if(g.state === 'not_deployed') return cmpNote('not_deployed', 'The comparison route is not live on this backend yet. No figures are shown in its place.');
+  if(g.state === 'error') return cmpNote('error', 'The ' + what + ' could not be loaded (' + (g.note || 'request failed') + '). Use the refresh button to retry.');
+  return cmpNote('empty', 'No decision in this window for the selected asset and horizon. Choose a longer window.' + un);
+}
+function cmpUnavailChips(list){ return list.length ? `<p class="mt-2 text-[11px]">${list.map(a => chip(a + ' · NOT AVAILABLE YET', 'neutral')).join(' ')} <span class="text-[#8A9599]">the deployed backend does not serve ${list.join(', ')} yet; nothing is shown or estimated for it.</span></p>` : ''; }
+// Create each Chart.js instance once; later renders update its data. `extra` is read by the tooltip callbacks via chart.$m.
+function cmpChart(key, canvasId, cfg, extra){
+  const el = document.getElementById(canvasId);
+  if(typeof Chart === 'undefined' || !el) return null;
+  let ch = _cmp.charts[key];
+  if(ch){ ch.$m = extra; ch.data.labels = cfg.data.labels; ch.data.datasets = cfg.data.datasets; ch.options.scales = cfg.options.scales; ch.update(); ch.resize(); return ch; }
+  cfg.options.plugins.tooltip.callbacks = cfg.options.plugins.tooltip.callbacks || {};
+  ch = new Chart(el.getContext('2d'), cfg); ch.$m = extra; _cmp.charts[key] = ch;
+  enableChartFullscreen(canvasId, () => _cmp.charts[key]);
+  return ch;
+}
+var CMP_TICK = { color: '#BAC9CD', font: { family: 'monospace', size: 10 } };
+var CMP_GRID = { color: 'rgba(59,73,76,0.4)' };
+function cmpBaseOptions(){
+  return { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, scales: {},
+    plugins: { legend: { labels: { color: '#BAC9CD', boxWidth: 10, font: { size: 10 } } }, tooltip: { backgroundColor: '#191C1F', borderColor: '#3B494C', borderWidth: 1, titleColor: '#E1E2E7', bodyColor: '#BAC9CD', callbacks: {} } } };
+}
+var cmpNPlugin = { id: 'cmpN', afterDatasetsDraw(chart){
+  const ctx = chart.ctx, y0 = chart.scales.y ? chart.scales.y.getPixelForValue(0) : null;
+  chart.data.datasets.forEach((ds, i) => { const meta = chart.getDatasetMeta(i); if(meta.hidden || !ds.$n) return;
+    meta.data.forEach((bar, j) => { const n = ds.$n[j]; if(n === null || n === undefined || !isFinite(bar.x)) return;
+      const y = ds.data[j] === null ? y0 : bar.y; if(!isFinite(y)) return;
+      ctx.save(); ctx.fillStyle = '#BAC9CD'; ctx.font = '10px monospace'; ctx.textAlign = 'center'; ctx.fillText('n=' + n, bar.x, y - 4); ctx.restore(); }); }); } };
+function renderCmpDashboard(entries, feeds, h){
+  const run = (name, fn) => { try{ fn(); }catch(e){ const el = document.getElementById(name); if(el) el.innerHTML = cmpNote('error', 'This section could not be drawn.'); } };
+  const main = feeds.filter(f => f.horizon === h);
+  run('cmpExec', () => renderCmpExec(cmpExecutive(entries, main)));
+  run('cmpTrendState', () => renderCmpTrend(main));
+  run('cmpAgreeState', () => renderCmpAgree(main));
+  run('cmpDState', () => renderCmpAssets(feeds, h));
+  run('cmpGlm', () => renderCmpGlm(main));
+  run('cmpTable', () => renderCmpTable(main));
+}
+function renderCmpExec(x){
+  const hl = document.getElementById('cmpHeadline'), host = document.getElementById('cmpExec');
+  const tone = { good: 'text-[#4AE176]', bad: 'text-[#FFB4AB]', neutral: 'text-[#E1E2E7]' }[x.headline.tone];
+  hl.innerHTML = `<div class="rounded-lg border border-[#3B494C] bg-[#0B0E11] p-3"><p class="font-semibold ${tone}">${esc(x.headline.text)}</p>${x.state === 'ok' ? '<p class="text-[10px] text-[#8A9599] mt-1">Driven only by the backend claim and the 95% Wilson intervals. Observational, not pre-registered: V1 is scored only where it had a reading and made a call, V2 on every decision, so the samples differ.</p>' : ''}${cmpUnavailChips(x.unavailable)}</div>`;
+  if(x.state !== 'ok'){ host.innerHTML = cmpGateText({ state: x.state, note: x.note, unavailable: x.unavailable }, 'comparison'); return; }
+  const acc = (label, a, col, sub) => `<div class="${CMP_CELL}"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]"><span style="color:${col}">●</span> ${label}</p>${a.n
+    ? `<p class="text-2xl font-bold font-mono-data text-[#E1E2E7] mt-1">${cmpPct(a.rate)}</p><p class="text-[11px] text-[#8A9599] font-mono-data">95% CI ${cmpCi(a)}</p><p class="text-[11px] text-[#8A9599]">${a.correct} of ${a.n} calls · n=${a.n}</p>`
+    : '<p class="text-[#8A9599] mt-1">no resolved calls</p>'}${sub ? `<p class="text-[10px] text-[#8A9599] mt-1">${sub}</p>` : ''}</div>`;
+  const cell = (k, v, sub) => `<div class="${CMP_CELL}"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] mt-1 text-sm">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
+  const diffs = x.claims.filter(c => c.diff);
+  const diffCell = diffs.length ? diffs.map(c => `${x.claims.length > 1 ? esc(c.asset) + ': ' : ''}V2 final − V1 = <b>${c.diff.pp > 0 ? '+' : ''}${c.diff.pp} pp</b> (${c.diff.higher === 'v2' ? 'V2 higher' : 'V1 higher'})`).join('<br>')
+    : '<span class="text-[#8A9599]">none supported</span>';
+  const claimChips = x.claims.map(c => `${x.claims.length > 1 ? `<span class="text-[#8A9599]">${esc(c.asset)}</span> ` : ''}${chip(String(c.claim || '').replace(/_/g, ' ').toUpperCase(), c.claim === 'insufficient_sample' ? 'neutral' : c.observational ? 'warn' : 'info')}`).join(' ');
+  host.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      ${acc('V1 production (proposed 45/55)', x.acc.v1, CMP_COLORS.v1)}
+      ${acc('V2 final (after GLM)', x.acc.v2f, CMP_COLORS.v2f)}
+      ${acc('V2 baseline (before GLM)', x.acc.v2b, CMP_COLORS.v2b)}</div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+      ${cell('Resolved comparable predictions', String(x.nResolvedPairs), `of ${x.nResolved} resolved, ${x.nAligned} decisions${x.truncated ? ' (newest 500 per asset)' : ''}`)}
+      ${cell('V1 coverage / missing', `${cmpPct(x.coverage)} / ${cmpPct(x.missing)}`, 'decisions with / without a V1 reading within 3 h')}
+      ${cell('Agreement / disagreement', `${cmpPct(x.agreeRate)} / ${cmpPct(x.disagreeRate)}`, `V1 vs V2 final, both made a call, n=${x.agreeN}`)}
+      ${cell('Performance difference', diffCell, 'shown only when the backend claim supports it')}</div>
+    <p class="mt-3">${claimChips}</p>
+    ${x.claims.map(c => `<p class="text-[11px] text-[#BAC9CD] mt-1">${x.claims.length > 1 ? '<b>' + esc(c.asset) + '</b> · ' : ''}${esc(c.claimText)}</p>`).join('')}
+    ${x.mode === 'pooled' ? `<p class="text-[10px] text-[#8A9599] mt-2">Figures pool ${x.assets.join(', ')} from the records with Wilson 95% intervals. The backend gives a claim per asset only; no pooled significance is claimed. V1 is market-wide, so its readings repeat across assets.</p>` : ''}
+    ${x.model ? cmpBackendDetails(x.model) : ''}`;
+}
+function cmpBackendDetails(m){
+  const acc = (a) => a.n ? `${cmpPct(a.rate)} <span class="text-[#8A9599]">[${cmpCi(a)}] ${a.correct}/${a.n}</span>` : '—';
+  return `<details class="mt-3"><summary class="cursor-pointer text-[11px] text-[#BAC9CD]">Backend summary details: Brier score and V1 threshold sensitivity</summary>
+    <p class="text-[11px] text-[#BAC9CD] mt-2">Brier (lower is better): V2 baseline ${m.brierV2b && m.brierV2b.score !== null ? m.brierV2b.score.toFixed(4) + ' (n=' + m.brierV2b.n + ')' : '—'} · V2 final ${m.brierV2f && m.brierV2f.score !== null ? m.brierV2f.score.toFixed(4) + ' (n=' + m.brierV2f.n + ')' : '—'} · V1 n/a: it gives no probability.</p>
+    <div class="overflow-x-auto"><table class="w-full text-xs mt-2"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">V1 band (DOWN below / UP above)</th><th class="px-2 font-normal">Coverage</th><th class="px-2 font-normal">No call</th><th class="px-2 font-normal">Accuracy [95% CI]</th></tr></thead><tbody>
+    ${m.bands.map(b => `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(b.band)}${b.proposed ? ' ' + chip('PROPOSED', 'info') : ''}</td><td class="px-2 font-mono-data">${cmpPct(b.coverage)}</td><td class="px-2 font-mono-data">${cmpPct(b.no_call_rate)}</td><td class="px-2 whitespace-nowrap">${acc({ n: b.accuracy.n, correct: b.accuracy.correct, rate: b.accuracy.rate, ci: b.accuracy.ci95 })}</td></tr>`).join('')}</tbody></table></div>
+    <p class="text-[10px] text-[#8A9599] mt-2">${esc(m.version || '')} · generated ${esc(fmtUtc(m.generated))} (cached up to 5 min). Method: ${esc(m.methodology.claims || '')}</p></details>`;
+}
+function renderCmpTrend(feeds){
+  const st = document.getElementById('cmpTrendState'), wrap = document.getElementById('cmpTrendWrap');
+  const g = cmpGate(feeds);
+  if(g.state !== 'ok'){ st.innerHTML = cmpGateText(g, 'time series'); wrap.classList.add('hidden'); return; }
+  const b = cmpBuckets(cmpOkRecords(feeds), CMP_MIN_BUCKET_N);
+  const scored = b.reduce((p, x) => p + x.v1.n + x.v2f.n, 0);
+  if(!scored){ st.innerHTML = cmpNote('insufficient', `No resolved, called decision in this window yet (${b.reduce((p, x) => p + x.pending, 0)} pending). Nothing is plotted.`); wrap.classList.add('hidden'); return; }
+  const usable = b.some(x => !x.v1.low || !x.v2f.low);
+  st.innerHTML = (usable ? '' : cmpNote('insufficient', 'Every weekly bucket has fewer than 5 scored calls; the points are shown hollow and are not reliable. Choose a longer window.') + ' ') +
+    `<span class="text-[11px] text-[#8A9599]">${b.length} week${b.length === 1 ? '' : 's'} · ${b.reduce((p, x) => p + x.pending, 0)} pending decision${b.reduce((p, x) => p + x.pending, 0) === 1 ? '' : 's'} not scored${feeds.filter(f => f.state === 'ok').length > 1 ? ' · assets pooled (V1 is market-wide and repeats across assets)' : ''}.</span>`;
+  wrap.classList.remove('hidden');
+  const line = (key, label, color) => ({ type: 'line', label, data: b.map(x => x[key].rate === null ? null : Math.round(x[key].rate * 1000) / 10), $n: b.map(x => x[key].n), $low: b.map(x => x[key].low),
+    borderColor: color, backgroundColor: color, borderWidth: 2, tension: 0, spanGaps: false, pointRadius: 4, pointBackgroundColor: b.map(x => x[key].low ? 'rgba(0,0,0,0)' : color), pointBorderColor: color, order: 1,
+    segment: { borderDash: c => (b[c.p0DataIndex][key].low || b[c.p1DataIndex][key].low ? [5, 4] : undefined) } });
+  const data = { labels: b.map(x => x.label), datasets: [line('v1', 'V1 accuracy', CMP_COLORS.v1), line('v2f', 'V2 final accuracy', CMP_COLORS.v2f),
+    { type: 'line', label: 'Chance (50%)', data: b.map(() => 50), borderColor: CMP_COLORS.neu, borderDash: [2, 4], borderWidth: 1, pointRadius: 0, order: 1 },
+    { type: 'bar', label: 'Pending decisions (not scored)', data: b.map(x => x.pending), yAxisID: 'y1', backgroundColor: 'rgba(138,149,153,0.28)', borderWidth: 0, order: 3 }] };
+  const opt = cmpBaseOptions();
+  const scales = { x: { ticks: { ...CMP_TICK, maxRotation: 0, maxTicksLimit: window.innerWidth < 640 ? 4 : 10 }, grid: CMP_GRID, title: { display: true, text: 'week starting (UTC, Monday)', color: '#8A9599', font: { size: 10 } } },
+    y: { min: 0, max: 100, ticks: { ...CMP_TICK, callback: v => v + '%' }, grid: CMP_GRID, title: { display: true, text: 'directional accuracy', color: '#8A9599', font: { size: 10 } } },
+    y1: { position: 'right', beginAtZero: true, ticks: { ...CMP_TICK, precision: 0 }, grid: { display: false }, title: { display: true, text: 'pending', color: '#8A9599', font: { size: 10 } } } };
+  opt.scales = scales;
+  opt.plugins.tooltip.callbacks = { title: items => items.length ? 'Week of ' + items[0].label : '', label: it => {
+    const ds = it.dataset, m = it.chart.$m || [];
+    if(ds.type === 'bar') return 'Pending: ' + it.parsed.y + ' (not scored)';
+    if(!ds.$n) return ds.label;
+    return `${ds.label}: ${it.parsed.y === null ? 'no scored calls' : it.parsed.y + '%'} (n=${ds.$n[it.dataIndex]}${ds.$low[it.dataIndex] ? ', under 5: unreliable' : ''})`; } };
+  cmpChart('trend', 'cmpTrendChart', { type: 'line', data, options: opt }, b);
+}
+function renderCmpAgree(feeds){
+  const st = document.getElementById('cmpAgreeState'), wrap = document.getElementById('cmpAgreeWrap'), opp = document.getElementById('cmpOpposite');
+  const g = cmpGate(feeds);
+  if(g.state !== 'ok'){ st.innerHTML = cmpGateText(g, 'agreement breakdown'); wrap.classList.add('hidden'); opp.innerHTML = ''; return; }
+  const rows = cmpAgreementRows(feeds);
+  st.innerHTML = cmpUnavailChips(g.unavailable) || '<span class="text-[11px] text-[#8A9599]">Counts are decisions; bars show each row as a share of its own decisions. "No call" = V1 or V2 final abstained; "V1 missing" = no V1 reading within 3 h.</span>';
+  wrap.classList.remove('hidden'); wrap.style.height = (90 + rows.length * 42) + 'px';
+  const share = (k) => rows.map(r => r.total ? Math.round(r[k] / r.total * 1000) / 10 : 0);
+  const ds = (k, label, color) => ({ label, data: share(k), backgroundColor: color, borderWidth: 0, $c: rows.map(r => r[k]) });
+  const data = { labels: rows.map(r => r.asset + ' (n=' + r.total + ')'), datasets: [ds('agree', 'Agree', CMP_COLORS.pos), ds('disagree', 'Disagree (opposite calls)', CMP_COLORS.neg), ds('noCall', 'No call', CMP_COLORS.neu), ds('missing', 'V1 missing', '#566067')] };
+  const opt = cmpBaseOptions(); opt.indexAxis = 'y'; opt.interaction = { mode: 'nearest', intersect: true };
+  opt.scales = { x: { stacked: true, min: 0, max: 100, ticks: { ...CMP_TICK, callback: v => v + '%' }, grid: CMP_GRID }, y: { stacked: true, ticks: CMP_TICK, grid: { display: false } } };
+  opt.plugins.tooltip.callbacks = { label: it => `${it.dataset.label}: ${it.dataset.$c[it.dataIndex]} (${it.parsed.x}%)` };
+  cmpChart('agree', 'cmpAgreeChart', { type: 'bar', data, options: opt }, rows);
+  const pct = (a, n) => n ? ` <span class="text-[#8A9599]">${Math.round(a / n * 100)}%</span>` : '';
+  opp.innerHTML = `<p class="text-[11px] text-[#BAC9CD] mb-1">Opposite-direction decisions (V1 UP and V2 final DOWN, or the reverse) and who was right after resolution</p>
+    <table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset</th><th class="px-2 font-normal">Opposite calls</th><th class="px-2 font-normal">V1 right</th><th class="px-2 font-normal">V2 right</th><th class="px-2 font-normal">Pending</th></tr></thead><tbody>
+    ${rows.map(r => { const o = r.opposite, res = o.v1Right + o.v2Right + o.other; return `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold whitespace-nowrap">${esc(r.asset)}</td><td class="px-2 font-mono-data">${o.n} <span class="text-[#8A9599]">of ${r.agree + r.disagree} both-called</span></td>
+      <td class="px-2 font-mono-data" style="color:${CMP_COLORS.v1}">${o.v1Right}${pct(o.v1Right, res)}</td><td class="px-2 font-mono-data" style="color:${CMP_COLORS.v2f}">${o.v2Right}${pct(o.v2Right, res)}</td><td class="px-2 font-mono-data text-[#8A9599]">${o.pending}</td></tr>`; }).join('')}</tbody></table>
+    <p class="text-[10px] text-[#8A9599] mt-1">Percentages are of the resolved opposite calls only; pending ones are not scored.</p>`;
+}
+function renderCmpAssets(feeds, h){
+  const st = document.getElementById('cmpDState'), wrap = document.getElementById('cmpDWrap'), av = document.getElementById('cmpAvail');
+  const g = cmpGate(feeds);
+  const rows = cmpAssetRows(feeds);
+  const stateChip = (r) => r.state === 'ok' ? chip('OK', 'good') : r.state === 'unavailable' ? chip('NOT AVAILABLE YET', 'neutral') : r.state === 'empty' ? chip('NO DECISIONS', 'neutral') : r.state === 'not_deployed' ? chip('NOT LIVE YET', 'neutral') : chip('ERROR', 'bad');
+  av.innerHTML = `<p class="text-[11px] text-[#BAC9CD] mb-1">Missing and non-comparable data per asset and horizon</p><table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset</th><th class="px-2 font-normal">Horizon</th><th class="px-2 font-normal">State</th><th class="px-2 font-normal">Decisions</th><th class="px-2 font-normal">Resolved</th><th class="px-2 font-normal">Pending</th><th class="px-2 font-normal">V1 missing</th><th class="px-2 font-normal">V1 no call</th><th class="px-2 font-normal">V2 no call</th></tr></thead><tbody>
+    ${rows.map(r => r.state === 'ok' ? `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold">${esc(r.asset)}</td><td class="px-2">${r.horizon} h</td><td class="px-2">${stateChip(r)}</td><td class="px-2 font-mono-data">${r.total}</td><td class="px-2 font-mono-data">${r.resolved}</td><td class="px-2 font-mono-data">${r.pending}</td><td class="px-2 font-mono-data">${r.v1Missing} <span class="text-[#8A9599]">${r.total ? Math.round(r.v1Missing / r.total * 100) : 0}%</span></td><td class="px-2 font-mono-data">${r.v1NoCall}</td><td class="px-2 font-mono-data">${r.v2NoCall}</td></tr>`
+      : `<tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2 font-semibold">${esc(r.asset)}</td><td class="px-2">${r.horizon} h</td><td class="px-2">${stateChip(r)}</td><td class="px-2 text-[#8A9599]" colspan="6">${r.state === 'unavailable' ? 'not served by the deployed backend yet; nothing estimated' : esc(r.note || '')}</td></tr>`).join('')}</tbody></table>`;
+  if(g.state !== 'ok'){ st.innerHTML = cmpGateText(g, 'asset and horizon analysis'); wrap.classList.add('hidden'); return; }
+  st.innerHTML = cmpUnavailChips(g.unavailable);
+  wrap.classList.remove('hidden');
+  document.getElementById('cmpDAssetH').textContent = h + ' h';
+  const bars = (items) => { const ds = (k, label, color) => ({ label, data: items.map(r => r[k] && r[k].n ? Math.round(r[k].rate * 1000) / 10 : null), $n: items.map(r => r[k].n), $ci: items.map(r => r[k].ci), backgroundColor: color, borderWidth: 0 });
+    return [ds('v1', 'V1', CMP_COLORS.v1), ds('v2b', 'V2 baseline', CMP_COLORS.v2b), ds('v2f', 'V2 final', CMP_COLORS.v2f)]; };
+  const opt = () => { const o = cmpBaseOptions(); o.layout = { padding: { top: 14 } };
+    o.scales = { x: { ticks: CMP_TICK, grid: { display: false } }, y: { min: 0, max: 100, ticks: { ...CMP_TICK, callback: v => v + '%' }, grid: CMP_GRID } };
+    o.plugins.tooltip.callbacks = { label: it => { const ds = it.dataset, ci = ds.$ci[it.dataIndex]; return it.parsed.y === null ? ds.label + ': no scored calls (n=0)' : `${ds.label}: ${it.parsed.y}% (n=${ds.$n[it.dataIndex]}${ci ? ', 95% CI ' + (ci[0] * 100).toFixed(1) + '–' + (ci[1] * 100).toFixed(1) + '%' : ''})`; } }; return o; };
+  const byAsset = rows.filter(r => r.horizon === h && r.state === 'ok');
+  const aCfg = { type: 'bar', data: { labels: byAsset.map(r => r.asset), datasets: bars(byAsset) }, options: opt(), plugins: [cmpNPlugin] };
+  const byH = cmpHorizonRows(feeds).filter(r => r.state === 'ok');
+  const hCfg = { type: 'bar', data: { labels: byH.map(r => r.horizon + ' h'), datasets: bars(byH) }, options: opt(), plugins: [cmpNPlugin] };
+  cmpChart('asset', 'cmpAssetChart', aCfg, byAsset); cmpChart('horizon', 'cmpHorizonChart', hCfg, byH);
+}
+function renderCmpGlm(feeds){
+  const host = document.getElementById('cmpGlm');
+  const gl = cmpGlmSplit(feeds);
+  const intro = '<p class="text-[11px] text-[#8A9599] mb-2">GLM applies to BTC 24 h only. It adjusts V2 probabilities but never flips a call, so changed calls are expected to be 0. Evidence coverage and freshness are on the GLM evidence page, not repeated here.</p>';
+  if(!gl.applicable){
+    const g = cmpGate(feeds);
+    host.innerHTML = intro + (g.state === 'ok' ? cmpNote('empty', 'Not in scope for this selection: GLM is evaluated on BTC 24 h only. Select asset BTC or All, with the 24 h horizon.') : cmpGateText(g, 'GLM contribution'));
+    return;
+  }
+  const a = (r) => r.n ? `<b class="text-[#E1E2E7]">${cmpPct(r.rate)}</b> <span class="text-[#8A9599]">[${cmpCi(r)}] n=${r.n}</span>` : '<span class="text-[#8A9599]">no resolved calls (n=0)</span>';
+  const cell = (k, v, sub) => `<div class="${CMP_CELL}"><p class="text-[10px] uppercase tracking-wide text-[#8A9599]">${k}</p><p class="font-mono-data text-[#E1E2E7] mt-1">${v}</p>${sub ? `<p class="text-[10px] text-[#8A9599] mt-0.5">${sub}</p>` : ''}</div>`;
+  host.innerHTML = intro + `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    ${cell('V2 baseline accuracy', a(gl.base), 'before GLM, BTC 24 h')}
+    ${cell('V2 final accuracy', a(gl.fin), 'after GLM, BTC 24 h')}
+    ${cell('Decisions adjusted by GLM', `${gl.adjusted} of ${gl.total} <span class="text-[#8A9599]">${cmpPct(gl.adjustedRate)}</span>`, gl.meanAbsAdj === null ? 'mean |adjustment| n/a' : 'mean |adjustment| ' + (gl.meanAbsAdj * 100).toFixed(2) + ' pp')}
+    ${cell('Calls changed by GLM', String(gl.changedCalls), 'expected 0: GLM never flips a call')}</div>
+    <div class="overflow-x-auto mt-3"><table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Outcome accuracy</th><th class="px-2 font-normal">Decisions</th><th class="px-2 font-normal">V2 final</th><th class="px-2 font-normal">V2 baseline</th></tr></thead><tbody>
+    <tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2">GLM adjusted</td><td class="px-2 font-mono-data">${gl.adjustedGroup.n}</td><td class="px-2">${a(gl.adjustedGroup.fin)}</td><td class="px-2">${a(gl.adjustedGroup.base)}</td></tr>
+    <tr class="border-t border-[#3B494C]/60"><td class="py-1 px-2">Not adjusted</td><td class="px-2 font-mono-data">${gl.unadjustedGroup.n}</td><td class="px-2">${a(gl.unadjustedGroup.fin)}</td><td class="px-2">${a(gl.unadjustedGroup.base)}</td></tr></tbody></table></div>
+    ${gl.adjusted === 0 ? '<p class="text-[11px] text-[#8A9599] mt-2">No decision has been adjusted yet, so V2 final equals V2 baseline everywhere in this window and GLM has no measurable contribution.</p>' : gl.adjusted < 30 ? '<p class="text-[11px] text-[#FBBF24] mt-2">Fewer than 30 adjusted decisions: too few to say whether GLM helps.</p>' : ''}`;
+}
+function renderCmpTable(feeds){
+  const host = document.getElementById('cmpTable'), more = document.getElementById('cmpMore'), cnt = document.getElementById('cmpTableCount');
+  const g = cmpGate(feeds);
+  if(g.state !== 'ok'){ host.innerHTML = cmpGateText(g, 'decision table'); more.classList.add('hidden'); cnt.textContent = ''; return; }
+  const d = cmpDetailRows(feeds, _cmp.shown);
+  const dir = (x) => x === 'UP' ? '<span class="text-[#4AE176]">UP</span>' : x === 'DOWN' ? '<span class="text-[#FFB4AB]">DOWN</span>' : x === 'NO_CALL' ? '<span class="text-[#8A9599]">no call</span>' : '—';
+  const mark = (v) => v === true ? '<span class="text-[#4AE176]">✓</span>' : v === false ? '<span class="text-[#FFB4AB]">✗</span>' : '<span class="text-[#8A9599]">—</span>';
   const p = (v) => (v === null || v === undefined ? '—' : (v * 100).toFixed(1) + '%');
-  host.innerHTML = `<table class="w-full"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Decision (UTC)</th><th class="px-2 font-normal">V1</th><th class="px-2 font-normal">V2 baseline</th><th class="px-2 font-normal">V2 final</th><th class="px-2 font-normal">Outcome</th></tr></thead><tbody>${rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top">
-    <td class="py-1 px-2 font-mono-data whitespace-nowrap">${esc(fmtUtc(r.ts))}<br><span class="text-[10px] text-[#8A9599]">target ${esc(fmtUtc(r.target))}${r.sha ? ' · ' + esc(r.sha) : ''}</span></td>
-    <td class="px-2 whitespace-nowrap">${r.v1 ? `${r.v1.score} ${dir(r.v1.dir)}${hit(r.v1.dir, r.outcome)}<br><span class="text-[10px] text-[#8A9599]">${r.v1.source === 'server_composite_readings' ? 'server' : 'app'} · ${r.v1.ageMin} min before</span>` : '<span class="text-[#8A9599]">—</span>'}</td>
-    <td class="px-2 whitespace-nowrap font-mono-data">${p(r.base.p_up)} ${dir(r.base.direction)}${hit(r.base.direction, r.outcome)}</td>
-    <td class="px-2 whitespace-nowrap font-mono-data">${p(r.fin.p_up)} ${dir(r.fin.direction)}${hit(r.fin.direction, r.outcome)}<br><span class="text-[10px] text-[#8A9599]">${esc(String(r.fin.reason || '').replace(/_/g, ' '))}</span></td>
-    <td class="px-2 whitespace-nowrap">${r.outcome.status === 'resolved' ? dir(r.outcome.direction) + '<br><span class="text-[10px] text-[#8A9599]">' + esc(fmtUtc(r.outcome.resolved_ts)) + '</span>' : chip('PENDING', 'neutral')}</td></tr>`).join('')}</tbody></table>`;
+  const th = (t) => `<th class="px-2 font-normal">${t}</th>`;
+  host.innerHTML = `<table class="w-full whitespace-nowrap"><thead class="text-left text-[#8A9599]"><tr><th class="py-1 px-2 font-normal">Asset</th>${['Horizon', 'Decision (UTC)', 'V1', 'V2 baseline', 'V2 final', 'Outcome', 'V1 correct', 'V2 correct', 'GLM'].map(th).join('')}</tr></thead><tbody>${d.rows.map(r => `<tr class="border-t border-[#3B494C]/60 align-top">
+    <td class="py-1 px-2 font-semibold">${esc(r.asset || '')}</td><td class="px-2">${r.horizon || ''} h</td><td class="px-2 font-mono-data">${esc(fmtUtc(r.ts))}</td>
+    <td class="px-2">${r.v1 ? `<span class="font-mono-data">${esc(String(r.v1.score))}</span> ${dir(r.v1.dir)}` : '<span class="text-[#8A9599]">no reading</span>'}</td>
+    <td class="px-2"><span class="font-mono-data">${p(r.base.p_up)}</span> ${dir(r.base.direction)}</td>
+    <td class="px-2"><span class="font-mono-data">${p(r.fin.p_up)}</span> ${dir(r.fin.direction)}</td>
+    <td class="px-2">${r.outcome.status === 'resolved' ? dir(r.outcome.direction) : chip('PENDING', 'neutral')}</td>
+    <td class="px-2 text-center">${mark(r.v1Ok)}</td><td class="px-2 text-center">${mark(r.v2Ok)}</td>
+    <td class="px-2">${r.glmApplied ? chip('ADJUSTED ' + (r.glmAdj > 0 ? '+' : '') + (r.glmAdj * 100).toFixed(1) + ' pp', 'info') : '<span class="text-[#8A9599]">' + esc(String(r.glmReason || '—').replace(/_/g, ' ')) + '</span>'}</td></tr>`).join('')}</tbody></table>`;
+  cnt.textContent = `Showing ${d.rows.length} of ${d.total} decisions`;
+  more.classList.toggle('hidden', d.rows.length >= d.total);
+  more.textContent = `Show ${Math.min(100, d.total - d.rows.length)} more`;
+  more.onclick = () => { _cmp.shown += 100; renderCmpTable(feeds); };
 }
 function renderComparison(res){
   const host = document.getElementById('cmpSummary');

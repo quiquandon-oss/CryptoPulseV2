@@ -9,7 +9,7 @@ const SRC = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const a = SRC.indexOf('// ---- BEGIN view-model helpers'), b = SRC.indexOf('// ---- END view-model helpers ----');
 assert.ok(a > 0 && b > a, 'helper block markers present');
 const ctx = vm.createContext({});
-vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily };', ctx);
+vm.runInContext(SRC.slice(a, b) + '\nthis.api = { headlineOf, glmHeadlineNote, forecastTileModel, predictionRunsModel, eventDetectionModel, collectorModel, variantCycleRows, nextTickTs, d1UsageModel, alertModel, sentimentV2Model, SV2_PERIODS, sv2LineBreakMs, sv2SeriesStyle, sv2AiAnnotationModel, sv2EvidenceModel, flTimesfmRows, flChronosRows, flWilson, flPairs, flDirectionStats, flErrorStats, flScatterPoints, flWindowStats, flCumulative, flAgreement, flModelCard, flPev1Model, flLedgerFilter, FL_SEAL_END, FL_PROSPECTIVE_START, sv2StatusModel, glmStatusModel, glmSignalModel, glmAdjustmentRows, glmEvidenceGroups, glmReasonText, apiBaseFor, GLM_CLASS_ORDER, CHART_PRESETS, CHART_DEFAULT_PRESET, chartPreset, clipSeries, coverageNote, AREAS, LEGACY_ROUTES, MOBILE_PRIMARY_AREAS, resolveRoute, allAreaViews, cmpSentimentSummary, flCoverage, glmEvalModel, GLM_PE1_MIN_APPLIED, foufiModel, V1_WORKER_URL, pfValidateTx, pfCompute, pfDryPowder, pfScenario, pfParseCsv, pfCsvRowsToTxs, pfToCsv, pfFromV1Backup, pfDedupKey, PF_TYPES, v1AlertsModel, cmpSummaryModel, cmpRecordRows, CMP_CLAIM_TEXT, cmpFeedStatus, cmpFeed, cmpGate, cmpDirCorrect, cmpScore, cmpWeekStart, cmpBuckets, cmpAgreement, cmpAgreementRows, cmpAssetRows, cmpHorizonRows, cmpGlmSplit, cmpDetailRows, cmpDifference, cmpHeadline, cmpExecutive, traderTechnicals, traderPayloadV2, techRsi, techSma, normCDF, beRealizedVol, beSigma, beProba, breakEvenTable, BE_COIN_PARAMS, BE_HORIZONS, pfParseEcbCsv, pfFxLookup, pfStmtNum, pfStmtDate, pfRowObjects, pfDetectStatement, pfFromRevolut, pfFromNeverless, pfStmtMatchKey, pfHasV1NeverlessSeed, pfXlsxSheetRows, PF_NEVERLESS_V1_SEED_DATE, pfParseV1Embedded, pfV1InterestAt, pfDailyHistory, pfV1RepairPlan, pfV1Compare, pfCandlesToDaily };', ctx);
 const H = ctx.api;
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NOW = Date.UTC(2026, 10, 13, 14, 0, 0);
@@ -1036,6 +1036,100 @@ test('comparison: real records keep decision time, V1 provenance and pending out
     assert.ok(r.target > r.ts);
   }
   assert.equal(H.cmpRecordRows({ ok: false }, 5), null);
+});
+
+
+// ---- Comparison dashboard: pure aggregation over aligned records (synthetic records in the real record shape) ----
+const rec = (o = {}) => ({ asset: o.asset || 'BTC', horizon_hours: o.h || 24, decision_ts: o.ts, target_ts: o.ts + 24 * HOUR,
+  v1: o.v1 === null ? { score: null, source: null, reading_ts: null, age_ms: null, direction: null, missing_reason: 'no_v1_reading_within_3h' } : { score: 60, source: 'history', reading_ts: o.ts - 60000, age_ms: 60000, direction: o.v1 || 'UP', missing_reason: null },
+  v2_baseline: { p_up: 0.6, source: 'p_up', variant: 'original', direction: o.b || o.f || 'UP' },
+  v2_final: { p_up: 0.6, reason: o.glm ? 'glm_applied' : 'no_adjustment', glm_applied: !!o.glm, adjustment: o.glm ? 0.02 : 0, direction: o.f || 'UP' },
+  outcome: o.out === undefined ? { status: 'pending', direction: null, realized_up: null, resolved_ts: null } : { status: 'resolved', direction: o.out, realized_up: o.out === 'UP' ? 1 : 0, resolved_ts: o.ts + 25 * HOUR } });
+const W1 = Date.UTC(2026, 10, 2, 12), W2 = Date.UTC(2026, 10, 9, 12); // Mondays 2026-11-02 and 2026-11-09
+test('comparison dashboard: accuracy counts resolved + called records only, exclusions counted apart', () => {
+  const s = H.cmpScore([rec({ ts: W1, v1: 'UP', f: 'UP', out: 'UP' }), rec({ ts: W1, v1: 'UP', f: 'DOWN', out: 'DOWN' }), rec({ ts: W1, v1: 'NO_CALL', f: 'UP', out: 'DOWN' }),
+    rec({ ts: W1, v1: null, f: 'NO_CALL', out: 'UP' }), rec({ ts: W1, v1: 'DOWN', f: 'DOWN' })]);
+  assert.deepEqual([s.v1.n, s.v1.correct, s.v2f.n, s.v2f.correct], [2, 1, 3, 2]);
+  assert.deepEqual([s.total, s.resolved, s.pending, s.v1Missing, s.v1NoCall, s.v2NoCall, s.withV1, s.resolvedWithV1], [5, 4, 1, 1, 1, 1, 4, 3]);
+  assert.deepEqual(plain(s.v1.ci), plain(H.flWilson(1, 2)));
+  assert.equal(H.cmpDirCorrect('UP', { status: 'pending' }), null); assert.equal(H.cmpDirCorrect('NO_CALL', { status: 'resolved', direction: 'UP' }), null);
+  assert.equal(H.cmpDirCorrect('UP', { status: 'resolved', direction: 'DOWN' }), false);
+});
+test('comparison dashboard: weekly buckets carry n, flag n<5, and keep pending out of accuracy', () => {
+  assert.equal(H.cmpWeekStart(Date.UTC(2026, 10, 8, 23, 59)), Date.UTC(2026, 10, 2)); // Sunday belongs to the Monday before
+  assert.equal(H.cmpWeekStart(Date.UTC(2026, 10, 9, 0, 0)), Date.UTC(2026, 10, 9));
+  const recs = [...Array(6)].map((_, i) => rec({ ts: W1 + i * HOUR, v1: 'UP', f: i < 4 ? 'UP' : 'DOWN', out: 'UP' })), w2 = [rec({ ts: W2, v1: 'UP', f: 'UP', out: 'UP' }), rec({ ts: W2 + HOUR, v1: 'UP', f: 'UP' }), rec({ ts: W2 + 2 * HOUR, v1: 'UP', f: 'UP' })];
+  const b = plain(H.cmpBuckets([...w2, ...recs]));
+  assert.deepEqual(b.map((x) => x.label), ['2026-11-02', '2026-11-09']);
+  assert.deepEqual([b[0].v2f.n, b[0].v2f.correct, b[0].v2f.low, b[0].v1.n, b[0].v1.low, b[0].pending], [6, 4, false, 6, false, 0]);
+  assert.deepEqual([b[1].v2f.n, b[1].v2f.low, b[1].pending, b[1].decisions], [1, true, 2, 3]);
+  assert.equal(b[1].v2f.rate, 1); // the two pending decisions are not scored as wrong or right
+});
+test('comparison dashboard: opposite-direction cases say who was right, pending apart', () => {
+  const a = H.cmpAgreement([rec({ ts: W1, v1: 'UP', f: 'DOWN', out: 'UP' }), rec({ ts: W1, v1: 'UP', f: 'DOWN', out: 'DOWN' }), rec({ ts: W1, v1: 'DOWN', f: 'UP', out: 'UP' }), rec({ ts: W1, v1: 'DOWN', f: 'UP' }),
+    rec({ ts: W1, v1: 'UP', f: 'UP', out: 'UP' }), rec({ ts: W1, v1: 'NO_CALL', f: 'UP' }), rec({ ts: W1, v1: 'UP', f: 'NO_CALL' }), rec({ ts: W1, v1: null, f: 'UP' })]);
+  assert.deepEqual(plain(a.opposite), { n: 4, v1Right: 1, v2Right: 2, pending: 1, other: 0 });
+  assert.deepEqual([a.agree, a.disagree, a.noCall, a.missing, a.total], [1, 4, 2, 1, 8]);
+  assert.equal(a.agreeRate, 1 / 5);
+});
+test('comparison dashboard: unavailable assets are explicit states, never errors or figures', () => {
+  const bad = { ok: false, error: 'unsupported asset (supported: BTC)', data: { ok: false, error: 'unsupported asset (supported: BTC)' } };
+  assert.equal(H.cmpFeedStatus(bad).state, 'unavailable');
+  assert.equal(H.cmpFeedStatus({ ok: false, error: 'HTTP 500' }).state, 'error');
+  assert.equal(H.cmpSummaryModel(bad).state, 'unavailable');
+  const feeds = [H.cmpFeed('BTC', 24, { ok: true, data: { records: [rec({ ts: W1, out: 'UP' })] } }), H.cmpFeed('ETH', 24, bad), H.cmpFeed('LINK', 24, bad)];
+  assert.deepEqual(plain(H.cmpGate(feeds)), { state: 'ok', unavailable: ['ETH', 'LINK'] });
+  assert.deepEqual(plain(H.cmpGate(feeds.slice(1))), { state: 'unavailable', unavailable: ['ETH', 'LINK'] });
+  assert.equal(H.cmpGate([H.cmpFeed('BTC', 24, { ok: false, error: 'HTTP 500' })]).state, 'error');
+  assert.equal(H.cmpGate([H.cmpFeed('BTC', 24, { ok: true, data: { records: [] } })]).state, 'empty');
+  const rows = plain(H.cmpAssetRows(feeds));
+  assert.deepEqual(rows.map((r) => [r.asset, r.state, r.n]), [['BTC', 'ok', 1], ['ETH', 'unavailable', 0], ['LINK', 'unavailable', 0]]);
+  assert.equal(rows[1].v1, undefined); // no figures invented for an unavailable asset
+  assert.deepEqual(plain(H.cmpAgreementRows(feeds).map((r) => r.asset)), ['BTC']);
+  const ex = H.cmpExecutive(feeds.slice(1).map((f) => ({ asset: f.asset, model: H.cmpSummaryModel(bad) })), feeds.slice(1));
+  assert.equal(ex.state, 'unavailable');
+});
+test('comparison dashboard: GLM adjusted vs unadjusted, scope is BTC 24 h only', () => {
+  const recs = [rec({ ts: W1, f: 'UP', glm: true, out: 'UP' }), rec({ ts: W1, f: 'UP', glm: true, out: 'DOWN' }), rec({ ts: W1, f: 'DOWN', out: 'DOWN' }), rec({ ts: W1, f: 'UP' })];
+  const g = plain(H.cmpGlmSplit([H.cmpFeed('BTC', 24, { ok: true, data: { records: recs } })]));
+  assert.deepEqual([g.applicable, g.total, g.adjusted, g.changedCalls, g.adjustedGroup.n, g.adjustedGroup.fin.correct, g.adjustedGroup.fin.n, g.unadjustedGroup.n, g.unadjustedGroup.fin.n], [true, 4, 2, 0, 2, 1, 2, 2, 1]);
+  assert.equal(g.adjustedRate, 0.5); assert.ok(Math.abs(g.meanAbsAdj - 0.02) < 1e-9);
+  assert.equal(H.cmpGlmSplit([H.cmpFeed('BTC', 12, { ok: true, data: { records: recs } }), H.cmpFeed('ETH', 24, { ok: true, data: { records: recs } })]).applicable, false);
+  const flip = rec({ ts: W1, b: 'UP', f: 'DOWN', glm: true, out: 'UP' });
+  assert.equal(H.cmpGlmSplit([H.cmpFeed('BTC', 24, { ok: true, data: { records: [flip] } })]).changedCalls, 1); // a flip would be reported, not hidden
+});
+test('comparison dashboard: no difference is claimed without backend support', () => {
+  const mk = (claim, v1, v2) => ({ state: 'ok', claim, claimText: '', accV1: { n: 200, correct: 0, rate: v1, ci: [v1 - 0.05, v1 + 0.05] }, accV2f: { n: 200, correct: 0, rate: v2, ci: [v2 - 0.05, v2 + 0.05] }, nResolvedPairs: 200 });
+  assert.equal(H.cmpDifference(mk('no_supported_difference', 0.5, 0.7)), null);
+  assert.equal(H.cmpDifference(mk('insufficient_sample', 0.5, 0.7)), null);
+  assert.equal(H.cmpDifference(mk(undefined, 0.5, 0.7)), null);
+  assert.deepEqual(plain(H.cmpDifference(mk('v2_higher_observational', 0.5, 0.7))), { higher: 'v2', pp: 20 });
+  const t = (c, a, b) => H.cmpHeadline([{ asset: 'BTC', model: mk(c, a, b) }]);
+  assert.ok(!/^Yes/.test(t('no_supported_difference', 0.5, 0.7).text) && t('no_supported_difference', 0.5, 0.7).tone === 'neutral');
+  assert.match(t('insufficient_sample', 0.5, 0.7).text, /Not enough/);
+  assert.match(t('v2_higher_observational', 0.5, 0.7).text, /^Yes, observationally/); assert.equal(t('v2_higher_observational', 0.5, 0.7).tone, 'good');
+  assert.match(t('v1_higher_observational', 0.7, 0.5).text, /^No: V1/); assert.equal(t('v1_higher_observational', 0.7, 0.5).tone, 'bad');
+  assert.match(H.cmpHeadline([]).text, /no V1 vs V2/i);
+  // real production summary: the claim is the backend's and is passed through
+  const real = H.cmpSummaryModel({ ok: true, data: CMP_SUM });
+  assert.equal(H.cmpExecutive([{ asset: 'BTC', model: real }], []).claims[0].claim, CMP_SUM.summary.claim);
+});
+test('comparison dashboard: executive figures pool records across assets, claims stay per asset', () => {
+  const btc = H.cmpFeed('BTC', 24, { ok: true, data: { records: [rec({ ts: W1, v1: 'UP', f: 'UP', out: 'UP' }), rec({ ts: W1, v1: 'UP', f: 'DOWN', out: 'DOWN' })] } });
+  const eth = H.cmpFeed('ETH', 24, { ok: true, data: { records: [rec({ ts: W1, asset: 'ETH', v1: null, f: 'UP', out: 'UP' })] } });
+  const m = (c) => ({ state: 'ok', claim: c, claimText: c, observational: false, accV1: { n: 0 }, accV2f: { n: 0 }, agreement: {}, nResolvedPairs: 1 });
+  const x = plain(H.cmpExecutive([{ asset: 'BTC', model: m('insufficient_sample') }, { asset: 'ETH', model: m('insufficient_sample') }], [btc, eth]));
+  assert.deepEqual([x.mode, x.nAligned, x.nResolved, x.nResolvedPairs, x.acc.v1.n, x.acc.v2f.n, x.acc.v2f.correct], ['pooled', 3, 3, 2, 2, 3, 3]);
+  assert.equal(x.coverage, 2 / 3); assert.deepEqual(x.claims.map((c) => c.asset), ['BTC', 'ETH']);
+  const h = plain(H.cmpHorizonRows([btc, eth, H.cmpFeed('BTC', 12, { ok: true, data: { records: [rec({ ts: W1, h: 12, out: 'UP' })] } })]));
+  assert.deepEqual(h.map((r) => [r.horizon, r.state, r.total]), [[12, 'ok', 1], [24, 'ok', 3]]);
+});
+test('comparison dashboard: detailed table rows follow the feeds, newest first, with correctness marks', () => {
+  const f = [H.cmpFeed('BTC', 24, { ok: true, data: { records: [rec({ ts: W1, v1: 'UP', f: 'UP', out: 'DOWN' }), rec({ ts: W1 + 5 * HOUR, v1: null, f: 'UP', glm: true })] } }), H.cmpFeed('ETH', 24, { ok: true, data: { records: [rec({ ts: W1 + 2 * HOUR, asset: 'ETH', v1: 'DOWN', f: 'DOWN', out: 'DOWN' })] } })];
+  const d = plain(H.cmpDetailRows(f, 2));
+  assert.equal(d.total, 3); assert.equal(d.rows.length, 2);
+  assert.deepEqual(d.rows.map((r) => [r.asset, r.v1Ok, r.v2Ok, r.glmApplied]), [['BTC', null, null, true], ['ETH', true, true, false]]);
+  assert.equal(H.cmpDetailRows(f, 10).rows[2].v1Ok, false);
 });
 
 // ---- Trader Analysis (Gemini) parity ----

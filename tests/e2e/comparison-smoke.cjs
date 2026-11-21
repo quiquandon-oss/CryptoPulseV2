@@ -84,7 +84,7 @@ async function common(p, name, errs) {
       ok(trend.labels > 0 && trend.hasPending && trend.n.length === trend.labels, `${tag}: B weekly buckets with n and a pending series (${trend.labels} weeks)`);
       ok(/Opposite-direction/.test(await text(p, '#cmpOpposite')) && /V1 right/.test(await text(p, '#cmpOpposite')), `${tag}: C who-was-right table`);
       ok(/GLM applies to BTC 24 h only/.test(await text(p, '#cmpGlm')) && /Calls changed by GLM/.test(await text(p, '#cmpGlm')), `${tag}: E GLM block`);
-      ok(await p.$eval('#cmpSecE button', (b) => /goRoute\('sentiment-v2\/evidence'\)/.test(b.getAttribute('onclick'))), `${tag}: E links to the GLM evidence page`);
+      ok(await p.$eval('#cmpSecE button[onclick]', (b) => /goRoute\('sentiment-v2\/evidence'\)/.test(b.getAttribute('onclick'))), `${tag}: E links to the GLM evidence page`);
       ok(await p.$eval('#view-comparison details', (d) => !d.open), `${tag}: Sentiment levels collapsed`);
       const avail = await text(p, '#cmpAvail');
       const tb = await rows(p);
@@ -103,7 +103,18 @@ async function common(p, name, errs) {
       } else if (scenario === 'all-assets') {
         ok(!/NOT AVAILABLE YET/.test(await text(p, '#cmpHeadline')), `${tag}: no unavailable chips when all assets are served`);
         ok(tb.length === 100, `${tag}: table shows the newest 100 (${tb.length})`);
+        // UX layer: secondary sections start folded, nothing is lost, and unfolding draws the charts at full size
+        ok(await p.evaluate(() => document.getElementById('cmpSecF').classList.contains('ux-folded') && !document.getElementById('cmpSecA').classList.contains('ux-folded')), `${tag}: details folded, executive section open`);
+        ok(await p.isVisible('#cmpFTitle'), `${tag}: a folded section still shows its title`);
+        await p.evaluate(() => document.querySelectorAll('#view-comparison .ux-card.ux-folded > .ux-fold-btn').forEach((b) => b.click())); await p.waitForTimeout(600);
+        ok(await p.evaluate(() => [...document.querySelectorAll('#view-comparison canvas')].every((c) => c.offsetHeight > 0)), `${tag}: every chart has a size after unfolding`);
+        ok(await p.evaluate(() => [...document.querySelectorAll('#cmpTable tbody tr')].filter((r) => r.offsetParent).length) === 5, `${tag}: decisions ledger shows its first 5 rows`);
+        ok(/Show all 100 rows/.test(await text(p, '#view-comparison .ux-rows-btn:not(.hidden)')), `${tag}: "Show all 100 rows" offered`);
+        ok(/Each side-by-side call and the result · 100 rows/.test(await text(p, '#view-comparison .ux-cap')) || (await p.$$eval('#view-comparison .ux-cap', (c) => c.map((x) => x.textContent))).some((x) => /Each side-by-side call and the result · 100 rows/.test(x)), `${tag}: ledger has a one-line caption with its row count`);
+        await p.click('#view-comparison .ux-rows-btn:not(.hidden) >> nth=-1'); await p.waitForTimeout(300);
+        ok(await p.evaluate(() => [...document.querySelectorAll('#cmpTable tbody tr')].filter((r) => r.offsetParent).length) === 100, `${tag}: "Show all" reveals every row`);
         await p.click('#cmpMore'); await p.waitForTimeout(300);
+        ok(await p.evaluate(() => [...document.querySelectorAll('#cmpTable tbody tr')].filter((r) => r.offsetParent).length) === 200, `${tag}: an expanded ledger stays expanded when more rows load`);
         ok((await rows(p)).length === 200, `${tag}: show more adds 100 rows (${(await rows(p)).length})`);
         ok(await p.evaluate(() => Chart.getChart('cmpAssetChart').data.labels.join()) === 'BTC,ETH,LINK', `${tag}: asset chart has BTC, ETH, LINK`);
         ok(/pooled|Pools/.test(await text(p, '#cmpExec')), `${tag}: All pools records and says the claim is per asset`);

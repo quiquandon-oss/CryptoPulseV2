@@ -55,6 +55,9 @@ async function mock(ctx){
   const im = (await p.textContent('#pfImportMsg')).replace(/\s+/g, ' ');
   ok(/1 added · 1 duplicate skipped · 1 rejected/.test(im), 'CSV import: added / duplicate / rejected reported: ' + im.slice(0, 120));
   // V1 import (fixture)
+  // UX layer: the entry forms fold to their titles; the ledger stays open
+  ok(await p.evaluate(() => document.querySelector('[aria-labelledby="pfIoTitle"]').classList.contains('ux-folded') && !document.querySelector('[aria-labelledby="pfLedgerTitle"]').classList.contains('ux-folded')), 'transactions: forms folded, ledger open');
+  await p.evaluate(() => document.querySelectorAll('#pf-transactions .ux-card.ux-folded > .ux-fold-btn').forEach((b) => b.click())); await p.waitForTimeout(200);
   await p.click('#pfImportV1'); await p.waitForTimeout(600);
   ok(/2 added/.test(await p.textContent('#pfImportMsg')), 'V1 backup imported (2 synthetic rows)');
   // Historical FX from the real ECB API (not mocked): the V1 EUR buy of 2026-03-02 gets that day's ECB rate.
